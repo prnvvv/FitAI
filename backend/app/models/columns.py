@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from enum import EnumMeta
+from enum import Enum
 
 from sqlalchemy import Enum as SAEnum
 
 
-def enum_type(enum_cls: EnumMeta, name: str) -> SAEnum:
+def enum_type(enum_cls: type[Enum], name: str) -> SAEnum:
     """Build a portable enum column type that stores enum *values*.
 
     ``native_enum=False`` renders a VARCHAR + CHECK constraint, which avoids

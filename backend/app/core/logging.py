@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import MutableMapping
+from typing import Any, cast
 
 import structlog
 
@@ -30,8 +32,8 @@ SENSITIVE_FIELD_NAMES = frozenset(
 
 
 def _redact_sensitive_fields(
-    _logger: object, _method_name: str, event_dict: dict[str, object]
-) -> dict[str, object]:
+    _logger: Any, _method_name: str, event_dict: MutableMapping[str, Any]
+) -> MutableMapping[str, Any]:
     """Replace values of well-known sensitive keys with a placeholder."""
     for key in list(event_dict):
         if key.lower() in SENSITIVE_FIELD_NAMES:
@@ -68,4 +70,4 @@ def configure_logging() -> None:
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     """Return a bound structlog logger."""
-    return structlog.get_logger(name)
+    return cast(structlog.stdlib.BoundLogger, structlog.get_logger(name))
