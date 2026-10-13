@@ -66,7 +66,7 @@ def get_workout(
     return WorkoutSessionOut.model_validate(session)
 
 
-@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_workout(
     session_id: UUID,
     current_user: CurrentUser,

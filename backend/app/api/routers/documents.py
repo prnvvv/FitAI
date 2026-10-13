@@ -89,7 +89,7 @@ def get_document(
     return DocumentOut.model_validate(document)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_document(
     document_id: UUID,
     current_user: CurrentUser,

@@ -79,7 +79,7 @@ def rename_conversation(
     return ConversationOut.model_validate(conversation)
 
 
-@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_conversation(
     conversation_id: UUID,
     current_user: CurrentUser,
