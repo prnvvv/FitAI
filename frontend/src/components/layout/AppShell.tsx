@@ -1,4 +1,3 @@
-import { useRef } from 'react'
 import { Outlet } from 'react-router-dom'
 import type { Conversation } from '../../types'
 import { Sidebar } from './Sidebar'
@@ -35,11 +34,8 @@ export function AppShell({
   onRename,
   onDelete,
 }: AppShellProps) {
-  const toggleRef = useRef<HTMLButtonElement>(null)
-
   const handleClose = () => {
     onCloseSidebar()
-    toggleRef.current?.focus()
   }
 
   return (
@@ -47,6 +43,7 @@ export function AppShell({
       <Sidebar
         id="app-sidebar"
         open={sidebarOpen}
+        onToggle={onToggleSidebar}
         onClose={handleClose}
         conversations={conversations}
         selectedId={selectedId}
@@ -56,17 +53,17 @@ export function AppShell({
         onSearchQueryChange={onSearchQueryChange}
         onSelectConversation={(id) => {
           onSelectConversation(id)
-          onClose()
+          handleClose()
         }}
         onNewChat={() => {
           onNewChat()
-          onClose()
+          handleClose()
         }}
         onRename={onRename}
         onDelete={onDelete}
       />
-      <div className={`app-shell__content${sidebarOpen ? ' app-shell__content--shifted' : ''}`}>
-        <TopBar ref={toggleRef} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
+      <div className="app-shell__content">
+        <TopBar />
         <main className="app-shell__main">
           <Outlet />
         </main>

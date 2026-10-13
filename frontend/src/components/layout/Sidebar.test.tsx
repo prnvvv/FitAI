@@ -16,6 +16,7 @@ function renderSidebar(props = {}) {
       <AuthProvider>
         <Sidebar
           open={true}
+          onToggle={vi.fn()}
           onClose={vi.fn()}
           conversations={mockConversations}
           selectedId={null}
@@ -41,11 +42,11 @@ describe('Sidebar', () => {
     expect(screen.getByText('Nutrition goals')).toBeInTheDocument()
   })
 
-  it('calls onClose when close button is clicked', () => {
-    const onClose = vi.fn()
-    renderSidebar({ onClose })
-    fireEvent.click(screen.getByLabelText('Close sidebar'))
-    expect(onClose).toHaveBeenCalledTimes(1)
+  it('calls onToggle when header toggle button is clicked', () => {
+    const onToggle = vi.fn()
+    renderSidebar({ onToggle })
+    fireEvent.click(screen.getByLabelText('Collapse sidebar'))
+    expect(onToggle).toHaveBeenCalledTimes(1)
   })
 
   it('filters conversations via search input', () => {
