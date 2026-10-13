@@ -437,6 +437,8 @@ Every agent and developer must:
 - Never commit broken scaffolding or knowingly failing changes without clearly communicating the reason.
 - Never rewrite or amend unrelated commits.
 - Never force-push or push changes without explicit authorization.
+- Commit frequently throughout development, making a commit whenever a small, logically complete unit of work is finished rather than accumulating changes into a few large commits.
+- Never push commits to any remote repository under any circumstances. All changes must remain as local commits unless explicitly instructed otherwise by the project owner.
 
 Examples of acceptable commit messages:
 
