@@ -17,7 +17,9 @@ function AuthenticatedApp() {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const stored = typeof window !== 'undefined' ? window.localStorage.getItem('fitai_sidebar_open') : null
-    return stored !== 'false'
+    if (stored !== null) return stored !== 'false'
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+    return !isMobile
   })
 
   const {

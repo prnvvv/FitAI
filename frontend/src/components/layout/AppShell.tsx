@@ -45,6 +45,7 @@ export function AppShell({
   return (
     <div className="app-shell">
       <Sidebar
+        id="app-sidebar"
         open={sidebarOpen}
         onClose={handleClose}
         conversations={conversations}
@@ -55,16 +56,16 @@ export function AppShell({
         onSearchQueryChange={onSearchQueryChange}
         onSelectConversation={(id) => {
           onSelectConversation(id)
-          handleClose()
+          onClose()
         }}
         onNewChat={() => {
           onNewChat()
-          handleClose()
+          onClose()
         }}
         onRename={onRename}
         onDelete={onDelete}
       />
-      <div className={`app-shell__content ${sidebarOpen ? 'app-shell__content--shifted' : ''}`}>
+      <div className={`app-shell__content${sidebarOpen ? ' app-shell__content--shifted' : ''}`}>
         <TopBar ref={toggleRef} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
         <main className="app-shell__main">
           <Outlet />

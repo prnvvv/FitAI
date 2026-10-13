@@ -18,6 +18,7 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(
           onClick={onToggleSidebar}
           aria-label={sidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
           aria-expanded={sidebarOpen}
+          aria-controls="app-sidebar"
         >
           <PanelLeftClose size={20} />
         </button>

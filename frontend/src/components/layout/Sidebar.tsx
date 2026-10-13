@@ -8,6 +8,7 @@ import { ConversationList } from './ConversationList'
 import { SidebarNavItem } from './SidebarNavItem'
 
 interface SidebarProps {
+  id?: string
   open: boolean
   onClose: () => void
   conversations: Conversation[]
@@ -23,6 +24,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
+  id,
   open,
   onClose,
   conversations,
@@ -57,9 +59,11 @@ export function Sidebar({
 
   return (
     <nav
+      id={id}
       className={`sidebar ${open ? 'sidebar--open' : 'sidebar--closed'}`}
       aria-label="Main navigation"
-      aria-hidden={!open}
+      aria-expanded={open}
+      aria-hidden={false}
     >
       <div className="sidebar__header">
         <span className="sidebar__brand">FitAI</span>
@@ -142,9 +146,7 @@ export function Sidebar({
         selectedId={selectedId}
         loading={loading}
         error={error}
-        onSelect={(id) => {
-          onSelectConversation(id)
-        }}
+        onSelect={onSelectConversation}
         onRename={onRename}
         onDelete={onDelete}
       />
