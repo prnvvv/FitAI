@@ -5,7 +5,6 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.errors import NotFoundError
 from app.schemas.profile import ProfileOut, ProfilePatch, ProfileUpdate
 from app.services.profile_service import ProfileService
 
@@ -14,13 +13,12 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 @router.get("", response_model=ProfileOut)
 def get_profile(current_user: CurrentUser, db: DbSession) -> ProfileOut:
-    """Return the authenticated user's profile.
+    """Return the authenticated user's profile, creating an empty one if absent.
 
-    Returns 404 until a profile has been created with PUT or PATCH.
+    The profile is initialized lazily so the UI can always load it without
+    treating a missing row as an error.
     """
-    profile = ProfileService(db).get(current_user.id)
-    if profile is None:
-        raise NotFoundError("Profile not found.")
+    profile = ProfileService(db).get_or_create(current_user.id)
     return ProfileOut.model_validate(profile)
 
 
