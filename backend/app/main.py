@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import DbSession
 from app.api.routers import (
     auth,
+    chat,
     conversations,
     documents,
     memory,
@@ -33,6 +34,7 @@ logger = get_logger(__name__)
 
 ROUTERS = (
     auth.router,
+    chat.router,
     conversations.router,
     profile.router,
     memory.router,
@@ -65,9 +67,6 @@ def create_app() -> FastAPI:
 
     for router in ROUTERS:
         app.include_router(router, prefix=settings.api_v1_prefix)
-
-    # Person 2: register the chat router here once
-    # ``app.api.routers.chat`` and ``app.services.chat_service`` are implemented.
 
     _register_health_endpoints(app)
 

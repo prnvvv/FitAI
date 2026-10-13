@@ -110,7 +110,7 @@ def correct_memory(
     return MemoryOut.model_validate(memory)
 
 
-@router.delete("/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{memory_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_memory(
     memory_id: UUID,
     current_user: CurrentUser,
