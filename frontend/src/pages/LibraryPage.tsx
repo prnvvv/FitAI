@@ -35,11 +35,26 @@ export function LibraryPage() {
       const page = await api.listDocuments()
       setDocuments(page.items)
     } catch (err) {
-      const message = err instanceof NetworkError
+      let message = err instanceof NetworkError
         ? 'The backend is unreachable. Check that the server is running, then retry.'
         : err instanceof Error
           ? err.message
           : 'Could not load library'
+      try {
+        if (err instanceof Error && !(err instanceof NetworkError)) {
+          const m = err.message.match(/API error \d+:\s*(.+)/)
+          if (m?.[1]) {
+            message = m[1].replace(/^\{.*\}$/s, (raw) => {
+              try {
+                const parsed = JSON.parse(raw)
+                return parsed?.error?.message || parsed?.message || raw
+              } catch {
+                return raw
+              }
+            })
+          }
+        }
+      } catch {}
       setError(message)
     } finally {
       setLoading(false)
@@ -57,7 +72,22 @@ export function LibraryPage() {
       await api.uploadDocument(file)
       await load()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Upload failed'
+      let message = err instanceof Error ? err.message : 'Upload failed'
+      try {
+        if (err instanceof Error) {
+          const m = err.message.match(/API error \d+:\s*(.+)/)
+          if (m?.[1]) {
+            message = m[1].replace(/^\{.*\}$/s, (raw) => {
+              try {
+                const parsed = JSON.parse(raw)
+                return parsed?.error?.message || parsed?.message || raw
+              } catch {
+                return raw
+              }
+            })
+          }
+        }
+      } catch {}
       setError(message)
     } finally {
       setUploading(false)

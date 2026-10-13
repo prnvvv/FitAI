@@ -8,6 +8,7 @@ coordinated by Person 2.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -44,10 +45,11 @@ def _utcnow() -> datetime:
 class DocumentService:
     """Coordinates document uploads, metadata, and status transitions."""
 
-    def __init__(self, db: Session, storage: DocumentStorage | None = None) -> None:
+    def __init__(self, db: Session, storage: DocumentStorage | None = None, ingestion: Any = None) -> None:
         self._db = db
         self._storage = storage or get_document_storage()
         self._documents = DocumentRepository(db)
+        self._ingestion = ingestion
 
     def list_documents(
         self, user_id: UUID, *, limit: int, offset: int
@@ -68,6 +70,8 @@ class DocumentService:
         filename: str,
         content_type: str,
         data: bytes,
+        *,
+        trigger_ingestion: bool = True,
     ) -> Document:
         """Validate and store an uploaded document, then record its metadata."""
         self._validate_upload(filename, content_type, len(data))
@@ -94,6 +98,37 @@ class DocumentService:
             raise AppError("The document metadata could not be saved.") from exc
 
         self._db.refresh(document)
+
+        if trigger_ingestion and self._ingestion is not None:
+            try:
+                result = self._ingestion.ingest_user_document_bytes(
+                    data,
+                    filename,
+                    str(user_id),
+                    str(document_id),
+                    metadata={"storage_key": key, "content_type": content_type},
+                )
+                if result.status == "indexed":
+                    self.mark_status(user_id, document.id, DocumentStatus.INDEXED)
+                else:
+                    self.mark_status(
+                        user_id,
+                        document.id,
+                        DocumentStatus.FAILED,
+                        error_message=result.error or "Ingestion failed",
+                    )
+            except Exception as exc:  # noqa: BLE001
+                from app.core.logging import get_logger
+
+                logger = get_logger(__name__)
+                logger.warning("document_ingestion_failed", doc_id=str(document.id), error=str(exc))
+                try:
+                    self.mark_status(
+                        user_id, document.id, DocumentStatus.FAILED, error_message="Ingestion failed"
+                    )
+                except Exception:
+                    pass
+
         return document
 
     def delete(self, user_id: UUID, document_id: UUID) -> None:

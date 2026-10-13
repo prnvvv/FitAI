@@ -51,7 +51,20 @@ class ActivityEventService:
             self._db.flush()
             return event
         except SQLAlchemyError as exc:
-            self._db.rollback()
+            # Roll back only this operation, do not break the parent transaction
+            try:
+                self._db.rollback()
+            except Exception:
+                pass
+            from app.core.logging import get_logger
+
+            logger = get_logger(__name__)
+            logger.warning(
+                "activity_event_record_failed",
+                user_id=str(user_id),
+                event_type=event_type.value if hasattr(event_type, "value") else str(event_type),
+                error=exc.__class__.__name__,
+            )
             raise AppError("The activity event could not be recorded.") from exc
 
     def list(
@@ -72,5 +85,16 @@ class ActivityEventService:
             self._db.commit()
             return count
         except SQLAlchemyError as exc:
-            self._db.rollback()
+            try:
+                self._db.rollback()
+            except Exception:
+                pass
+            from app.core.logging import get_logger
+
+            logger = get_logger(__name__)
+            logger.warning(
+                "activity_event_clear_failed",
+                user_id=str(user_id),
+                error=exc.__class__.__name__,
+            )
             raise AppError("The activity history could not be cleared.") from exc

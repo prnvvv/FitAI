@@ -31,12 +31,15 @@ class ActivityEventRepository:
         payload: dict[str, object] | None = None,
     ) -> ActivityEvent:
         """Append a new activity event."""
+        from datetime import datetime, timezone
+
+        occurred = occurred_at or datetime.now(timezone.utc)
         event = ActivityEvent(
             user_id=user_id,
             type=event_type,
             entity_type=entity_type,
             entity_id=entity_id,
-            occurred_at=occurred_at or datetime.utcnow(),
+            occurred_at=occurred,
             source=source,
             payload=payload,
         )

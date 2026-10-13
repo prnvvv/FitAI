@@ -11,7 +11,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0003"
-down_revision = "0002"
+down_revision = "0002_add_activity_events"
 branch_labels = None
 depends_on = None
 

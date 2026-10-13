@@ -15,6 +15,8 @@ from app.api.deps import CurrentUser, DbSession, Pagination
 from app.core.config import settings
 from app.core.errors import PayloadTooLargeError
 from app.models.enums import ActivityEventType
+from app.rag.pipeline import IngestionPipeline
+from app.rag.vector_store import VectorStore
 from app.schemas.common import Page
 from app.schemas.document import DocumentOut
 from app.services.activity_event_service import ActivityEventService
@@ -23,6 +25,9 @@ from app.services.document_service import DocumentService
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 _CHUNK_SIZE = 1024 * 1024
+
+def _get_ingestion() -> IngestionPipeline:
+    return IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
 
 
 async def _read_upload_limited(file: UploadFile) -> bytes:
@@ -52,7 +57,7 @@ async def upload_document(
 ) -> DocumentOut:
     """Upload a document and record its metadata and initial status."""
     data = await _read_upload_limited(file)
-    service = DocumentService(db)
+    service = DocumentService(db, ingestion=_get_ingestion())
     document = service.create(
         current_user.id,
         file.filename or "upload",
@@ -108,4 +113,18 @@ def delete_document(
 
     ChromaDB vector deletion for this document must be completed by Person 2.
     """
-    DocumentService(db).delete(current_user.id, document_id)
+    from app.rag.vector_store import VectorStore
+    service = DocumentService(db)
+    # Delete vectors before/after metadata removal is handled in service; also try to clean vectors
+    ingestion = IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
+    try:
+        ingestion.delete_user_document(str(current_user.id), str(document_id))
+    except Exception:
+        pass
+    service.delete(current_user.id, document_id)
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.DOCUMENT_DELETED,
+        entity_type="document",
+        entity_id=str(document_id),
+    )

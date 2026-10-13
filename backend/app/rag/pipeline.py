@@ -74,6 +74,33 @@ class IngestionPipeline:
             raise ValueError("user_id is required")
         return self._ingest(Path(path), USER_COLLECTION, user_id, doc_id, metadata)
 
+    def ingest_user_document_bytes(
+        self,
+        data: bytes,
+        filename: str,
+        user_id: str,
+        doc_id: str | None = None,
+        metadata: Mapping[str, object] | None = None,
+    ) -> IngestionResult:
+        """Ingest document from bytes (avoids temp files when possible)."""
+        if not user_id or not user_id.strip():
+            raise ValueError("user_id is required")
+        if not data:
+            return IngestionResult(doc_id, filename, "user", "failed", 0, 0, "file is empty")
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(filename).suffix) as f:
+            f.write(data)
+            tmp_path = Path(f.name)
+        try:
+            result = self._ingest(tmp_path, USER_COLLECTION, user_id, doc_id, metadata)
+        finally:
+            try:
+                tmp_path.unlink()
+            except Exception:
+                pass
+        return result
+
     def ingest_curated_directory(self, directory: str | Path) -> list[IngestionResult]:
         files = sorted(
             p for p in Path(directory).rglob("*") if p.suffix.lower() in SUPPORTED_EXTENSIONS

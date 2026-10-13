@@ -18,6 +18,8 @@ from app.memory.confirmation import Decision, MemoryWriter
 from app.memory.history import HistoryRecord
 from app.models.enums import MemoryKey, MessageRole
 from app.models.user import User
+from app.rag.retriever import Retriever
+from app.rag.vector_store import VectorStore
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
 from app.services.profile_service import ProfileService
@@ -167,12 +169,17 @@ class ChatService:
         conversation_id = conversation.id
         self._conversations.add_message(user_id, conversation_id, MessageRole.USER, message)
 
+        try:
+            retriever = Retriever(VectorStore(persist_dir=settings.chromadb_persist_dir))
+        except Exception:
+            retriever = None
+
         graph_deps = AgentDeps(
             llm=self._build_llm(),
             memory_reader=_MemoryReaderAdapter(self._db, user_id),
             memory_writer=_MemoryWriterAdapter(self._db, user_id),
             profile_reader=_ProfileReaderAdapter(self._db, user_id),
-            retriever=None,
+            retriever=retriever,
             tools={"web_search": web_search, "nearby_gyms": nearby_gyms},
             db_session=self._db,
         )
