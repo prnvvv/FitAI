@@ -4,16 +4,14 @@ import { api } from '../services/api'
 import type { Profile } from '../types'
 
 const EMPTY_PROFILE: Partial<Profile> = {
-  display_name: '',
+  date_of_birth: undefined,
   age: undefined,
-  sex: null,
   height_cm: undefined,
   weight_kg: undefined,
+  goal: '',
   activity_level: '',
-  primary_goal: '',
   dietary_preferences: [],
-  equipment: [],
-  experience_level: '',
+  dietary_restrictions: [],
 }
 
 export function ProfilePage() {
@@ -67,39 +65,26 @@ export function ProfilePage() {
           <User size={40} />
         </div>
 
-        <label className="profile__field">
-          <span>Display name</span>
-          <input
-            type="text"
-            value={profile.display_name ?? ''}
-            onChange={(e) => handleChange('display_name', e.target.value)}
-          />
-        </label>
-
         <div className="profile__row">
+          <label className="profile__field">
+            <span>Date of birth</span>
+            <input
+              type="date"
+              value={profile.date_of_birth ?? ''}
+              onChange={(e) => handleChange('date_of_birth', e.target.value || null)}
+            />
+          </label>
+
           <label className="profile__field">
             <span>Age</span>
             <input
               type="number"
               min={10}
               max={120}
+              disabled
               value={profile.age ?? ''}
-              onChange={(e) => handleChange('age', e.target.value ? Number(e.target.value) : undefined)}
+              placeholder="Derived from date of birth"
             />
-          </label>
-
-          <label className="profile__field">
-            <span>Sex</span>
-            <select
-              value={profile.sex ?? ''}
-              onChange={(e) =>
-                handleChange('sex', e.target.value === '' ? null : (e.target.value as 'male' | 'female'))
-              }
-            >
-              <option value="">Not specified</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
           </label>
         </div>
 
@@ -139,19 +124,19 @@ export function ProfilePage() {
           >
             <option value="">Select</option>
             <option value="sedentary">Sedentary</option>
-            <option value="lightly_active">Lightly active</option>
-            <option value="moderately_active">Moderately active</option>
+            <option value="light">Lightly active</option>
+            <option value="moderate">Moderately active</option>
+            <option value="active">Active</option>
             <option value="very_active">Very active</option>
-            <option value="super_active">Super active</option>
           </select>
         </label>
 
         <label className="profile__field">
-          <span>Primary goal</span>
+          <span>Goal</span>
           <input
             type="text"
-            value={profile.primary_goal ?? ''}
-            onChange={(e) => handleChange('primary_goal', e.target.value)}
+            value={profile.goal ?? ''}
+            onChange={(e) => handleChange('goal', e.target.value)}
             placeholder="e.g. Build muscle, lose fat, run a 5K"
           />
         </label>
@@ -172,31 +157,18 @@ export function ProfilePage() {
         </label>
 
         <label className="profile__field">
-          <span>Equipment</span>
+          <span>Dietary restrictions</span>
           <input
             type="text"
-            value={(profile.equipment ?? []).join(', ')}
+            value={(profile.dietary_restrictions ?? []).join(', ')}
             onChange={(e) =>
               handleChange(
-                'equipment',
+                'dietary_restrictions',
                 e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
               )
             }
-            placeholder="e.g. dumbbells, barbell, resistance bands"
+            placeholder="e.g. lactose-free, gluten-free"
           />
-        </label>
-
-        <label className="profile__field">
-          <span>Experience level</span>
-          <select
-            value={profile.experience_level ?? ''}
-            onChange={(e) => handleChange('experience_level', e.target.value)}
-          >
-            <option value="">Select</option>
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
         </label>
 
         <button type="submit" className="profile__save" disabled={saving}>

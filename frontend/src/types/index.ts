@@ -61,16 +61,14 @@ export interface Memory {
 export interface Profile {
   id: string
   user_id: string
-  display_name?: string
-  age?: number
-  sex?: 'male' | 'female' | null
-  height_cm?: number
-  weight_kg?: number
-  activity_level?: string
-  primary_goal?: string
+  date_of_birth?: string | null
+  age?: number | null
+  height_cm?: number | null
+  weight_kg?: number | null
+  goal?: string | null
+  activity_level?: string | null
   dietary_preferences?: string[]
-  equipment?: string[]
-  experience_level?: string
+  dietary_restrictions?: string[]
   created_at: string
   updated_at: string
 }
