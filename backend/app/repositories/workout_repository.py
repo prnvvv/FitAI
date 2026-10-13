@@ -21,7 +21,9 @@ class WorkoutRepository:
     ) -> tuple[list[WorkoutSession], int]:
         """Return a page of workout sessions for ``user_id`` and the total count."""
         total = self._db.scalar(
-            select(func.count()).select_from(WorkoutSession).where(WorkoutSession.user_id == user_id)
+            select(func.count())
+            .select_from(WorkoutSession)
+            .where(WorkoutSession.user_id == user_id)
         )
         statement = (
             select(WorkoutSession)

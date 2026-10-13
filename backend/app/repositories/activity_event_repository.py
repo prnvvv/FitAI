@@ -1,9 +1,10 @@
 """Activity event persistence."""
+
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
-from typing import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -55,9 +56,7 @@ class ActivityEventRepository:
         filters = [ActivityEvent.user_id == user_id]
         if types:
             filters.append(ActivityEvent.type.in_(types))
-        total = self._db.scalar(
-            select(func.count()).select_from(ActivityEvent).where(*filters)
-        )
+        total = self._db.scalar(select(func.count()).select_from(ActivityEvent).where(*filters))
         statement = (
             select(ActivityEvent)
             .where(*filters)
@@ -71,7 +70,5 @@ class ActivityEventRepository:
         """Delete all activity events for a user (privacy reset)."""
         from sqlalchemy import delete
 
-        result = self._db.execute(
-            delete(ActivityEvent).where(ActivityEvent.user_id == user_id)
-        )
+        result = self._db.execute(delete(ActivityEvent).where(ActivityEvent.user_id == user_id))
         return int(getattr(result, "rowcount", 0))

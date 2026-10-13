@@ -1,7 +1,6 @@
 """Activity log endpoints."""
-from __future__ import annotations
 
-from uuid import UUID
+from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
 

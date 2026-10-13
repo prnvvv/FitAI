@@ -13,13 +13,13 @@ from uuid import UUID, uuid4
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.errors import (
     AppError,
     NotFoundError,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
 )
-from app.core.config import settings
 from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.repositories.document_repository import DocumentRepository

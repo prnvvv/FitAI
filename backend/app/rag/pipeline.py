@@ -1,4 +1,5 @@
 """Ingestion: load -> chunk -> index (with retries) for curated and user documents."""
+
 from __future__ import annotations
 
 import hashlib
@@ -39,34 +40,58 @@ def _file_hash(path: Path) -> str:
 
 
 class IngestionPipeline:
-    def __init__(self, store: VectorStore, chunk_size: int = 1000, overlap: int = 150,
-                 max_chunks: int = 2000, max_retries: int = 3, backoff_s: float = 0.5,
-                 sleep: Callable[[float], None] = time.sleep):
+    def __init__(
+        self,
+        store: VectorStore,
+        chunk_size: int = 1000,
+        overlap: int = 150,
+        max_chunks: int = 2000,
+        max_retries: int = 3,
+        backoff_s: float = 0.5,
+        sleep: Callable[[float], None] = time.sleep,
+    ):
         self._store = store
         self._size, self._overlap, self._max_chunks = chunk_size, overlap, max_chunks
         self._retries, self._backoff, self._sleep = max(1, max_retries), backoff_s, sleep
 
-    def ingest_curated(self, path: str | Path, doc_id: str | None = None,
-                       metadata: Mapping[str, object] | None = None) -> IngestionResult:
+    def ingest_curated(
+        self,
+        path: str | Path,
+        doc_id: str | None = None,
+        metadata: Mapping[str, object] | None = None,
+    ) -> IngestionResult:
         return self._ingest(Path(path), KNOWLEDGE_COLLECTION, None, doc_id, metadata)
 
-    def ingest_user_document(self, path: str | Path, user_id: str, doc_id: str | None = None,
-                             metadata: Mapping[str, object] | None = None) -> IngestionResult:
+    def ingest_user_document(
+        self,
+        path: str | Path,
+        user_id: str,
+        doc_id: str | None = None,
+        metadata: Mapping[str, object] | None = None,
+    ) -> IngestionResult:
         """`user_id` must be the authenticated user, never taken from document content."""
         if not user_id or not user_id.strip():
             raise ValueError("user_id is required")
         return self._ingest(Path(path), USER_COLLECTION, user_id, doc_id, metadata)
 
     def ingest_curated_directory(self, directory: str | Path) -> list[IngestionResult]:
-        files = sorted(p for p in Path(directory).rglob("*") if p.suffix.lower() in SUPPORTED_EXTENSIONS)
+        files = sorted(
+            p for p in Path(directory).rglob("*") if p.suffix.lower() in SUPPORTED_EXTENSIONS
+        )
         return [self.ingest_curated(p) for p in files]
 
     def delete_user_document(self, user_id: str, doc_id: str) -> int:
         """Remove one of the user's documents from the index; returns vectors deleted."""
         return self._store.delete_document(USER_COLLECTION, doc_id, owner_id=user_id)
 
-    def _ingest(self, path: Path, collection: str, owner_id: str | None, doc_id: str | None,
-                metadata: Mapping[str, object] | None) -> IngestionResult:
+    def _ingest(
+        self,
+        path: Path,
+        collection: str,
+        owner_id: str | None,
+        doc_id: str | None,
+        metadata: Mapping[str, object] | None,
+    ) -> IngestionResult:
         scope: Literal["curated", "user"] = "user" if owner_id else "curated"
 
         def _fail(err: str, did: str | None = None, n: int = 0) -> IngestionResult:
@@ -80,7 +105,9 @@ class IngestionPipeline:
             if owner_id:
                 meta["owner_id"] = owner_id
                 prefix = hashlib.sha256(owner_id.encode()).hexdigest()[:12] + ":"
-            chunks = chunk_document(doc, did, meta, self._size, self._overlap, prefix, self._max_chunks)
+            chunks = chunk_document(
+                doc, did, meta, self._size, self._overlap, prefix, self._max_chunks
+            )
         except (DocumentLoadError, ValueError, OSError) as exc:
             log.info("ingestion rejected %s: %s", path.name, exc)
             return _fail(str(exc))
@@ -95,7 +122,9 @@ class IngestionPipeline:
                 return _fail(str(exc), did, attempt)
             except VectorStoreError as exc:
                 last = exc
-                log.warning("index attempt %d/%d failed for %s: %s", attempt, self._retries, path.name, exc)
+                log.warning(
+                    "index attempt %d/%d failed for %s: %s", attempt, self._retries, path.name, exc
+                )
                 if attempt < self._retries:
                     self._sleep(self._backoff * 2 ** (attempt - 1))
         try:  # avoid leaving a partially indexed document

@@ -20,7 +20,6 @@ from app.models.user import User
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
 from app.services.profile_service import ProfileService
-from app.tools.activity import get_activity_log
 from app.tools.nearby_gyms import nearby_gyms
 from app.tools.web_search import web_search
 
@@ -46,7 +45,9 @@ class _ProfileReaderAdapter(ProfileReader):
             "dietary_restrictions": profile.dietary_restrictions or [],
             "display_name": prefs.get("display_name") if isinstance(prefs, dict) else None,
             "about_you": prefs.get("about_you") if isinstance(prefs, dict) else None,
-            "assistant_should_know": prefs.get("assistant_should_know") if isinstance(prefs, dict) else None,
+            "assistant_should_know": prefs.get("assistant_should_know")
+            if isinstance(prefs, dict)
+            else None,
             "preferred_tone": prefs.get("preferred_tone") if isinstance(prefs, dict) else None,
             "units": prefs.get("units") if isinstance(prefs, dict) else None,
         }

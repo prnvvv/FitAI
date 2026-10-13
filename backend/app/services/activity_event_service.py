@@ -1,9 +1,10 @@
 """Activity event log business logic."""
+
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime, timezone
-from typing import Sequence
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -62,9 +63,7 @@ class ActivityEventService:
         offset: int = 0,
     ) -> tuple[list[ActivityEvent], int]:
         """Return a page of the user's activity events."""
-        return self._events.list_for_user(
-            user_id, types=types, limit=limit, offset=offset
-        )
+        return self._events.list_for_user(user_id, types=types, limit=limit, offset=offset)
 
     def clear(self, user_id: uuid.UUID) -> int:
         """Delete all events for a user."""

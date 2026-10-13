@@ -4,6 +4,7 @@ Contract for the persistence developer (`MemoryWriter`): each method must return
 truthy ONLY after the write is durably committed. Raise or return False/None
 otherwise. This module reports success solely from those return values.
 """
+
 from __future__ import annotations
 
 import logging
@@ -78,19 +79,29 @@ def decide(change: DetectedChange, policy: ConfirmationPolicy | None = None) -> 
     if kind is ChangeKind.HISTORICAL_EVENT:
         if build_history_record(f) is None:
             return d(Action.CREATE_PENDING, "historical event without a verifiable date")
-        if (policy.allow_auto_apply and confident
-                and f.statement_type in (StatementType.EXPLICIT, StatementType.HISTORICAL)):
+        if (
+            policy.allow_auto_apply
+            and confident
+            and f.statement_type in (StatementType.EXPLICIT, StatementType.HISTORICAL)
+        ):
             return d(Action.RECORD_HISTORY, "dated, confident historical record")
         return d(Action.CREATE_PENDING, "historical record needs confirmation")
 
     # NEW / CHANGED current values
-    if (policy.allow_auto_apply and f.field in policy.auto_fields and confident
-            and f.statement_type is StatementType.EXPLICIT and f.tense is Tense.PRESENT):
+    if (
+        policy.allow_auto_apply
+        and f.field in policy.auto_fields
+        and confident
+        and f.statement_type is StatementType.EXPLICIT
+        and f.tense is Tense.PRESENT
+    ):
         return d(Action.AUTO_APPLY, "explicit, validated, high-confidence")
     return d(Action.CREATE_PENDING, "needs confirmation (policy/confidence/certainty)")
 
 
-def decide_all(changes: list[DetectedChange], policy: ConfirmationPolicy | None = None) -> list[Decision]:
+def decide_all(
+    changes: list[DetectedChange], policy: ConfirmationPolicy | None = None
+) -> list[Decision]:
     return [decide(c, policy) for c in changes]
 
 
@@ -99,7 +110,9 @@ def _summary(c: DetectedChange) -> str:
     return f"{f.key} = {f.value}{' ' + f.unit if f.unit else ''}"
 
 
-def apply_decisions(user_id: str, decisions: list[Decision], writer: MemoryWriter) -> list[ApplyResult]:
+def apply_decisions(
+    user_id: str, decisions: list[Decision], writer: MemoryWriter
+) -> list[ApplyResult]:
     """Execute decisions via the writer. Service errors become `failed` results."""
     results: list[ApplyResult] = []
     for dec in decisions:

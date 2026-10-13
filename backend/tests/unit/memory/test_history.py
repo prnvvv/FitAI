@@ -1,4 +1,5 @@
 """Tests for history record preparation."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -11,15 +12,24 @@ from app.memory.history import build_history_record, prepare_history
 _FactField = Literal["weight", "height", "body_fat", "goal", "workout", "supplement", "measurement"]
 
 
-def _fact(field: _FactField, value: float | str, tense: Tense = Tense.PRESENT,
-          statement_type: StatementType = StatementType.EXPLICIT,
-          timestamp: datetime | None = None, source_text: str = "test") -> ExtractedFact:
+def _fact(
+    field: _FactField,
+    value: float | str,
+    tense: Tense = Tense.PRESENT,
+    statement_type: StatementType = StatementType.EXPLICIT,
+    timestamp: datetime | None = None,
+    source_text: str = "test",
+) -> ExtractedFact:
     return ExtractedFact(
-        field=field, value=value,
+        field=field,
+        value=value,
         unit="kg" if field == "weight" else None,
-        confidence=0.9, timestamp=timestamp,
+        confidence=0.9,
+        timestamp=timestamp,
         extracted_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
-        tense=tense, statement_type=statement_type, source_text=source_text,
+        tense=tense,
+        statement_type=statement_type,
+        source_text=source_text,
     )
 
 
@@ -41,8 +51,13 @@ def test_build_history_record_stated_timestamp() -> None:
 
 
 def test_build_history_record_past_without_date_returns_none() -> None:
-    fact = _fact("weight", 80, tense=Tense.PAST, statement_type=StatementType.HISTORICAL,
-                 source_text="I weighed 80 kg before")
+    fact = _fact(
+        "weight",
+        80,
+        tense=Tense.PAST,
+        statement_type=StatementType.HISTORICAL,
+        source_text="I weighed 80 kg before",
+    )
     assert build_history_record(fact) is None
 
 
@@ -65,8 +80,13 @@ def test_build_history_record_goal_future_allowed() -> None:
 
 def test_prepare_history_splits_records_and_missing_dates() -> None:
     dated = _fact("weight", 70, timestamp=datetime(2025, 6, 1, tzinfo=timezone.utc))
-    missing = _fact("weight", 80, tense=Tense.PAST, statement_type=StatementType.HISTORICAL,
-                    source_text="I weighed 80 kg before")
+    missing = _fact(
+        "weight",
+        80,
+        tense=Tense.PAST,
+        statement_type=StatementType.HISTORICAL,
+        source_text="I weighed 80 kg before",
+    )
     changes = [
         DetectedChange(fact=dated, kind=ChangeKind.CHANGED),
         DetectedChange(fact=missing, kind=ChangeKind.HISTORICAL_EVENT),

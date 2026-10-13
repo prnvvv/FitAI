@@ -4,6 +4,7 @@ This module is the first-line screen for sensitive or risky requests. It is NOT 
 substitute for a full moderation model, but it provides fail-closed blocking for
 clear categories before any tool, memory, or LLM call is made.
 """
+
 from __future__ import annotations
 
 import re
@@ -39,14 +40,26 @@ _SAFE_REPLIES = {
 
 _SAFETY_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("self_harm", re.compile(r"\b(kill myself|suicid\w*|self[- ]harm|end my life)\b", re.I)),
-    ("medical_emergency", re.compile(r"\b(chest pain|can'?t breathe|heart attack|passed out|fainted)\b", re.I)),
-    ("extreme_restriction", re.compile(
-        r"\b(anorexi\w*|bulimi\w*|thinspo|pro[- ]?ana|purg\w+|starv\w+ myself|"
-        r"(?:under|below|less than)\s*[1-8]\d\d\s*(?:calories|kcal))\b", re.I)),
-    ("drug_dosing", re.compile(
-        r"\b(?:steroids?|trenbolone|clenbuterol|dnp|sarms?)\b.*\b(?:dos(?:e|age)|cycle|stack|inject\w*|mg)\b|"
-        r"\b(?:dos(?:e|age)|cycle|stack|inject\w*)\b.*\b(?:steroids?|trenbolone|clenbuterol|dnp|sarms?)\b",
-        re.I | re.S)),
+    (
+        "medical_emergency",
+        re.compile(r"\b(chest pain|can'?t breathe|heart attack|passed out|fainted)\b", re.I),
+    ),
+    (
+        "extreme_restriction",
+        re.compile(
+            r"\b(anorexi\w*|bulimi\w*|thinspo|pro[- ]?ana|purg\w+|starv\w+ myself|"
+            r"(?:under|below|less than)\s*[1-8]\d\d\s*(?:calories|kcal))\b",
+            re.I,
+        ),
+    ),
+    (
+        "drug_dosing",
+        re.compile(
+            r"\b(?:steroids?|trenbolone|clenbuterol|dnp|sarms?)\b.*\b(?:dos(?:e|age)|cycle|stack|inject\w*|mg)\b|"
+            r"\b(?:dos(?:e|age)|cycle|stack|inject\w*)\b.*\b(?:steroids?|trenbolone|clenbuterol|dnp|sarms?)\b",
+            re.I | re.S,
+        ),
+    ),
 ]
 
 

@@ -3,6 +3,7 @@
 Geocoding is done with Nominatim; place discovery uses the Overpass API.
 No API key is required. Attribution: data from OpenStreetMap contributors.
 """
+
 from __future__ import annotations
 
 import logging

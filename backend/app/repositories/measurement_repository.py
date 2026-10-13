@@ -76,9 +76,7 @@ class MeasurementRepository:
         self._db.delete(measurement)
         self._db.flush()
 
-    def series(
-        self, user_id: UUID, measurement_type: MeasurementType
-    ) -> list[Measurement]:
+    def series(self, user_id: UUID, measurement_type: MeasurementType) -> list[Measurement]:
         """Return all measurements of a type in chronological order."""
         statement = (
             select(Measurement)

@@ -124,7 +124,10 @@ class TokenVerifier:
 
         key = self._resolve_key(algorithm, header.get("kid"))
 
-        options = {"require": ["exp", "sub"], "verify_aud": self._config.supabase_jwt_audience is not None}
+        options = {
+            "require": ["exp", "sub"],
+            "verify_aud": self._config.supabase_jwt_audience is not None,
+        }
         decode_kwargs: dict[str, Any] = {
             "algorithms": [algorithm],
             "options": options,

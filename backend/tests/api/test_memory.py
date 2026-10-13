@@ -31,9 +31,7 @@ def test_confirm_pending_update_creates_current_memory(make_client, db_session) 
     client = _provision(make_client, user)
 
     service = MemoryService(db_session)
-    proposal = service.create_proposal(
-        user.id, MemoryKey.WEIGHT, {"value": 72.0, "unit": "kg"}
-    )
+    proposal = service.create_proposal(user.id, MemoryKey.WEIGHT, {"value": 72.0, "unit": "kg"})
 
     confirmed = client.post(f"/api/v1/memory/pending/{proposal.id}/confirm")
     assert confirmed.status_code == 200
@@ -46,9 +44,7 @@ def test_confirm_pending_update_creates_current_memory(make_client, db_session) 
 def test_duplicate_confirmation_returns_409(make_client, db_session) -> None:
     user = AuthUser(id=uuid.uuid4())
     client = _provision(make_client, user)
-    proposal = MemoryService(db_session).create_proposal(
-        user.id, MemoryKey.GOAL, "build muscle"
-    )
+    proposal = MemoryService(db_session).create_proposal(user.id, MemoryKey.GOAL, "build muscle")
 
     assert client.post(f"/api/v1/memory/pending/{proposal.id}/confirm").status_code == 200
     second = client.post(f"/api/v1/memory/pending/{proposal.id}/confirm")

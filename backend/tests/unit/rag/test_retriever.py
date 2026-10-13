@@ -1,4 +1,5 @@
 """Tests for RAG retriever."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -9,8 +10,9 @@ from app.rag.retriever import Retriever
 from app.rag.vector_store import VectorStore, VectorStoreError
 
 
-def _hit(text: str, source: str, doc_id: str, page: int, distance: float,
-         owner_id: str | None = None) -> MagicMock:
+def _hit(
+    text: str, source: str, doc_id: str, page: int, distance: float, owner_id: str | None = None
+) -> MagicMock:
     hit = MagicMock()
     hit.text = text
     hit.distance = distance

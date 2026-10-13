@@ -1,4 +1,5 @@
 """Compare extracted facts with current memory. Pure logic, no I/O."""
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -14,10 +15,10 @@ from .extractor import ExtractedFact, StatementType, Tense
 class ChangeKind(str, Enum):
     NEW = "new"
     UNCHANGED = "unchanged"
-    CHANGED = "changed"                    # current value differs from memory
+    CHANGED = "changed"  # current value differs from memory
     HISTORICAL_EVENT = "historical_event"  # past/event; never a current update
-    CONTRADICTION = "contradiction"        # conflicts in a way that needs the user
-    NOT_CURRENT = "not_current"            # hypothetical/future/other: ignore
+    CONTRADICTION = "contradiction"  # conflicts in a way that needs the user
+    NOT_CURRENT = "not_current"  # hypothetical/future/other: ignore
 
 
 class MemoryEntry(BaseModel):
@@ -65,7 +66,11 @@ def _classify(f: ExtractedFact, prev: MemoryEntry | None) -> DetectedChange:
 
     if f.statement_type is StatementType.HYPOTHETICAL:
         return out(ChangeKind.NOT_CURRENT, "hypothetical statement")
-    if f.tense is Tense.PAST or f.statement_type is StatementType.HISTORICAL or f.field == "workout":
+    if (
+        f.tense is Tense.PAST
+        or f.statement_type is StatementType.HISTORICAL
+        or f.field == "workout"
+    ):
         return out(ChangeKind.HISTORICAL_EVENT, "past event or workout log; not a current value")
     if not (f.tense is Tense.PRESENT or (f.field == "goal" and f.tense is Tense.FUTURE)):
         return out(ChangeKind.NOT_CURRENT, "not a current-state statement")
@@ -73,9 +78,13 @@ def _classify(f: ExtractedFact, prev: MemoryEntry | None) -> DetectedChange:
         return out(ChangeKind.NEW, "no existing value")
 
     if f.field in _MULTI_VALUED:
-        known = {s.lower() for s in (prev.value if isinstance(prev.value, list) else [str(prev.value)])}
-        return out(ChangeKind.UNCHANGED if str(f.value).lower() in known else ChangeKind.NEW,
-                   "supplement set comparison")
+        known = {
+            s.lower() for s in (prev.value if isinstance(prev.value, list) else [str(prev.value)])
+        }
+        return out(
+            ChangeKind.UNCHANGED if str(f.value).lower() in known else ChangeKind.NEW,
+            "supplement set comparison",
+        )
     if f.field == "goal":
         same = _same("goal", f.value, str(prev.value))
         return out(ChangeKind.UNCHANGED if same else ChangeKind.CHANGED, "goal text comparison")
@@ -90,25 +99,34 @@ def _classify(f: ExtractedFact, prev: MemoryEntry | None) -> DetectedChange:
     if f.timestamp and prev.updated_at and f.timestamp < prev.updated_at:
         return out(ChangeKind.CONTRADICTION, "statement is older than the stored value")
     if _implausible(f.field, float(prev.value), float(f.value)):
-        return out(ChangeKind.CONTRADICTION, "change too large to be plausible without confirmation")
+        return out(
+            ChangeKind.CONTRADICTION, "change too large to be plausible without confirmation"
+        )
     return out(ChangeKind.CHANGED, "value differs from stored value")
 
 
-def detect_changes(facts: list[ExtractedFact], memory: Mapping[str, MemoryEntry]) -> list[DetectedChange]:
+def detect_changes(
+    facts: list[ExtractedFact], memory: Mapping[str, MemoryEntry]
+) -> list[DetectedChange]:
     """Classify each fact against current memory (keyed by `ExtractedFact.key`)."""
     results = [_classify(f, memory.get(f.key)) for f in facts]
 
     # conflicting current statements for the same single-valued key in one batch
     groups: dict[str, list[int]] = defaultdict(list)
     for i, c in enumerate(results):
-        if c.kind in (ChangeKind.NEW, ChangeKind.CHANGED, ChangeKind.UNCHANGED) \
-                and c.fact.field not in _MULTI_VALUED:
+        if (
+            c.kind in (ChangeKind.NEW, ChangeKind.CHANGED, ChangeKind.UNCHANGED)
+            and c.fact.field not in _MULTI_VALUED
+        ):
             groups[c.fact.key].append(i)
     for idxs in (g for g in groups.values() if len(g) > 1):
         first = results[idxs[0]].fact
         if not all(_same(first.field, first.value, results[i].fact.value) for i in idxs[1:]):
             for i in idxs:
-                results[i] = DetectedChange(fact=results[i].fact, kind=ChangeKind.CONTRADICTION,
-                                            previous=results[i].previous,
-                                            reason="conflicting statements in the same message")
+                results[i] = DetectedChange(
+                    fact=results[i].fact,
+                    kind=ChangeKind.CONTRADICTION,
+                    previous=results[i].previous,
+                    reason="conflicting statements in the same message",
+                )
     return results

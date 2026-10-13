@@ -1,4 +1,5 @@
 """Tests for workout tools."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -63,12 +64,14 @@ def test_analyze_personal_records() -> None:
 def test_require_user_id_raises_when_missing() -> None:
     from app.tools.calculations import ToolInputError
     from app.tools.workout_tools import require_user_id
+
     with pytest.raises(ToolInputError, match="no authenticated user"):
         require_user_id({})
 
 
 def test_require_user_id_returns_uid() -> None:
     from app.tools.workout_tools import require_user_id
+
     uid = require_user_id(_config())
     assert uid == "user-1"
 

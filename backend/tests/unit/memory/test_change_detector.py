@@ -1,4 +1,5 @@
 """Tests for memory change detection."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -14,14 +15,27 @@ from app.memory.extractor import ExtractedFact, StatementType, Tense
 _FactField = Literal["weight", "height", "body_fat", "goal", "workout", "supplement", "measurement"]
 
 
-def _fact(field: _FactField, value: float | str, unit: str | None = None,
-          tense: Tense = Tense.PRESENT, statement_type: StatementType = StatementType.EXPLICIT,
-          source_text: str = "fact", qualifier: str | None = None,
-          timestamp: datetime | None = None) -> ExtractedFact:
+def _fact(
+    field: _FactField,
+    value: float | str,
+    unit: str | None = None,
+    tense: Tense = Tense.PRESENT,
+    statement_type: StatementType = StatementType.EXPLICIT,
+    source_text: str = "fact",
+    qualifier: str | None = None,
+    timestamp: datetime | None = None,
+) -> ExtractedFact:
     return ExtractedFact(
-        field=field, qualifier=qualifier, value=value, unit=unit,
-        confidence=0.9, timestamp=timestamp, extracted_at=datetime.now(timezone.utc),
-        tense=tense, statement_type=statement_type, source_text=source_text,
+        field=field,
+        qualifier=qualifier,
+        value=value,
+        unit=unit,
+        confidence=0.9,
+        timestamp=timestamp,
+        extracted_at=datetime.now(timezone.utc),
+        tense=tense,
+        statement_type=statement_type,
+        source_text=source_text,
     )
 
 
@@ -52,16 +66,27 @@ def test_detect_changes_changed_value() -> None:
 
 
 def test_detect_changes_historical_event() -> None:
-    fact = _fact("weight", 80, "kg", tense=Tense.PAST,
-                 statement_type=StatementType.HISTORICAL, source_text="I weighed 80 kg")
+    fact = _fact(
+        "weight",
+        80,
+        "kg",
+        tense=Tense.PAST,
+        statement_type=StatementType.HISTORICAL,
+        source_text="I weighed 80 kg",
+    )
     memory: dict[str, MemoryEntry] = {}
     result = detect_changes([fact], memory)
     assert result[0].kind is ChangeKind.HISTORICAL_EVENT
 
 
 def test_detect_changes_hypothetical_ignored() -> None:
-    fact = _fact("weight", 60, "kg", statement_type=StatementType.HYPOTHETICAL,
-                 source_text="What if I weighed 60 kg?")
+    fact = _fact(
+        "weight",
+        60,
+        "kg",
+        statement_type=StatementType.HYPOTHETICAL,
+        source_text="What if I weighed 60 kg?",
+    )
     memory: dict[str, MemoryEntry] = {}
     result = detect_changes([fact], memory)
     assert result[0].kind is ChangeKind.NOT_CURRENT

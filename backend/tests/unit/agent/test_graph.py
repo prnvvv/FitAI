@@ -1,4 +1,5 @@
 """Tests for LangGraph routing."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -17,9 +18,14 @@ from app.safety import SafetyResult
 
 def _fact() -> ExtractedFact:
     return ExtractedFact(
-        field="weight", value=70, unit="kg", confidence=0.9,
+        field="weight",
+        value=70,
+        unit="kg",
+        confidence=0.9,
         extracted_at=datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
-        tense=Tense.PRESENT, statement_type=StatementType.EXPLICIT, source_text="I weigh 70 kg",
+        tense=Tense.PRESENT,
+        statement_type=StatementType.EXPLICIT,
+        source_text="I weigh 70 kg",
     )
 
 
@@ -55,16 +61,24 @@ def test_route_after_extract_without_facts() -> None:
 
 def test_route_after_detect_with_actionable_updates() -> None:
     from app.memory.change_detector import ChangeKind, DetectedChange
-    decision = Decision(change=DetectedChange(fact=_fact(), kind=ChangeKind.NEW),
-                        action=Action.AUTO_APPLY, reason="test")
+
+    decision = Decision(
+        change=DetectedChange(fact=_fact(), kind=ChangeKind.NEW),
+        action=Action.AUTO_APPLY,
+        reason="test",
+    )
     state: AgentState = {"proposed_updates": [decision], "user_message": "Hello"}
     assert route_after_detect(state) == "apply_updates"
 
 
 def test_route_after_detect_only_skips() -> None:
     from app.memory.change_detector import ChangeKind, DetectedChange
-    decision = Decision(change=DetectedChange(fact=_fact(), kind=ChangeKind.UNCHANGED),
-                        action=Action.SKIP, reason="test")
+
+    decision = Decision(
+        change=DetectedChange(fact=_fact(), kind=ChangeKind.UNCHANGED),
+        action=Action.SKIP,
+        reason="test",
+    )
     state: AgentState = {"proposed_updates": [decision], "user_message": "Hello"}
     assert route_after_detect(state) == "generate_response"
 

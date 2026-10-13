@@ -1,4 +1,5 @@
 """Build dated, append-only history records. Never invents dates; never writes."""
+
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
@@ -11,8 +12,13 @@ from .extractor import ExtractedFact, StatementType, Tense
 
 HistoryCategory = Literal["weight", "goal", "workout", "measurement", "supplement"]
 _CATEGORY: dict[str, HistoryCategory] = {
-    "weight": "weight", "goal": "goal", "workout": "workout", "supplement": "supplement",
-    "height": "measurement", "body_fat": "measurement", "measurement": "measurement",
+    "weight": "weight",
+    "goal": "goal",
+    "workout": "workout",
+    "supplement": "supplement",
+    "height": "measurement",
+    "body_fat": "measurement",
+    "measurement": "measurement",
 }
 _RECORDABLE = {ChangeKind.NEW, ChangeKind.CHANGED, ChangeKind.HISTORICAL_EVENT}
 
@@ -24,8 +30,8 @@ class HistoryRecord(BaseModel):
     key: str
     value: float | str
     unit: str | None = None
-    effective_date: date           # when the fact held, from user text or message time
-    recorded_at: datetime          # when we captured it
+    effective_date: date  # when the fact held, from user text or message time
+    recorded_at: datetime  # when we captured it
     confidence: float
     source_text: str
 
@@ -48,14 +54,24 @@ def build_history_record(fact: ExtractedFact) -> HistoryRecord | None:
         return None
     if fact.timestamp is not None:
         effective = fact.timestamp.astimezone(timezone.utc).date()
-    elif fact.tense is Tense.PRESENT and fact.field != "workout" \
-            or (fact.field == "goal" and fact.tense is Tense.FUTURE):
+    elif (
+        fact.tense is Tense.PRESENT
+        and fact.field != "workout"
+        or (fact.field == "goal" and fact.tense is Tense.FUTURE)
+    ):
         effective = fact.extracted_at.astimezone(timezone.utc).date()
     else:
         return None
-    return HistoryRecord(category=_CATEGORY[fact.field], key=fact.key, value=fact.value, unit=fact.unit,
-                         effective_date=effective, recorded_at=fact.extracted_at,
-                         confidence=fact.confidence, source_text=fact.source_text)
+    return HistoryRecord(
+        category=_CATEGORY[fact.field],
+        key=fact.key,
+        value=fact.value,
+        unit=fact.unit,
+        effective_date=effective,
+        recorded_at=fact.extracted_at,
+        confidence=fact.confidence,
+        source_text=fact.source_text,
+    )
 
 
 def prepare_history(changes: list[DetectedChange]) -> HistoryPlan:
