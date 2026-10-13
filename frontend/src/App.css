@@ -842,6 +842,30 @@
   opacity: 1;
 }
 
+.message__tool-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  padding-left: 40px;
+}
+
+.message__tool-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: var(--bg-code);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.message__tool-event svg {
+  flex-shrink: 0;
+}
+
 .message__action {
   display: flex;
   align-items: center;

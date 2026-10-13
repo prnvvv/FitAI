@@ -36,6 +36,16 @@ export interface ChatResponse {
   conversation_id: string
   response: string
   title: string | null
+  tool_events?: ToolEvent[]
+}
+
+export interface ToolEvent {
+  tool: string
+  status?: string
+  summary?: string
+  key?: string
+  history_recorded?: boolean
+  docs?: string[]
 }
 
 export interface Document {

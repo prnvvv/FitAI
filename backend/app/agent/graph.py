@@ -91,8 +91,8 @@ def build_graph(deps: AgentDeps) -> Any:
     return g.compile()
 
 
-def run_turn(graph: Any, user_id: str, message: str, context: list[dict[str, str]] | None = None) -> str:
+def run_turn(graph: Any, user_id: str, message: str, context: list[dict[str, str]] | None = None) -> dict[str, Any]:
     """Run one turn. `user_id` must come from authentication, never from the message."""
     out: dict[str, Any] = graph.invoke({"user_id": user_id, "user_message": message,
                                         "conversation_context": context or [], "tool_results": [], "errors": []})
-    return str(out.get("response", ""))
+    return {"response": str(out.get("response", "")), "tool_results": out.get("tool_results", [])}

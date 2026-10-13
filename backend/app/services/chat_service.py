@@ -173,7 +173,8 @@ class ChatService:
         messages = self._conversations.list_recent_messages(user_id, conversation_id, limit=20)
         context = [{"role": msg.role.value, "content": msg.content} for msg in messages]
 
-        response = run_turn(graph, str(user_id), message, context)
+        turn = run_turn(graph, str(user_id), message, context)
+        response = turn["response"]
 
         self._conversations.add_message(user_id, conversation_id, MessageRole.ASSISTANT, response)
 
@@ -181,6 +182,7 @@ class ChatService:
             "conversation_id": conversation_id,
             "response": response,
             "title": conversation.title,
+            "tool_events": turn.get("tool_results", []),
         }
 
     @staticmethod
