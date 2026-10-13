@@ -2,6 +2,7 @@
 
 No API key is required. Results are returned as-is and must not be fabricated.
 """
+
 from __future__ import annotations
 
 import logging

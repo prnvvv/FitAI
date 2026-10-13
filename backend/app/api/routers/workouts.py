@@ -10,8 +10,8 @@ from uuid import UUID
 from fastapi import APIRouter, status
 
 from app.api.deps import CurrentUser, DbSession, Pagination
-from app.schemas.common import Page
 from app.models.enums import ActivityEventType
+from app.schemas.common import Page
 from app.schemas.workout import WorkoutSessionCreate, WorkoutSessionOut
 from app.services.activity_event_service import ActivityEventService
 from app.services.workout_service import WorkoutService

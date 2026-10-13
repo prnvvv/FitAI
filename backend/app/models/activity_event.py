@@ -3,6 +3,7 @@
 Events are append-only and scoped to a user. They are written in the same
 transaction as the mutation that produces them.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -41,9 +42,7 @@ class ActivityEvent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     entity_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    occurred_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="user")
     payload: Mapped[dict[str, object] | None] = mapped_column(JSONType, nullable=True)
 

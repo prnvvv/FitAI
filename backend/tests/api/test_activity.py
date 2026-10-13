@@ -1,4 +1,5 @@
 """API tests for the activity log."""
+
 from __future__ import annotations
 
 import uuid

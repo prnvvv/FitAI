@@ -1,4 +1,5 @@
 """Activity log tool for the agent."""
+
 from __future__ import annotations
 
 import logging
@@ -32,7 +33,9 @@ def get_activity_log(
         since = datetime.now(timezone.utc) - timedelta(days=days)
         event_types = None
         if types:
-            event_types = [ActivityEventType(t) for t in types if t in ActivityEventType._value2member_map_]
+            event_types = [
+                ActivityEventType(t) for t in types if t in ActivityEventType._value2member_map_
+            ]
         service = ActivityEventService(db_session)
         items, total = service.list(
             UUID(user_id),
