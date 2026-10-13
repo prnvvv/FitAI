@@ -14,6 +14,8 @@ from app.tools.web.limits import ToolBudget
 from app.tools.web.search import WebSearchKit
 from app.tools.web.weather import get_datetime, get_weather
 from app.tools.web_search import web_search as ddgs_web_search
+from app.tools.workout_adapter import WorkoutHistoryServiceAdapter
+from app.tools.workout_history import build_workout_history
 
 
 @dataclass
@@ -25,6 +27,11 @@ class ToolContext:
         default_factory=lambda: ToolBudget(max_calls=settings.web_max_tool_calls_per_turn)
     )
     profile: dict[str, Any] | None = None
+    db_session: Any = None
+
+
+#: Accepted aliases for the user's own workout-history tool.
+_WORKOUT_HISTORY_TOOL_NAMES = frozenset({"get_workout_history", "workout_history", "list_workouts"})
 
 
 def _web_search_tool(*, name: str = "web_search") -> dict[str, Any]:
@@ -269,6 +276,45 @@ def _nearby_gyms_tool(*, name: str = "nearby_gyms") -> dict[str, Any]:
     }
 
 
+def _workout_history_tool() -> dict[str, Any]:
+    return {
+        "type": "function",
+        "function": {
+            "name": "get_workout_history",
+            "description": (
+                "Look up the user's OWN logged workouts, including exercises, reps and "
+                "weights, for a specific date or period. Use this whenever the user asks "
+                "what they did, which exercises they performed, or how much they lifted. "
+                "Resolve relative dates (e.g. 'the 13th', 'last Tuesday', 'this week') to "
+                "ISO dates using today's date from the system prompt. Never claim you "
+                "cannot access workout data before calling this tool."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start": {
+                        "type": "string",
+                        "description": "ISO start date (YYYY-MM-DD). Optional.",
+                    },
+                    "end": {
+                        "type": "string",
+                        "description": "ISO end date (YYYY-MM-DD). Optional.",
+                    },
+                    "days": {
+                        "type": "integer",
+                        "description": (
+                            "Look-back window in days (1-365) used only when no start/end "
+                            "is given. Default 90."
+                        ),
+                        "minimum": 1,
+                        "maximum": 365,
+                    },
+                },
+            },
+        },
+    }
+
+
 # Canonical tool definitions exposed to the model. Web/location tools are only
 # added at runtime when the corresponding feature flag is enabled.
 CORE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -277,6 +323,7 @@ CORE_TOOL_DEFINITIONS: list[dict[str, Any]] = [
     _news_search_tool(),
     _fetch_url_tool(),
     _nearby_gyms_tool(name="nearby_gyms"),
+    _workout_history_tool(),
 ]
 
 LOCATION_TOOL_DEFINITIONS: list[dict[str, Any]] = [
@@ -294,8 +341,11 @@ def build_executor(ctx: ToolContext) -> Callable[[str, dict[str, Any]], dict[str
     if ctx.profile and isinstance(ctx.profile.get("units"), str):
         units = ctx.profile["units"]
     timezone = ctx.profile.get("timezone") if ctx.profile else None
+    workout_history = _workout_history_executor(ctx)
 
     def execute(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        if name in _WORKOUT_HISTORY_TOOL_NAMES:
+            return workout_history(args)
         if name in ("web_search", "web.run", "search"):
             return kit.web_search(
                 args.get("query", ""),
@@ -332,6 +382,23 @@ def build_executor(ctx: ToolContext) -> Callable[[str, dict[str, Any]], dict[str
     return execute
 
 
+def _workout_history_executor(
+    ctx: ToolContext,
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """Return an executor for the user's own logged workouts."""
+
+    def execute(args: dict[str, Any]) -> dict[str, Any]:
+        if ctx.db_session is None:
+            return {
+                "status": "error",
+                "error": "Workout history is not available in this context.",
+            }
+        service = WorkoutHistoryServiceAdapter(ctx.db_session, ctx.user_id)
+        return build_workout_history(service, ctx.user_id, args)
+
+    return execute
+
+
 # Legacy static executor kept for backward compatibility when AGENT_WEB_TOOLS is OFF.
 # It uses the simple ddgs-based web_search and does not enforce per-turn budgets.
 def execute_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -348,10 +415,25 @@ def execute_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
     return {"error": f"Unknown tool: {name}"}
 
 
+def build_legacy_executor(
+    ctx: ToolContext,
+) -> Callable[[str, dict[str, Any]], dict[str, Any]]:
+    """Wrap the legacy static executor, adding the user's own workout history."""
+    workout_history = _workout_history_executor(ctx)
+
+    def execute(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        if name in _WORKOUT_HISTORY_TOOL_NAMES:
+            return workout_history(args)
+        return execute_tool(name, args)
+
+    return execute
+
+
 # Legacy tool definitions for the same backward-compatible path.
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     _web_search_tool(name="web_search"),
     _web_search_tool(name="web.run"),
     _fetch_url_tool(),
     _nearby_gyms_tool(name="nearby_gyms"),
+    _workout_history_tool(),
 ]
