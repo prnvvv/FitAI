@@ -3,10 +3,13 @@ import type {
   ChatResponse,
   Conversation,
   Document,
+  Measurement,
   Memory,
   Message,
   Page,
   Profile,
+  WorkoutSession,
+  WorkoutSessionCreate,
 } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
@@ -128,4 +131,18 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(profile),
     }),
+
+  // Workouts
+  listWorkouts: (limit = 50, offset = 0) =>
+    fetchApi<Page<WorkoutSession>>(`/workouts?limit=${limit}&offset=${offset}`),
+  createWorkout: (payload: WorkoutSessionCreate) =>
+    fetchApi<WorkoutSession>('/workouts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteWorkout: (id: string) =>
+    fetchApi<void>(`/workouts/${id}`, { method: 'DELETE' }),
+
+  // Progress
+  weightSeries: () => fetchApi<Measurement[]>('/progress/weight'),
 }

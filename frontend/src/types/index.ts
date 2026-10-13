@@ -79,3 +79,53 @@ export interface NavItem {
   icon: string
   path: string
 }
+
+export interface WorkoutSet {
+  id: string
+  position: number
+  exercise_name: string
+  reps: number | null
+  weight: number | null
+  weight_unit: string | null
+  duration_seconds: number | null
+  distance_meters: number | null
+  notes: string | null
+}
+
+export interface WorkoutSession {
+  id: string
+  name: string | null
+  performed_at: string
+  duration_minutes: number | null
+  notes: string | null
+  created_at: string
+  sets: WorkoutSet[]
+}
+
+export interface WorkoutSetCreate {
+  exercise_name: string
+  reps?: number | null
+  weight?: number | null
+  weight_unit?: string | null
+  duration_seconds?: number | null
+  distance_meters?: number | null
+  notes?: string | null
+}
+
+export interface WorkoutSessionCreate {
+  name?: string | null
+  performed_at: string
+  duration_minutes?: number | null
+  notes?: string | null
+  sets: WorkoutSetCreate[]
+}
+
+export interface Measurement {
+  id: string
+  type: string
+  value: number
+  unit: string
+  measured_at: string
+  notes: string | null
+  created_at: string
+}
