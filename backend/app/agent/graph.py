@@ -17,11 +17,11 @@ from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
 # Suppress noisy LangGraph pending-deprecation warning about default allowed_objects.
 warnings.filterwarnings("ignore", category=LangChainPendingDeprecationWarning)
 
-from langgraph.graph import END, StateGraph
+from langgraph.graph import END, StateGraph  # noqa: E402
 
-from app.memory.confirmation import Action
+from app.memory.confirmation import Action  # noqa: E402
 
-from .nodes import (
+from .nodes import (  # noqa: E402
     AgentDeps,
     apply_updates_node,
     detect_changes_node,
@@ -33,7 +33,7 @@ from .nodes import (
     safe_response,
     safety_check,
 )
-from .state import AgentState
+from .state import AgentState  # noqa: E402
 
 
 def route_after_safety(state: AgentState) -> str:
