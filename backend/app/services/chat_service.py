@@ -81,8 +81,23 @@ class _MemoryWriterAdapter(MemoryWriter):
             return False
 
     def create_pending(self, user_id: str, decision: Decision) -> str | None:
-        # Pending proposals are not yet supported through the memory service.
-        return None
+        """Persist an uncertain proposal so the user can confirm or reject it."""
+        try:
+            try:
+                key = MemoryKey(decision.change.fact.key)
+            except ValueError:
+                return None
+            proposal = self._service.create_proposal(
+                UUID(user_id),
+                key,
+                decision.change.fact.value,
+                confidence=Decimal(str(decision.change.fact.confidence)),
+                source="agent",
+                reason=decision.reason,
+            )
+            return str(proposal.id)
+        except Exception:
+            return None
 
     def record_history(self, user_id: str, record: HistoryRecord) -> bool:
         # Historical records are stored by correcting current memory; full history
