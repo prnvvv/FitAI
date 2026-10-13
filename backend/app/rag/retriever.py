@@ -8,6 +8,7 @@ from typing import Any
 from .vector_store import (
     KNOWLEDGE_COLLECTION,
     USER_COLLECTION,
+    FilterDict,
     SearchHit,
     VectorStore,
     VectorStoreError,
@@ -36,7 +37,7 @@ class Retriever:
 
     def retrieve(self, query: str, user_id: str | None, k: int | None = None,
                  include_curated: bool = True, include_user_docs: bool = True,
-                 where: dict | None = None) -> list[RetrievedChunk]:
+                 where: FilterDict | None = None) -> list[RetrievedChunk]:
         """Curated results for everyone; user-document results only for `user_id`.
 
         A blank user_id gets curated knowledge only. Raises VectorStoreError only if
@@ -66,7 +67,7 @@ class Retriever:
         if plan and failures == len(plan):
             raise VectorStoreError("all retrieval sources failed")
 
-        seen: set[tuple[str, Any]] = set()
+        seen: set[tuple[str, Any | None, str]] = set()
         out: list[RetrievedChunk] = []
         for r in sorted(results, key=lambda r: r.score, reverse=True):
             key = (r.doc_id, r.metadata.get("chunk_index"), r.scope)

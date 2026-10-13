@@ -35,18 +35,24 @@ class SearchHit:
     distance: float  # cosine distance; lower is closer
 
 
-def _and(*filters: dict | None) -> dict | None:
+FilterDict = dict[str, Any]
+
+
+def _and(*filters: FilterDict | None) -> FilterDict | None:
     parts = [f for f in filters if f]
     if not parts:
         return None
     return parts[0] if len(parts) == 1 else {"$and": parts}
 
 
+def _persist_path(persist_dir: str | None) -> str:
+    return persist_dir or os.getenv("CHROMA_PERSIST_DIR") or "./data/chroma"
+
+
 class VectorStore:
     def __init__(self, persist_dir: str | None = None, client: Any = None, embedding_function: Any = None):
         """`persist_dir` should come from project config; env CHROMA_PERSIST_DIR is the fallback."""
-        self._client = client or chromadb.PersistentClient(
-            path=persist_dir or os.getenv("CHROMA_PERSIST_DIR", "./data/chroma"))
+        self._client = client or chromadb.PersistentClient(path=_persist_path(persist_dir))
         self._ef = embedding_function or get_embedding_function()
         self._cols: dict[str, Any] = {}
 
@@ -67,7 +73,7 @@ class VectorStore:
         return self._cols[name]
 
     @staticmethod
-    def _scope(collection: str, owner_id: str | None, where: dict | None) -> dict | None:
+    def _scope(collection: str, owner_id: str | None, where: FilterDict | None) -> FilterDict | None:
         if collection == USER_COLLECTION:
             if not owner_id or not owner_id.strip():
                 raise PermissionError("owner_id is required for user documents")
@@ -89,7 +95,7 @@ class VectorStore:
             raise VectorStoreError(f"indexing failed: {exc}") from exc
         return len(chunks)
 
-    def query(self, collection: str, text: str, n_results: int = 4, where: dict | None = None,
+    def query(self, collection: str, text: str, n_results: int = 4, where: FilterDict | None = None,
               owner_id: str | None = None) -> list[SearchHit]:
         """Similarity search with optional metadata filter."""
         if n_results < 1:

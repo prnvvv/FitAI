@@ -4,17 +4,12 @@ from __future__ import annotations
 import operator
 from typing import Annotated, Any, TypedDict
 
-from pydantic import BaseModel
-
 from app.memory.change_detector import MemoryEntry
 from app.memory.confirmation import Decision
 from app.memory.extractor import ExtractedFact
+from app.safety import SafetyResult
 
-
-class SafetyResult(BaseModel):
-    blocked: bool = False
-    category: str | None = None
-    response: str | None = None  # fixed safe reply when blocked
+__all__ = ["AgentState", "SafetyResult"]
 
 
 class AgentState(TypedDict, total=False):
