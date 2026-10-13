@@ -53,8 +53,8 @@ export function PlanPage() {
     setLoading(true)
     setError(null)
     try {
-      const page = await api.listWorkouts(200)
-      setSessions(page.items)
+      const allSessions = await api.listAllWorkouts()
+      setSessions(allSessions)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load plan')
     } finally {

@@ -131,3 +131,38 @@ def test_generate_response_includes_status_footer(
     result = generate_response(state, deps)
     assert "You need more protein." in result["response"]
     assert "Saved: weight = 70 kg" in result["response"]
+
+
+def test_generate_response_uses_tool_loop_when_available(
+    fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    """When the LLM supports run_with_tools, generate_response uses it."""
+
+    class _ToolLoopLLM:
+        def __init__(self) -> None:
+            self.tools_passed: list[dict[str, Any]] | None = None
+
+        def __call__(self, system: str, user: str, *, json_mode: bool = False) -> str:
+            return "fallback"
+
+        def run_with_tools(
+            self,
+            messages: list[dict[str, Any]],
+            tools: list[dict[str, Any]],
+            execute: Any,
+        ) -> str:
+            self.tools_passed = tools
+            return "tool-loop answer"
+
+    llm = _ToolLoopLLM()
+    state: AgentState = {
+        "user_message": "Find gyms near me",
+        "conversation_context": [],
+        "tool_results": [],
+        "errors": [],
+    }
+    deps = _deps(llm, fake_memory_reader, fake_memory_writer)
+    result = generate_response(state, deps)
+    assert result["response"] == "tool-loop answer"
+    assert llm.tools_passed is not None
+    assert any(t["function"]["name"] == "nearby_gyms" for t in llm.tools_passed)

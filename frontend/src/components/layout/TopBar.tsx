@@ -1,4 +1,4 @@
-import { Menu, PanelLeftOpen } from 'lucide-react'
+import { PanelLeftClose } from 'lucide-react'
 import { forwardRef } from 'react'
 
 interface TopBarProps {
@@ -14,11 +14,12 @@ export const TopBar = forwardRef<HTMLButtonElement, TopBarProps>(
         <button
           ref={ref}
           type="button"
-          className={`top-bar__toggle ${sidebarOpen ? 'top-bar__toggle--hidden-desktop' : ''}`}
+          className="top-bar__toggle"
           onClick={onToggleSidebar}
           aria-label={sidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
+          aria-expanded={sidebarOpen}
         >
-          {sidebarOpen ? <PanelLeftOpen size={20} /> : <Menu size={20} />}
+          <PanelLeftClose size={20} />
         </button>
         {title && <span className="top-bar__title">{title}</span>}
       </header>
