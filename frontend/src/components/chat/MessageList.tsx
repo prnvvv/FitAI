@@ -41,8 +41,12 @@ export function MessageList({ messages, loading }: MessageListProps) {
         {loading && (
           <div className="message message--assistant">
             <div className="message__avatar">F</div>
-            <div className="message__typing">
-              <span className="message__typing-dot" />
+            <div className="message__bubble message__bubble--assistant">
+              <div className="message__thinking" aria-label="FitAI is thinking">
+                <span className="message__thinking-dot" />
+                <span className="message__thinking-dot" />
+                <span className="message__thinking-dot" />
+              </div>
             </div>
           </div>
         )}

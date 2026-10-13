@@ -65,7 +65,7 @@ export function AppShell({
         onDelete={onDelete}
       />
       <div className={`app-shell__content ${sidebarOpen ? 'app-shell__content--shifted' : ''}`}>
-        <TopBar ref={toggleRef} onToggleSidebar={onToggleSidebar} />
+        <TopBar ref={toggleRef} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
         <main className="app-shell__main">
           <Outlet />
         </main>
