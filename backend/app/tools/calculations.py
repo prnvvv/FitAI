@@ -8,6 +8,7 @@ Formulas / sources (estimates, not medical advice):
 - Protein 1.6-2.2 g/kg is the commonly cited range for resistance training; fat default 25% of kcal.
 """
 import math
+from collections.abc import Callable
 from typing import Any, Literal
 
 from langchain_core.tools import StructuredTool, ToolException
@@ -125,14 +126,17 @@ def calculate_macros(calorie_target_kcal: float, weight_kg: float, goal: Goal,
     carbs_g = (cal - protein_g * 4 - fat_g * 9) / 4
     if carbs_g < 0:
         raise ToolInputError("calorie target is too low for the protein and fat minimums")
-    pct = lambda kcal: round(100 * kcal / cal, 1)  # noqa: E731
+
+    def _pct(kcal: float) -> float:
+        return round(100 * kcal / cal, 1)
+
     return {"protein_g": round(protein_g), "fat_g": round(fat_g), "carbs_g": round(carbs_g),
-            "percent_of_calories": {"protein": pct(protein_g * 4), "fat": pct(fat_g * 9),
-                                    "carbs": pct(carbs_g * 4)},
+            "percent_of_calories": {"protein": _pct(protein_g * 4), "fat": _pct(fat_g * 9),
+                                    "carbs": _pct(carbs_g * 4)},
             "kcal_per_gram": {"protein": 4, "carbs": 4, "fat": 9}}
 
 
-def _as_tool(fn) -> StructuredTool:
+def _as_tool(fn: Callable[..., dict[str, Any]]) -> StructuredTool:
     return StructuredTool.from_function(fn, name=fn.__name__, description=(fn.__doc__ or "").strip(),
                                         handle_tool_error=True)
 

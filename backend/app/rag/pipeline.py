@@ -30,7 +30,10 @@ class IngestionResult:
 def _file_hash(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as fh:
-        for block in iter(lambda: fh.read(1 << 20), b""):
+        while True:
+            block = fh.read(1 << 20)
+            if not block:
+                break
             h.update(block)
     return h.hexdigest()[:16]
 
@@ -64,8 +67,11 @@ class IngestionPipeline:
 
     def _ingest(self, path: Path, collection: str, owner_id: str | None, doc_id: str | None,
                 metadata: Mapping[str, object] | None) -> IngestionResult:
-        scope = "user" if owner_id else "curated"
-        fail = lambda err, did=None, n=0: IngestionResult(did, path.name, scope, "failed", 0, n, err)  # noqa: E731
+        scope: Literal["curated", "user"] = "user" if owner_id else "curated"
+
+        def _fail(err: str, did: str | None = None, n: int = 0) -> IngestionResult:
+            return IngestionResult(did, path.name, scope, "failed", 0, n, err)
+
         try:
             doc = load_document(path)
             did = doc_id or _file_hash(path)
@@ -77,7 +83,7 @@ class IngestionPipeline:
             chunks = chunk_document(doc, did, meta, self._size, self._overlap, prefix, self._max_chunks)
         except (DocumentLoadError, ValueError, OSError) as exc:
             log.info("ingestion rejected %s: %s", path.name, exc)
-            return fail(str(exc))
+            return _fail(str(exc))
 
         last: Exception | None = None
         for attempt in range(1, self._retries + 1):
@@ -86,7 +92,7 @@ class IngestionPipeline:
                 n = self._store.add_chunks(collection, chunks, owner_id)
                 return IngestionResult(did, path.name, scope, "indexed", n, attempt)
             except PermissionError as exc:
-                return fail(str(exc), did, attempt)
+                return _fail(str(exc), did, attempt)
             except VectorStoreError as exc:
                 last = exc
                 log.warning("index attempt %d/%d failed for %s: %s", attempt, self._retries, path.name, exc)
@@ -96,4 +102,4 @@ class IngestionPipeline:
             self._store.delete_document(collection, did, owner_id)
         except Exception:
             log.error("cleanup after failed ingestion of %s also failed", path.name)
-        return fail(f"indexing failed after {self._retries} attempts: {last}", did, self._retries)
+        return _fail(f"indexing failed after {self._retries} attempts: {last}", did, self._retries)

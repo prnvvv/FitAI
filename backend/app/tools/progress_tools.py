@@ -78,14 +78,17 @@ def analyze_workout_consistency(workouts: Sequence[Any], start: date, end: date)
     dated = sorted(w.performed_on for w in workouts if start <= w.performed_on <= end)
     if not dated:
         return {"status": "no_data", "sessions": 0}
-    monday = lambda d: d - timedelta(days=d.weekday())  # noqa: E731
+
+    def _monday(d: date) -> date:
+        return d - timedelta(days=d.weekday())
+
     weeks: dict[date, int] = {}
-    w = monday(start)
+    w = _monday(start)
     while w <= end:
         weeks[w] = 0
         w += timedelta(days=7)
     for d in dated:
-        weeks[monday(d)] += 1
+        weeks[_monday(d)] += 1
     days = (end - start).days + 1
     mid = start + timedelta(days=days // 2)
     first_half = sum(1 for d in dated if d < mid)
