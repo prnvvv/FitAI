@@ -1,4 +1,5 @@
 """Graph nodes. Each takes state (+ injected deps) and returns a partial state update."""
+
 from __future__ import annotations
 
 import logging
@@ -11,9 +12,6 @@ from typing import Any, Protocol
 
 from app.llm.prompts import RESPONSE_GENERATION
 from app.memory.change_detector import MemoryEntry, detect_changes
-from app.tools.activity import get_activity_log
-from app.tools.nearby_gyms import nearby_gyms
-from app.tools.web_search import web_search
 from app.memory.confirmation import (
     Action,
     ConfirmationPolicy,
@@ -23,6 +21,8 @@ from app.memory.confirmation import (
 )
 from app.memory.extractor import TextCompleter, extract_facts
 from app.safety import SafetyResult, run_safety_rules
+from app.tools.activity import get_activity_log
+from app.tools.tool_definitions import TOOL_DEFINITIONS, execute_tool
 
 from .state import AgentState
 
@@ -69,10 +69,13 @@ class AgentDeps:
 # ---- heuristics (cheap routing; no LLM call) --------------------------------
 _PERSONAL = re.compile(
     r"\b(i am|i'm|i weigh|i weighed|i've|i have|i used to|i was|i started|i stopped|i did|i lifted|"
-    r"i ran|i take|i took|my|goal)\b|\d\s*(?:kg|kgs|lb|lbs|cm|in|%)", re.I)
+    r"i ran|i take|i took|my|goal)\b|\d\s*(?:kg|kgs|lb|lbs|cm|in|%)",
+    re.I,
+)
 _QUESTION = re.compile(
     r"\?|^\s*(how|what|why|when|which|should|can|could|is|are|do|does|suggest|recommend|give me|show me)\b",
-    re.I)
+    re.I,
+)
 
 
 def looks_personal(msg: str) -> bool:
@@ -103,7 +106,11 @@ def _select_tools(msg: str) -> list[str]:
     selected: list[str] = []
     if _GYM_INTENT.search(msg):
         selected.append("nearby_gyms")
-    elif re.search(r"\b(what did i do|how (have|has) my|my week|recent|activity|log|train(?:ing)? been|workouts lately)\b", msg, re.I):
+    elif re.search(
+        r"\b(what did i do|how (have|has) my|my week|recent|activity|log|train(?:ing)? been|workouts lately)\b",
+        msg,
+        re.I,
+    ):
         selected.append("activity_log")
     elif _LIVE_INFO_INTENT.search(msg):
         # Prefer web search for general live-info questions unless they are
@@ -138,7 +145,9 @@ def extract_facts_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     return out
 
 
-def _load_memory(state: AgentState, deps: AgentDeps) -> tuple[dict[str, MemoryEntry] | None, list[str]]:
+def _load_memory(
+    state: AgentState, deps: AgentDeps
+) -> tuple[dict[str, MemoryEntry] | None, list[str]]:
     if state.get("retrieved_memory") is not None:
         return state["retrieved_memory"], []
     try:
@@ -166,8 +175,11 @@ def detect_changes_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         return {}
     memory, errs = _load_memory(state, deps)
     if memory is None:  # cannot compare => cannot update
-        return {"proposed_updates": [], "errors": errs,
-                "tool_results": [{"tool": "memory_read", "status": "failed"}]}
+        return {
+            "proposed_updates": [],
+            "errors": errs,
+            "tool_results": [{"tool": "memory_read", "status": "failed"}],
+        }
     decisions = decide_all(detect_changes(state.get("extracted_facts", []), memory), deps.policy)
     return {"retrieved_memory": memory, "proposed_updates": decisions}
 
@@ -177,7 +189,9 @@ def apply_updates_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         return {}
     actionable = [d for d in state.get("proposed_updates", []) if d.action is not Action.SKIP]
     results = apply_decisions(state["user_id"], actionable, deps.memory_writer)
-    return {"tool_results": [{"tool": "memory_write", **r.model_dump(mode="json")} for r in results]}
+    return {
+        "tool_results": [{"tool": "memory_write", **r.model_dump(mode="json")} for r in results]
+    }
 
 
 def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -237,7 +251,9 @@ def _status_footer(tool_results: list[dict[str, Any]], errors: list[str]) -> str
             continue
         s, summ = r.get("status"), r.get("summary", r.get("key", ""))
         if s == "applied":
-            lines.append(f"Saved: {summ}" + (" (added to history)" if r.get("history_recorded") else ""))
+            lines.append(
+                f"Saved: {summ}" + (" (added to history)" if r.get("history_recorded") else "")
+            )
         elif s == "history_recorded":
             lines.append(f"Added to history: {summ}")
         elif s == "pending_created":
@@ -272,13 +288,17 @@ def _format_tool_context(tool_results: list[dict[str, Any]]) -> str:
             elif result.get("results"):
                 lines.append("Web search results:")
                 for item in result["results"]:
-                    lines.append(f"- {item.get('title', '')}: {item.get('snippet', '')} ({item.get('url', '')})")
+                    lines.append(
+                        f"- {item.get('title', '')}: {item.get('snippet', '')} ({item.get('url', '')})"
+                    )
         elif tool == "nearby_gyms":
             result = r.get("result", {})
             if result.get("error"):
                 lines.append(f"Nearby gyms: {result['error']}")
             elif result.get("places"):
-                lines.append(f"Nearby fitness facilities near {result.get('location', 'the requested area')}:")
+                lines.append(
+                    f"Nearby fitness facilities near {result.get('location', 'the requested area')}:"
+                )
                 for place in result["places"]:
                     lines.append(
                         f"- {place.get('name', '')} ({place.get('type', '')}) "
@@ -302,14 +322,24 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     profile = state.get("retrieved_profile")
     profile_text = _format_profile(mem, profile)
     tool_context = _format_tool_context(state.get("tool_results", []))
-    prompt = (f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
-              f"Live research:\n{tool_context}\n\n"
-              "When using live search or nearby facility results, cite the source URLs plainly. "
-              "If a tool returned an error or no results, say so honestly.\n\n"
-              f"User message:\n{state['user_message']}")
+    prompt = (
+        f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
+        f"Live research:\n{tool_context}\n\n"
+        "If a tool returned an error or no results, say so honestly.\n\n"
+        f"User message:\n{state['user_message']}"
+    )
     try:
-        text = deps.llm(RESPONSE_GENERATION, prompt).strip()
-    except Exception as exc:
-        log.warning("response generation failed: %s", exc)
+        if hasattr(deps.llm, "run_with_tools"):
+            messages: list[dict[str, Any]] = [
+                {"role": "system", "content": RESPONSE_GENERATION},
+                {"role": "user", "content": prompt[:4000]},
+            ]
+            text = deps.llm.run_with_tools(messages, TOOL_DEFINITIONS, execute_tool).strip()
+        else:
+            text = deps.llm(RESPONSE_GENERATION, prompt).strip()
+    except Exception:
+        log.warning("response generation failed", exc_info=True)
         text = "Sorry, I couldn't generate a response right now. Please try again."
-    return {"response": text + _status_footer(state.get("tool_results", []), state.get("errors", []))}
+    return {
+        "response": text + _status_footer(state.get("tool_results", []), state.get("errors", []))
+    }

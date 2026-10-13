@@ -49,7 +49,7 @@ def configure_logging() -> None:
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
-        _redact_sensitive_fields,
+        _redact_sensitive_fields,  # type: ignore[list-item]
     ]
 
     renderer: structlog.typing.Processor
@@ -68,4 +68,4 @@ def configure_logging() -> None:
 
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     """Return a bound structlog logger."""
-    return structlog.get_logger(name)
+    return structlog.get_logger(name)  # type: ignore[no-any-return]

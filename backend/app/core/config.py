@@ -18,7 +18,7 @@ try:
     import langchain
 
     if not hasattr(langchain, "debug"):
-        langchain.debug = False
+        langchain.debug = False  # type: ignore[attr-defined]
 except Exception:
     pass
 

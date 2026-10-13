@@ -6,6 +6,7 @@ safety_check -> blocked: safe_response -> END   (no tool/memory node is reachabl
              -> otherwise: generate_response
 After memory handling, questions still get context retrieval.
 """
+
 from __future__ import annotations
 
 import warnings
@@ -17,11 +18,11 @@ from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
 # Suppress noisy LangGraph pending-deprecation warning about default allowed_objects.
 warnings.filterwarnings("ignore", category=LangChainPendingDeprecationWarning)
 
-from langgraph.graph import END, StateGraph
+from langgraph.graph import END, StateGraph  # noqa: E402
 
-from app.memory.confirmation import Action
+from app.memory.confirmation import Action  # noqa: E402
 
-from .nodes import (
+from .nodes import (  # noqa: E402
     AgentDeps,
     apply_updates_node,
     detect_changes_node,
@@ -33,7 +34,7 @@ from .nodes import (
     safe_response,
     safety_check,
 )
-from .state import AgentState
+from .state import AgentState  # noqa: E402
 
 
 def route_after_safety(state: AgentState) -> str:
@@ -47,7 +48,11 @@ def route_after_safety(state: AgentState) -> str:
 
 
 def route_after_updates(state: AgentState) -> str:
-    return "retrieve_context" if looks_like_question(state.get("user_message", "")) else "generate_response"
+    return (
+        "retrieve_context"
+        if looks_like_question(state.get("user_message", ""))
+        else "generate_response"
+    )
 
 
 def route_after_extract(state: AgentState) -> str:
@@ -60,9 +65,12 @@ def route_after_detect(state: AgentState) -> str:
     return route_after_updates(state)
 
 
-def _bind(fn: Callable[[AgentState, AgentDeps], dict[str, Any]], deps: AgentDeps) -> Callable[[AgentState], dict[str, Any]]:
+def _bind(
+    fn: Callable[[AgentState, AgentDeps], dict[str, Any]], deps: AgentDeps
+) -> Callable[[AgentState], dict[str, Any]]:
     def node(state: AgentState) -> dict[str, Any]:
         return fn(state, deps)
+
     return node
 
 
@@ -78,21 +86,41 @@ def build_graph(deps: AgentDeps) -> Any:
     g.add_node("generate_response", _bind(generate_response, deps))
 
     g.set_entry_point("safety_check")
-    g.add_conditional_edges("safety_check", route_after_safety,
-                            ["safe_response", "extract_facts", "retrieve_context", "generate_response"])
-    g.add_conditional_edges("extract_facts", route_after_extract,
-                            ["detect_changes", "retrieve_context", "generate_response"])
-    g.add_conditional_edges("detect_changes", route_after_detect,
-                            ["apply_updates", "retrieve_context", "generate_response"])
-    g.add_conditional_edges("apply_updates", route_after_updates, ["retrieve_context", "generate_response"])
+    g.add_conditional_edges(
+        "safety_check",
+        route_after_safety,
+        ["safe_response", "extract_facts", "retrieve_context", "generate_response"],
+    )
+    g.add_conditional_edges(
+        "extract_facts",
+        route_after_extract,
+        ["detect_changes", "retrieve_context", "generate_response"],
+    )
+    g.add_conditional_edges(
+        "detect_changes",
+        route_after_detect,
+        ["apply_updates", "retrieve_context", "generate_response"],
+    )
+    g.add_conditional_edges(
+        "apply_updates", route_after_updates, ["retrieve_context", "generate_response"]
+    )
     g.add_edge("retrieve_context", "generate_response")
     g.add_edge("generate_response", END)
     g.add_edge("safe_response", END)
     return g.compile()
 
 
-def run_turn(graph: Any, user_id: str, message: str, context: list[dict[str, str]] | None = None) -> dict[str, Any]:
+def run_turn(
+    graph: Any, user_id: str, message: str, context: list[dict[str, str]] | None = None
+) -> dict[str, Any]:
     """Run one turn. `user_id` must come from authentication, never from the message."""
-    out: dict[str, Any] = graph.invoke({"user_id": user_id, "user_message": message,
-                                        "conversation_context": context or [], "tool_results": [], "errors": []})
+    out: dict[str, Any] = graph.invoke(
+        {
+            "user_id": user_id,
+            "user_message": message,
+            "conversation_context": context or [],
+            "tool_results": [],
+            "errors": [],
+        }
+    )
     return {"response": str(out.get("response", "")), "tool_results": out.get("tool_results", [])}

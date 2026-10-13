@@ -13,7 +13,7 @@ def enum_type(enum_cls: EnumMeta, name: str) -> SAEnum:
     ``native_enum=False`` renders a VARCHAR + CHECK constraint, which avoids
     PostgreSQL type-creation complexity in migrations.
     """
-    return SAEnum(
+    return SAEnum(  # type: ignore[no-any-return, call-overload]
         enum_cls,
         name=name,
         native_enum=False,

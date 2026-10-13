@@ -178,6 +178,18 @@ export const api = {
   // Workouts
   listWorkouts: (limit = 50, offset = 0) =>
     fetchApi<Page<WorkoutSession>>(`/workouts?limit=${limit}&offset=${offset}`),
+  listAllWorkouts: async () => {
+    const items: WorkoutSession[] = []
+    let offset = 0
+    const pageSize = 100
+    while (true) {
+      const page = await api.listWorkouts(pageSize, offset)
+      items.push(...page.items)
+      if (items.length >= page.total || page.items.length === 0) break
+      offset += pageSize
+    }
+    return items
+  },
   createWorkout: (payload: WorkoutSessionCreate) =>
     fetchApi<WorkoutSession>('/workouts', {
       method: 'POST',

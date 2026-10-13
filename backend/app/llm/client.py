@@ -1,8 +1,15 @@
-"""Groq-backed LLM client implementing the project's TextCompleter protocol."""
+"""Groq-backed LLM client implementing the project's TextCompleter protocol.
+
+Also supports a tool-calling loop so live search and places tools can be invoked
+by the model when the request requires current information.
+"""
+
 from __future__ import annotations
 
+import json
 import logging
 import os
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from groq import Groq
@@ -14,6 +21,9 @@ log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TEMPERATURE = 0.0
+MAX_TOOL_ITERATIONS = 3
+
+ToolExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
 class GroqClient:
@@ -23,14 +33,20 @@ class GroqClient:
     explicitly only in tests.
     """
 
-    def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL,
-                 temperature: float = DEFAULT_TEMPERATURE, timeout: float = 60.0):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str = DEFAULT_MODEL,
+        temperature: float = DEFAULT_TEMPERATURE,
+        timeout: float = 60.0,
+    ):
         key = api_key or os.getenv("GROQ_API_KEY")
         if not key:
             raise RuntimeError("GROQ_API_KEY is not set")
         self._client = Groq(api_key=key, timeout=timeout)
         self._model = model
         self._temperature = temperature
+        self._timeout = timeout
 
     def __call__(self, system: str, user: str, *, json_mode: bool = False) -> str:
         """Call the chat completions endpoint and return the message content."""
@@ -53,4 +69,89 @@ class GroqClient:
         content = response.choices[0].message.content
         return content or ""
 
+    def run_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        execute: ToolExecutor,
+        *,
+        max_iterations: int = MAX_TOOL_ITERATIONS,
+    ) -> str:
+        """Run a chat completion loop that may invoke tools.
 
+        Args:
+            messages: OpenAI-style message list (system/user/tool).
+            tools: OpenAI-style function definitions.
+            execute: Callback that receives (tool_name, arguments) and returns a
+                JSON-serialisable result dict.
+            max_iterations: Safety cap on tool-turn iterations.
+
+        Returns:
+            The final assistant message content, or a safe fallback if the loop
+            does not produce a final answer.
+        """
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "temperature": self._temperature,
+            "messages": messages,
+            "tools": tools,
+            "tool_choice": "auto",
+        }
+
+        for iteration in range(max_iterations):
+            try:
+                response = self._client.chat.completions.create(**kwargs)
+            except Exception:
+                log.warning(
+                    "groq tool-loop completion failed",
+                    exc_info=True,
+                    extra={"model": self._model, "iteration": iteration},
+                )
+                raise
+
+            message = response.choices[0].message
+            content = message.content
+            tool_calls = message.tool_calls
+
+            if content and not tool_calls:
+                return str(content).strip()
+
+            if not tool_calls:
+                # Empty final message; return whatever we have.
+                return str(content).strip() if content else ""
+
+            # Execute requested tools and append results to the conversation.
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": content or "",
+                    "tool_calls": [tc.model_dump() for tc in tool_calls],
+                }
+            )
+            for tc in tool_calls:
+                name = tc.function.name
+                try:
+                    args = json.loads(tc.function.arguments)
+                except json.JSONDecodeError as exc:
+                    log.warning(
+                        "malformed tool arguments from model", exc_info=True, extra={"tool": name}
+                    )
+                    result = {"error": f"Malformed arguments for {name}: {exc}"}
+                else:
+                    log.info("executing tool", extra={"tool": name, "iteration": iteration})
+                    try:
+                        result = execute(name, args)
+                    except Exception as exc:
+                        log.warning("tool execution failed", exc_info=True, extra={"tool": name})
+                        result = {"error": f"Tool {name} failed: {type(exc).__name__}"}
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "name": name,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
+
+        log.warning("tool-loop reached max iterations without final answer")
+        return "I couldn't finish answering that. Please try rephrasing your question."

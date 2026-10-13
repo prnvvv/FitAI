@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.models.enums import MemoryChangeType, MemoryKey, MemoryStatus, PendingUpdateStatus
-from app.models.memory import Memory
+from app.models.memory import Memory, MemoryHistory
 from app.models.pending_update import PendingMemoryUpdate
 from app.repositories.memory_repository import MemoryRepository
 from app.repositories.pending_update_repository import PendingUpdateRepository
@@ -49,7 +49,9 @@ class MemoryService:
             raise NotFoundError("Memory not found.")
         return memory
 
-    def list_history(self, user_id: UUID, *, limit: int, offset: int) -> tuple[list[object], int]:
+    def list_history(
+        self, user_id: UUID, *, limit: int, offset: int
+    ) -> tuple[list[MemoryHistory], int]:
         """Return a page of the user's memory history."""
         return self._memory.list_history(user_id, limit=limit, offset=offset)
 

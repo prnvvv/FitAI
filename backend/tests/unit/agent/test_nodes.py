@@ -1,4 +1,5 @@
 """Tests for LangGraph agent nodes."""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -19,8 +20,12 @@ from app.memory.change_detector import MemoryEntry
 from app.safety import SafetyResult
 
 
-def _deps(fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any,
-          fake_retriever: Any | None = None) -> AgentDeps:
+def _deps(
+    fake_llm: Any,
+    fake_memory_reader: Any,
+    fake_memory_writer: Any,
+    fake_retriever: Any | None = None,
+) -> AgentDeps:
     return AgentDeps(
         llm=fake_llm,
         memory_reader=fake_memory_reader,
@@ -76,8 +81,9 @@ def test_extract_facts_node_blocked_returns_empty() -> None:
     assert extract_facts_node(state, deps) == {}
 
 
-def test_extract_facts_node_extracts(fake_llm: Any, fake_memory_reader: Any,
-                                     fake_memory_writer: Any, now: datetime) -> None:
+def test_extract_facts_node_extracts(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any, now: datetime
+) -> None:
     fake_llm.response = '{"facts":[{"field":"weight","value":70,"unit":"kg","confidence":0.9,"timestamp":null,"tense":"present","statement_type":"explicit","source_text":"I weigh 70 kg"}]}'
     state: AgentState = {"user_message": "I weigh 70 kg", "safety": SafetyResult()}
     deps = _deps(fake_llm, fake_memory_reader, fake_memory_writer)
@@ -85,13 +91,16 @@ def test_extract_facts_node_extracts(fake_llm: Any, fake_memory_reader: Any,
     assert len(result["extracted_facts"]) == 1
 
 
-def test_retrieve_context_node_loads_memory_and_docs(fake_memory_reader: Any,
-                                                     fake_memory_writer: Any,
-                                                     fake_retriever: Any) -> None:
+def test_retrieve_context_node_loads_memory_and_docs(
+    fake_memory_reader: Any, fake_memory_writer: Any, fake_retriever: Any
+) -> None:
     fake_memory_reader.memory = {"weight": MemoryEntry(key="weight", value=70, unit="kg")}
     fake_retriever.docs = ["[source] protein info"]
-    state: AgentState = {"user_message": "How much protein?", "user_id": "user-1",
-                         "safety": SafetyResult()}
+    state: AgentState = {
+        "user_message": "How much protein?",
+        "user_id": "user-1",
+        "safety": SafetyResult(),
+    }
     deps = _deps(None, fake_memory_reader, fake_memory_writer, fake_retriever)
     result = retrieve_context_node(state, deps)
     assert "retrieved_memory" in result
@@ -100,17 +109,60 @@ def test_retrieve_context_node_loads_memory_and_docs(fake_memory_reader: Any,
     assert result["tool_results"][0]["docs"] == ["[source] protein info"]
 
 
-def test_generate_response_includes_status_footer(fake_llm: Any, fake_memory_reader: Any,
-                                                   fake_memory_writer: Any) -> None:
+def test_generate_response_includes_status_footer(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
     fake_llm.response = "You need more protein."
     state: AgentState = {
         "user_message": "How much protein?",
         "conversation_context": [],
-        "tool_results": [{"tool": "memory_write", "status": "applied", "summary": "weight = 70 kg",
-                          "key": "weight", "history_recorded": False}],
+        "tool_results": [
+            {
+                "tool": "memory_write",
+                "status": "applied",
+                "summary": "weight = 70 kg",
+                "key": "weight",
+                "history_recorded": False,
+            }
+        ],
         "errors": [],
     }
     deps = _deps(fake_llm, fake_memory_reader, fake_memory_writer)
     result = generate_response(state, deps)
     assert "You need more protein." in result["response"]
     assert "Saved: weight = 70 kg" in result["response"]
+
+
+def test_generate_response_uses_tool_loop_when_available(
+    fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    """When the LLM supports run_with_tools, generate_response uses it."""
+
+    class _ToolLoopLLM:
+        def __init__(self) -> None:
+            self.tools_passed: list[dict[str, Any]] | None = None
+
+        def __call__(self, system: str, user: str, *, json_mode: bool = False) -> str:
+            return "fallback"
+
+        def run_with_tools(
+            self,
+            messages: list[dict[str, Any]],
+            tools: list[dict[str, Any]],
+            execute: Any,
+        ) -> str:
+            self.tools_passed = tools
+            return "tool-loop answer"
+
+    llm = _ToolLoopLLM()
+    state: AgentState = {
+        "user_message": "Find gyms near me",
+        "conversation_context": [],
+        "tool_results": [],
+        "errors": [],
+    }
+    deps = _deps(llm, fake_memory_reader, fake_memory_writer)
+    result = generate_response(state, deps)
+    assert result["response"] == "tool-loop answer"
+    assert llm.tools_passed is not None
+    assert any(t["function"]["name"] == "nearby_gyms" for t in llm.tools_passed)
