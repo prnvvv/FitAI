@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from app.tools.tool_definitions import TOOL_DEFINITIONS, execute_tool
+from app.tools.tool_definitions import (
+    CORE_TOOL_DEFINITIONS,
+    TOOL_DEFINITIONS,
+    ToolContext,
+    build_executor,
+    build_legacy_executor,
+    execute_tool,
+)
 
 
 def test_tool_definitions_include_canonical_and_alias() -> None:
@@ -12,6 +19,26 @@ def test_tool_definitions_include_canonical_and_alias() -> None:
     assert "web_search" in names
     assert "web.run" in names
     assert "nearby_gyms" in names
+    assert "get_workout_history" in names
+
+
+def test_core_definitions_include_workout_history() -> None:
+    names = {t["function"]["name"] for t in CORE_TOOL_DEFINITIONS}
+    assert "get_workout_history" in names
+
+
+def test_workout_history_without_session_returns_error() -> None:
+    ctx = ToolContext(user_id="user-1")
+    executor = build_legacy_executor(ctx)
+    result = executor("get_workout_history", {"start": "2026-01-13"})
+    assert result["status"] == "error"
+
+
+def test_build_executor_routes_workout_history() -> None:
+    ctx = ToolContext(user_id="user-1")
+    executor = build_executor(ctx)
+    result = executor("get_workout_history", {"days": 7})
+    assert result["status"] == "error"
 
 
 def test_execute_tool_routes_web_search() -> None:
