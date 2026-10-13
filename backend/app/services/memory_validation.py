@@ -18,9 +18,7 @@ _MEASUREMENT_UNITS: dict[MemoryKey, frozenset[str]] = {
     MemoryKey.HEIGHT: frozenset({"cm", "in"}),
 }
 
-_STRING_KEYS = frozenset(
-    {MemoryKey.GOAL, MemoryKey.EXPERIENCE_LEVEL, MemoryKey.WORKOUT_FREQUENCY}
-)
+_STRING_KEYS = frozenset({MemoryKey.GOAL, MemoryKey.EXPERIENCE_LEVEL, MemoryKey.WORKOUT_FREQUENCY})
 
 _LIST_KEYS = frozenset(
     {

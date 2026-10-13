@@ -1,4 +1,5 @@
 """Tests for deterministic safety guardrails."""
+
 from __future__ import annotations
 
 import pytest
@@ -6,12 +7,15 @@ import pytest
 from app.safety import SafetyResult, run_safety_rules
 
 
-@pytest.mark.parametrize("message,category", [
-    ("I want to kill myself", "self_harm"),
-    ("I have chest pain and can't breathe", "medical_emergency"),
-    ("I want to starve myself and eat under 800 calories", "extreme_restriction"),
-    ("What dosage of trenbolone should I inject in a 500mg cycle?", "drug_dosing"),
-])
+@pytest.mark.parametrize(
+    "message,category",
+    [
+        ("I want to kill myself", "self_harm"),
+        ("I have chest pain and can't breathe", "medical_emergency"),
+        ("I want to starve myself and eat under 800 calories", "extreme_restriction"),
+        ("What dosage of trenbolone should I inject in a 500mg cycle?", "drug_dosing"),
+    ],
+)
 def test_run_safety_rules_blocks(message: str, category: str) -> None:
     result = run_safety_rules(message)
     assert result.blocked is True

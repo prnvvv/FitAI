@@ -1,4 +1,5 @@
 """Tests for document ingestion pipeline."""
+
 from __future__ import annotations
 
 from pathlib import Path

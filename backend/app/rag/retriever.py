@@ -1,4 +1,5 @@
 """Retrieve fitness knowledge with source metadata and per-user access control."""
+
 from __future__ import annotations
 
 import logging
@@ -21,8 +22,8 @@ log = logging.getLogger(__name__)
 class RetrievedChunk:
     text: str
     source: str
-    score: float            # 1 - cosine distance, clipped to [0, 1]
-    scope: str              # "curated" | "user"
+    score: float  # 1 - cosine distance, clipped to [0, 1]
+    scope: str  # "curated" | "user"
     doc_id: str
     page: int | None
     metadata: dict[str, Any]
@@ -35,9 +36,15 @@ class Retriever:
     def __init__(self, store: VectorStore, k: int = 4, min_score: float = 0.2):
         self._store, self._k, self._min = store, k, min_score
 
-    def retrieve(self, query: str, user_id: str | None, k: int | None = None,
-                 include_curated: bool = True, include_user_docs: bool = True,
-                 where: FilterDict | None = None) -> list[RetrievedChunk]:
+    def retrieve(
+        self,
+        query: str,
+        user_id: str | None,
+        k: int | None = None,
+        include_curated: bool = True,
+        include_user_docs: bool = True,
+        where: FilterDict | None = None,
+    ) -> list[RetrievedChunk]:
         """Curated results for everyone; user-document results only for `user_id`.
 
         A blank user_id gets curated knowledge only. Raises VectorStoreError only if
@@ -57,8 +64,9 @@ class Retriever:
         failures = 0
         for collection, scope in plan:
             try:
-                hits = self._store.query(collection, query, k, where=where,
-                                         owner_id=uid if scope == "user" else None)
+                hits = self._store.query(
+                    collection, query, k, where=where, owner_id=uid if scope == "user" else None
+                )
             except VectorStoreError as exc:
                 log.warning("retrieval from %s failed: %s", collection, exc)
                 failures += 1
@@ -88,7 +96,11 @@ class Retriever:
             return None
         page = m.get("page")
         return RetrievedChunk(
-            text=hit.text, source=str(m.get("source", "unknown")),
-            score=max(0.0, min(1.0, 1.0 - hit.distance)), scope=scope,
+            text=hit.text,
+            source=str(m.get("source", "unknown")),
+            score=max(0.0, min(1.0, 1.0 - hit.distance)),
+            scope=scope,
             doc_id=str(m.get("doc_id", hit.id)),
-            page=page if isinstance(page, int) and page > 0 else None, metadata=m)
+            page=page if isinstance(page, int) and page > 0 else None,
+            metadata=m,
+        )

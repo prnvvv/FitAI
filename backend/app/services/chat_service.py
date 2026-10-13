@@ -43,7 +43,9 @@ class _ProfileReaderAdapter(ProfileReader):
             "dietary_restrictions": profile.dietary_restrictions or [],
             "display_name": prefs.get("display_name") if isinstance(prefs, dict) else None,
             "about_you": prefs.get("about_you") if isinstance(prefs, dict) else None,
-            "assistant_should_know": prefs.get("assistant_should_know") if isinstance(prefs, dict) else None,
+            "assistant_should_know": prefs.get("assistant_should_know")
+            if isinstance(prefs, dict)
+            else None,
             "preferred_tone": prefs.get("preferred_tone") if isinstance(prefs, dict) else None,
             "units": prefs.get("units") if isinstance(prefs, dict) else None,
         }

@@ -1,4 +1,5 @@
 """Groq-backed LLM client implementing the project's TextCompleter protocol."""
+
 from __future__ import annotations
 
 import logging
@@ -23,8 +24,13 @@ class GroqClient:
     explicitly only in tests.
     """
 
-    def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL,
-                 temperature: float = DEFAULT_TEMPERATURE, timeout: float = 60.0):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str = DEFAULT_MODEL,
+        temperature: float = DEFAULT_TEMPERATURE,
+        timeout: float = 60.0,
+    ):
         key = api_key or os.getenv("GROQ_API_KEY")
         if not key:
             raise RuntimeError("GROQ_API_KEY is not set")
@@ -52,5 +58,3 @@ class GroqClient:
             raise
         content = response.choices[0].message.content
         return content or ""
-
-

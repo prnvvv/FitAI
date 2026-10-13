@@ -3,6 +3,7 @@
 Keep prompts here so they can be versioned, reviewed, and reused without
 scattering strings through the agent and memory modules.
 """
+
 from __future__ import annotations
 
 FACT_EXTRACTION = """You extract fitness facts about the USER from their message. Output JSON only:

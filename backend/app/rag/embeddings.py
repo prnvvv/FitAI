@@ -3,6 +3,7 @@
 Uses ChromaDB's default local embedding function (ONNX all-MiniLM-L6-v2): no API key.
 The model files are downloaded by Chroma on first use, then cached locally.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache

@@ -1,4 +1,5 @@
 """Tests for the Groq LLM client wrapper."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -53,5 +54,8 @@ def test_groq_client_reads_env(mock_getenv: MagicMock) -> None:
 
 
 def test_groq_client_raises_when_key_missing() -> None:
-    with patch("app.llm.client.os.getenv", return_value=None), pytest.raises(RuntimeError, match="GROQ_API_KEY is not set"):
+    with (
+        patch("app.llm.client.os.getenv", return_value=None),
+        pytest.raises(RuntimeError, match="GROQ_API_KEY is not set"),
+    ):
         GroqClient()

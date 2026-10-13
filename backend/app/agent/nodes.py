@@ -1,4 +1,5 @@
 """Graph nodes. Each takes state (+ injected deps) and returns a partial state update."""
+
 from __future__ import annotations
 
 import logging
@@ -58,10 +59,13 @@ class AgentDeps:
 # ---- heuristics (cheap routing; no LLM call) --------------------------------
 _PERSONAL = re.compile(
     r"\b(i am|i'm|i weigh|i weighed|i've|i have|i used to|i was|i started|i stopped|i did|i lifted|"
-    r"i ran|i take|i took|my|goal)\b|\d\s*(?:kg|kgs|lb|lbs|cm|in|%)", re.I)
+    r"i ran|i take|i took|my|goal)\b|\d\s*(?:kg|kgs|lb|lbs|cm|in|%)",
+    re.I,
+)
 _QUESTION = re.compile(
     r"\?|^\s*(how|what|why|when|which|should|can|could|is|are|do|does|suggest|recommend|give me|show me)\b",
-    re.I)
+    re.I,
+)
 
 
 def looks_personal(msg: str) -> bool:
@@ -98,7 +102,9 @@ def extract_facts_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     return out
 
 
-def _load_memory(state: AgentState, deps: AgentDeps) -> tuple[dict[str, MemoryEntry] | None, list[str]]:
+def _load_memory(
+    state: AgentState, deps: AgentDeps
+) -> tuple[dict[str, MemoryEntry] | None, list[str]]:
     if state.get("retrieved_memory") is not None:
         return state["retrieved_memory"], []
     try:
@@ -126,8 +132,11 @@ def detect_changes_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         return {}
     memory, errs = _load_memory(state, deps)
     if memory is None:  # cannot compare => cannot update
-        return {"proposed_updates": [], "errors": errs,
-                "tool_results": [{"tool": "memory_read", "status": "failed"}]}
+        return {
+            "proposed_updates": [],
+            "errors": errs,
+            "tool_results": [{"tool": "memory_read", "status": "failed"}],
+        }
     decisions = decide_all(detect_changes(state.get("extracted_facts", []), memory), deps.policy)
     return {"retrieved_memory": memory, "proposed_updates": decisions}
 
@@ -137,7 +146,9 @@ def apply_updates_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         return {}
     actionable = [d for d in state.get("proposed_updates", []) if d.action is not Action.SKIP]
     results = apply_decisions(state["user_id"], actionable, deps.memory_writer)
-    return {"tool_results": [{"tool": "memory_write", **r.model_dump(mode="json")} for r in results]}
+    return {
+        "tool_results": [{"tool": "memory_write", **r.model_dump(mode="json")} for r in results]
+    }
 
 
 def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -173,7 +184,9 @@ def _status_footer(tool_results: list[dict[str, Any]], errors: list[str]) -> str
             continue
         s, summ = r.get("status"), r.get("summary", r.get("key", ""))
         if s == "applied":
-            lines.append(f"Saved: {summ}" + (" (added to history)" if r.get("history_recorded") else ""))
+            lines.append(
+                f"Saved: {summ}" + (" (added to history)" if r.get("history_recorded") else "")
+            )
         elif s == "history_recorded":
             lines.append(f"Added to history: {summ}")
         elif s == "pending_created":
@@ -198,12 +211,21 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     mem = state.get("retrieved_memory") or {}
     profile = state.get("retrieved_profile")
     profile_text = _format_profile(mem, profile)
-    docs = [d for r in state.get("tool_results", []) if r.get("tool") == "retriever" for d in r.get("docs", [])]
-    prompt = (f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
-              f"Reference documents:\n{chr(10).join(docs) or '(none)'}\n\nUser message:\n{state['user_message']}")
+    docs = [
+        d
+        for r in state.get("tool_results", [])
+        if r.get("tool") == "retriever"
+        for d in r.get("docs", [])
+    ]
+    prompt = (
+        f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
+        f"Reference documents:\n{chr(10).join(docs) or '(none)'}\n\nUser message:\n{state['user_message']}"
+    )
     try:
         text = deps.llm(RESPONSE_GENERATION, prompt).strip()
     except Exception as exc:
         log.warning("response generation failed: %s", exc)
         text = "Sorry, I couldn't generate a response right now. Please try again."
-    return {"response": text + _status_footer(state.get("tool_results", []), state.get("errors", []))}
+    return {
+        "response": text + _status_footer(state.get("tool_results", []), state.get("errors", []))
+    }

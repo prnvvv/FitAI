@@ -5,6 +5,7 @@ units are normalised to canonical units, and temporal labels are reconciled
 against the fact's own source span. Guards only ever DOWNGRADE a fact
 (explicit -> historical/hypothetical/uncertain), never upgrade it.
 """
+
 from __future__ import annotations
 
 import json
@@ -24,13 +25,13 @@ log = logging.getLogger(__name__)
 class TextCompleter(Protocol):
     """Minimal LLM interface. Adapt the project's existing Groq client to it, e.g.:
 
-        def complete(system, user, *, json_mode=False):
-            kw = {"response_format": {"type": "json_object"}} if json_mode else {}
-            r = groq_client.chat.completions.create(
-                model=settings.GROQ_MODEL, temperature=0,
-                messages=[{"role": "system", "content": system},
-                          {"role": "user", "content": user}], **kw)
-            return r.choices[0].message.content
+    def complete(system, user, *, json_mode=False):
+        kw = {"response_format": {"type": "json_object"}} if json_mode else {}
+        r = groq_client.chat.completions.create(
+            model=settings.GROQ_MODEL, temperature=0,
+            messages=[{"role": "system", "content": system},
+                      {"role": "user", "content": user}], **kw)
+        return r.choices[0].message.content
     """
 
     def __call__(self, system: str, user: str, *, json_mode: bool = False) -> str: ...
@@ -53,8 +54,16 @@ FactField = Literal["weight", "height", "body_fat", "goal", "workout", "suppleme
 
 # unit -> multiplier to canonical unit
 _UNITS: dict[str, dict[str, float]] = {
-    "weight": {"kg": 1, "kgs": 1, "kilogram": 1, "kilograms": 1,
-               "lb": 0.45359237, "lbs": 0.45359237, "pound": 0.45359237, "pounds": 0.45359237},
+    "weight": {
+        "kg": 1,
+        "kgs": 1,
+        "kilogram": 1,
+        "kilograms": 1,
+        "lb": 0.45359237,
+        "lbs": 0.45359237,
+        "pound": 0.45359237,
+        "pounds": 0.45359237,
+    },
     "height": {"cm": 1, "m": 100, "in": 2.54, "inch": 2.54, "inches": 2.54},
     "body_fat": {"%": 1, "percent": 1, "pct": 1},
     "measurement": {"cm": 1, "in": 2.54, "inch": 2.54, "inches": 2.54},
@@ -62,20 +71,27 @@ _UNITS: dict[str, dict[str, float]] = {
 CANONICAL_UNIT = {"weight": "kg", "height": "cm", "body_fat": "%", "measurement": "cm"}
 _RANGE = {"weight": (20, 400), "height": (100, 250), "body_fat": (2, 70), "measurement": (5, 300)}
 
-_HYPO = re.compile(r"\b(if i|would|could|might|maybe|suppose|imagine|what if|thinking (?:of|about))\b", re.I)
-_PAST = re.compile(r"\b(used to|was|were|had been|last (?:year|month|week)|ago|previously|back in|formerly)\b", re.I)
-_UNCERTAIN = re.compile(r"\b(about|around|roughly|approximately|approx|i think|probably|not sure|i guess)\b|~", re.I)
+_HYPO = re.compile(
+    r"\b(if i|would|could|might|maybe|suppose|imagine|what if|thinking (?:of|about))\b", re.I
+)
+_PAST = re.compile(
+    r"\b(used to|was|were|had been|last (?:year|month|week)|ago|previously|back in|formerly)\b",
+    re.I,
+)
+_UNCERTAIN = re.compile(
+    r"\b(about|around|roughly|approximately|approx|i think|probably|not sure|i guess)\b|~", re.I
+)
 
 
 class ExtractedFact(BaseModel):
     """One validated fact. Numeric values are stored in canonical units."""
 
     field: FactField
-    qualifier: str | None = None          # e.g. "waist" for measurements
+    qualifier: str | None = None  # e.g. "waist" for measurements
     value: float | str
     unit: str | None = None
     confidence: float = Field(ge=0, le=1)  # LLM estimate, not proof
-    timestamp: datetime | None = None      # when the fact held; None if not stated
+    timestamp: datetime | None = None  # when the fact held; None if not stated
     extracted_at: datetime
     tense: Tense
     statement_type: StatementType
@@ -139,15 +155,18 @@ class ExtractedFact(BaseModel):
                 self.statement_type = StatementType.UNCERTAIN
         if self.statement_type is StatementType.UNCERTAIN:
             self.confidence = min(self.confidence, 0.6)
-        if (self.timestamp and self.tense is not Tense.FUTURE
-                and self.timestamp > self.extracted_at + timedelta(days=1)):
+        if (
+            self.timestamp
+            and self.tense is not Tense.FUTURE
+            and self.timestamp > self.extracted_at + timedelta(days=1)
+        ):
             raise ValueError("timestamp in the future for a non-future statement")
 
 
 class ExtractionResult(BaseModel):
     facts: list[ExtractedFact] = Field(default_factory=list)
     rejected: list[str] = Field(default_factory=list)  # reasons for dropped items
-    error: str | None = None                            # LLM/parse failure
+    error: str | None = None  # LLM/parse failure
 
 
 def _parse_json(raw: str) -> Any:
@@ -155,11 +174,17 @@ def _parse_json(raw: str) -> Any:
     return json.loads(s)
 
 
-def extract_facts(message: str, llm: TextCompleter, now: datetime | None = None) -> ExtractionResult:
+def extract_facts(
+    message: str, llm: TextCompleter, now: datetime | None = None
+) -> ExtractionResult:
     """Extract and validate facts. Never raises; failures land in `error`/`rejected`."""
     now = now or datetime.now(timezone.utc)
     try:
-        raw = llm(FACT_EXTRACTION.replace("{today}", now.date().isoformat()), message[:4000], json_mode=True)
+        raw = llm(
+            FACT_EXTRACTION.replace("{today}", now.date().isoformat()),
+            message[:4000],
+            json_mode=True,
+        )
         data = _parse_json(raw)
         items = data.get("facts") if isinstance(data, dict) else data
         if not isinstance(items, list):

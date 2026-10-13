@@ -49,7 +49,9 @@ class MemoryService:
             raise NotFoundError("Memory not found.")
         return memory
 
-    def list_history(self, user_id: UUID, *, limit: int, offset: int) -> tuple[list[MemoryHistory], int]:
+    def list_history(
+        self, user_id: UUID, *, limit: int, offset: int
+    ) -> tuple[list[MemoryHistory], int]:
         """Return a page of the user's memory history."""
         return self._memory.list_history(user_id, limit=limit, offset=offset)
 

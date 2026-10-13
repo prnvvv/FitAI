@@ -1,4 +1,5 @@
 """Tests for progress analysis tools."""
+
 from __future__ import annotations
 
 from datetime import date
@@ -36,8 +37,9 @@ def test_weight_trend_tool(fake_progress_service: Any, fake_workout_service: Any
         DatedValue(on=date(2026, 1, 1), value=75),
         DatedValue(on=date(2026, 1, 15), value=73),
     ]
-    tools = make_progress_tools(fake_progress_service, fake_workout_service,
-                                today=lambda: date(2026, 1, 15))
+    tools = make_progress_tools(
+        fake_progress_service, fake_workout_service, today=lambda: date(2026, 1, 15)
+    )
     weight_tool = tools[0]
     result = weight_tool.invoke({"days": 30}, config=_config())
     assert result["window_days"] == 30
@@ -45,15 +47,17 @@ def test_weight_trend_tool(fake_progress_service: Any, fake_workout_service: Any
 
 
 def test_goal_progress_tool_no_goals(fake_progress_service: Any, fake_workout_service: Any) -> None:
-    tools = make_progress_tools(fake_progress_service, fake_workout_service,
-                                today=lambda: date(2026, 1, 15))
+    tools = make_progress_tools(
+        fake_progress_service, fake_workout_service, today=lambda: date(2026, 1, 15)
+    )
     goal_tool = tools[3]
     result = goal_tool.invoke({}, config=_config())
     assert result["status"] == "no_data"
 
 
-def test_goal_progress_tool_numeric_weight_goal(fake_progress_service: Any,
-                                                fake_workout_service: Any) -> None:
+def test_goal_progress_tool_numeric_weight_goal(
+    fake_progress_service: Any, fake_workout_service: Any
+) -> None:
     fake_progress_service.goals = [
         GoalEntry(on=date(2026, 1, 1), goal="lose weight", metric="weight", target_value=70),
     ]
@@ -61,8 +65,9 @@ def test_goal_progress_tool_numeric_weight_goal(fake_progress_service: Any,
         DatedValue(on=date(2026, 1, 1), value=75),
         DatedValue(on=date(2026, 1, 15), value=73),
     ]
-    tools = make_progress_tools(fake_progress_service, fake_workout_service,
-                                today=lambda: date(2026, 1, 15))
+    tools = make_progress_tools(
+        fake_progress_service, fake_workout_service, today=lambda: date(2026, 1, 15)
+    )
     goal_tool = tools[3]
     result = goal_tool.invoke({}, config=_config())
     assert result["status"] == "ok"

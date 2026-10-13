@@ -1,4 +1,5 @@
 """Tests for text chunking."""
+
 from __future__ import annotations
 
 import pytest
@@ -30,8 +31,9 @@ def test_split_text_overlap() -> None:
 
 
 def test_chunk_document_preserves_metadata() -> None:
-    doc = LoadedDocument(source="test.pdf", file_type="pdf",
-                         sections=(Section("Hello world", page=1),))
+    doc = LoadedDocument(
+        source="test.pdf", file_type="pdf", sections=(Section("Hello world", page=1),)
+    )
     chunks = chunk_document(doc, "doc-1", {"author": "test"})
     assert len(chunks) == 1
     chunk = chunks[0]
@@ -45,7 +47,6 @@ def test_chunk_document_preserves_metadata() -> None:
 
 def test_chunk_document_enforces_max_chunks() -> None:
     long_text = "word " * 5000
-    doc = LoadedDocument(source="test.txt", file_type="txt",
-                         sections=(Section(long_text),))
+    doc = LoadedDocument(source="test.txt", file_type="txt", sections=(Section(long_text),))
     with pytest.raises(ValueError, match="exceeds"):
         chunk_document(doc, "doc-1", max_chunks=1)

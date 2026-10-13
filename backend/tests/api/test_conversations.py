@@ -20,9 +20,7 @@ def test_conversation_lifecycle(client) -> None:
     assert fetched.status_code == 200
     assert fetched.json()["title"] == "Leg day"
 
-    renamed = client.patch(
-        f"/api/v1/conversations/{conversation_id}", json={"title": "Push day"}
-    )
+    renamed = client.patch(f"/api/v1/conversations/{conversation_id}", json={"title": "Push day"})
     assert renamed.status_code == 200
     assert renamed.json()["title"] == "Push day"
 

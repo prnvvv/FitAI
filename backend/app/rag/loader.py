@@ -1,4 +1,5 @@
 """Load and extract text from PDF, TXT and DOCX files."""
+
 from __future__ import annotations
 
 import re
@@ -20,14 +21,15 @@ class UnsupportedFileTypeError(DocumentLoadError):
 @dataclass(frozen=True)
 class Section:
     """A block of text; `page` is 1-based for PDFs, else None."""
+
     text: str
     page: int | None = None
 
 
 @dataclass(frozen=True)
 class LoadedDocument:
-    source: str          # file name only (no server paths)
-    file_type: str       # "pdf" | "txt" | "docx"
+    source: str  # file name only (no server paths)
+    file_type: str  # "pdf" | "txt" | "docx"
     sections: tuple[Section, ...]
 
     @property
@@ -106,5 +108,7 @@ def load_document(path: str | Path, max_bytes: int = DEFAULT_MAX_BYTES) -> Loade
     loader = {".pdf": _load_pdf, ".txt": _load_txt, ".docx": _load_docx}[ext]
     sections = [s for s in loader(p) if s.text]
     if not sections:
-        raise DocumentLoadError("no extractable text (scanned documents need OCR, which is not supported)")
+        raise DocumentLoadError(
+            "no extractable text (scanned documents need OCR, which is not supported)"
+        )
     return LoadedDocument(source=p.name, file_type=ext[1:], sections=tuple(sections))

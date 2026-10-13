@@ -1,4 +1,5 @@
 """Chat endpoint: single-turn agent responses."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, status

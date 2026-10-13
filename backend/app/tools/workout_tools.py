@@ -3,6 +3,7 @@
 Tools take the user from `config["configurable"]["user_id"]` (set by the authenticated caller),
 never from model-supplied arguments.
 """
+
 from collections.abc import Callable, Sequence
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Protocol
@@ -68,7 +69,9 @@ def call_service(fn: Callable[..., Any], *args: Any) -> Any:
     except ToolException:
         raise
     except Exception as exc:
-        raise ToolException(f"data service unavailable ({type(exc).__name__}); nothing was changed") from exc
+        raise ToolException(
+            f"data service unavailable ({type(exc).__name__}); nothing was changed"
+        ) from exc
 
 
 def _norm(name: str) -> str:
@@ -92,8 +95,16 @@ def summarize_workouts(workouts: Sequence[WorkoutLog]) -> dict[str, Any]:
     durations = [w.duration_min for w in workouts if w.duration_min]
     for w in workouts:
         for ex in w.exercises:
-            e = per.setdefault(_norm(ex.name), {"exercise": _norm(ex.name), "sessions": 0, "sets": 0,
-                                                "volume_kg": 0.0, "max_weight_kg": 0.0})
+            e = per.setdefault(
+                _norm(ex.name),
+                {
+                    "exercise": _norm(ex.name),
+                    "sessions": 0,
+                    "sets": 0,
+                    "volume_kg": 0.0,
+                    "max_weight_kg": 0.0,
+                },
+            )
             e["sessions"] += 1
             for s in ex.sets:
                 e["sets"] += 1
@@ -105,14 +116,23 @@ def summarize_workouts(workouts: Sequence[WorkoutLog]) -> dict[str, Any]:
     for e in exercises:
         e["volume_kg"] = round(e["volume_kg"], 1)
     dates = sorted({w.performed_on for w in workouts})
-    return {"status": "ok", "sessions": len(workouts), "active_days": len(dates),
-            "first_date": dates[0].isoformat(), "last_date": dates[-1].isoformat(),
-            "total_sets": total_sets, "total_volume_kg": round(volume, 1),
-            "total_duration_min": sum(durations), "sessions_with_duration": len(durations),
-            "exercises": exercises}
+    return {
+        "status": "ok",
+        "sessions": len(workouts),
+        "active_days": len(dates),
+        "first_date": dates[0].isoformat(),
+        "last_date": dates[-1].isoformat(),
+        "total_sets": total_sets,
+        "total_volume_kg": round(volume, 1),
+        "total_duration_min": sum(durations),
+        "sessions_with_duration": len(durations),
+        "exercises": exercises,
+    }
 
 
-def analyze_personal_records(workouts: Sequence[WorkoutLog], exercise: str | None = None) -> dict[str, Any]:
+def analyze_personal_records(
+    workouts: Sequence[WorkoutLog], exercise: str | None = None
+) -> dict[str, Any]:
     """Max weight, best estimated 1RM, bodyweight rep max and max-weight progression per exercise."""
     wanted = _norm(exercise) if exercise else None
     state: dict[str, dict[str, Any]] = {}
@@ -122,23 +142,41 @@ def analyze_personal_records(workouts: Sequence[WorkoutLog], exercise: str | Non
             key = _norm(ex.name)
             if wanted and key != wanted:
                 continue
-            r = state.setdefault(key, {"exercise": key, "max_weight_kg": None, "max_weight_reps": None,
-                                       "max_weight_date": None, "best_est_1rm_kg": None,
-                                       "best_est_1rm_date": None, "max_bodyweight_reps": None,
-                                       "max_bodyweight_reps_date": None, "pr_events": []})
+            r = state.setdefault(
+                key,
+                {
+                    "exercise": key,
+                    "max_weight_kg": None,
+                    "max_weight_reps": None,
+                    "max_weight_date": None,
+                    "best_est_1rm_kg": None,
+                    "best_est_1rm_date": None,
+                    "max_bodyweight_reps": None,
+                    "max_bodyweight_reps_date": None,
+                    "pr_events": [],
+                },
+            )
             for s in ex.sets:
                 if s.weight_kg > 0:
                     if r["max_weight_kg"] is None or s.weight_kg > r["max_weight_kg"]:
-                        r.update(max_weight_kg=s.weight_kg, max_weight_reps=s.reps, max_weight_date=day)
-                        event = {"date": day, "weight_kg": s.weight_kg, "reps": s.reps,
-                                 "baseline": not r["pr_events"]}
+                        r.update(
+                            max_weight_kg=s.weight_kg, max_weight_reps=s.reps, max_weight_date=day
+                        )
+                        event = {
+                            "date": day,
+                            "weight_kg": s.weight_kg,
+                            "reps": s.reps,
+                            "baseline": not r["pr_events"],
+                        }
                         if r["pr_events"] and r["pr_events"][-1]["date"] == day:
                             event["baseline"] = r["pr_events"][-1]["baseline"]
                             r["pr_events"][-1] = event
                         else:
                             r["pr_events"].append(event)
                     e1 = estimate_1rm(s.weight_kg, s.reps)
-                    if e1 is not None and (r["best_est_1rm_kg"] is None or e1 > r["best_est_1rm_kg"]):
+                    if e1 is not None and (
+                        r["best_est_1rm_kg"] is None or e1 > r["best_est_1rm_kg"]
+                    ):
                         r.update(best_est_1rm_kg=round(e1, 1), best_est_1rm_date=day)
                 elif r["max_bodyweight_reps"] is None or s.reps > r["max_bodyweight_reps"]:
                     r.update(max_bodyweight_reps=s.reps, max_bodyweight_reps_date=day)
@@ -147,16 +185,26 @@ def analyze_personal_records(workouts: Sequence[WorkoutLog], exercise: str | Non
     records = sorted(state.values(), key=lambda r: r["exercise"])
     for r in records:
         r["pr_events"] = r["pr_events"][-5:]
-    return {"status": "ok", "records": records,
-            "note": "Estimated 1RM uses the Epley formula and is only computed for sets of 12 reps or fewer."}
+    return {
+        "status": "ok",
+        "records": records,
+        "note": "Estimated 1RM uses the Epley formula and is only computed for sets of 12 reps or fewer.",
+    }
 
 
-def make_workout_tools(service: WorkoutService, today: Callable[[], date] = utc_today) -> list[BaseTool]:
+def make_workout_tools(
+    service: WorkoutService, today: Callable[[], date] = utc_today
+) -> list[BaseTool]:
     """Build LangGraph-compatible tools bound to `service`."""
 
-    def log_workout(performed_on: date, exercises: list[ExerciseEntry], config: RunnableConfig,
-                    name: str | None = None, duration_min: int | None = None,
-                    notes: str | None = None) -> dict[str, Any]:
+    def log_workout(
+        performed_on: date,
+        exercises: list[ExerciseEntry],
+        config: RunnableConfig,
+        name: str | None = None,
+        duration_min: int | None = None,
+        notes: str | None = None,
+    ) -> dict[str, Any]:
         """Log a completed workout. `performed_on` must be an explicit ISO date the user gave
         (not in the future). Reports success only when the service confirms the save."""
         uid = require_user_id(config)
@@ -166,8 +214,13 @@ def make_workout_tools(service: WorkoutService, today: Callable[[], date] = utc_
         if performed_on < now - timedelta(days=3650):
             raise ToolInputError("performed_on is implausibly old")
         try:
-            log = WorkoutLog(performed_on=performed_on, name=name, duration_min=duration_min,
-                             exercises=exercises, notes=notes)
+            log = WorkoutLog(
+                performed_on=performed_on,
+                name=name,
+                duration_min=duration_min,
+                exercises=exercises,
+                notes=notes,
+            )
         except ValueError as exc:
             raise ToolInputError(f"invalid workout: {exc}") from exc
         workout_id = call_service(service.log_workout, uid, log)
@@ -184,8 +237,9 @@ def make_workout_tools(service: WorkoutService, today: Callable[[], date] = utc_
         data = call_service(service.get_workouts, uid, end - timedelta(days=days), end)
         return {"window_days": days, **summarize_workouts(data)}
 
-    def personal_records(config: RunnableConfig, exercise: str | None = None,
-                         days: int = 365) -> dict[str, Any]:
+    def personal_records(
+        config: RunnableConfig, exercise: str | None = None, days: int = 365
+    ) -> dict[str, Any]:
         """Personal records (heaviest set, best estimated 1RM, progression) from logged workouts in the
         last `days` days (1-3650), optionally for one exercise."""
         uid = require_user_id(config)
@@ -195,5 +249,7 @@ def make_workout_tools(service: WorkoutService, today: Callable[[], date] = utc_
         data = call_service(service.get_workouts, uid, end - timedelta(days=days), end)
         return {"window_days": days, **analyze_personal_records(data, exercise)}
 
-    return [StructuredTool.from_function(f, handle_tool_error=True)
-            for f in (log_workout, workout_summary, personal_records)]
+    return [
+        StructuredTool.from_function(f, handle_tool_error=True)
+        for f in (log_workout, workout_summary, personal_records)
+    ]

@@ -1,4 +1,5 @@
 """Overlapping text chunking that preserves source metadata."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -71,8 +72,14 @@ def chunk_document(
     for section in doc.sections:
         for piece in split_text(section.text, chunk_size, overlap):
             i = len(chunks)
-            meta: Metadata = {**base, "doc_id": doc_id, "source": doc.source,
-                              "file_type": doc.file_type, "page": section.page or -1, "chunk_index": i}
+            meta: Metadata = {
+                **base,
+                "doc_id": doc_id,
+                "source": doc.source,
+                "file_type": doc.file_type,
+                "page": section.page or -1,
+                "chunk_index": i,
+            }
             assert meta.keys() >= _RESERVED
             chunks.append(Chunk(id=f"{id_prefix}{doc_id}:{i}", text=piece, metadata=meta))
             if max_chunks is not None and len(chunks) > max_chunks:
