@@ -1,42 +1,58 @@
-import { FileText, Loader2, Trash2, Upload } from 'lucide-react'
+import { AlertCircle, FileText, Loader2, Trash2, Upload } from 'lucide-react'
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { api } from '../services/api'
 import type { Document } from '../types'
 
+function getStatusClass(status: string): string {
+  const map: Record<string, string> = {
+    pending: 'documents__status--pending',
+    processing: 'documents__status--processing',
+    indexed: 'documents__status--indexed',
+    failed: 'documents__status--failed',
+  }
+  return `documents__status ${map[status] ?? ''}`
+}
+
+function formatStatus(status: string): string {
+  if (status === 'indexed') return 'Ready'
+  if (status === 'failed') return 'Failed'
+  if (status === 'processing') return 'Processing'
+  return 'Pending'
+}
+
 export function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    api
-      .listDocuments()
-      .then((page) => {
-        if (!cancelled) setDocuments(page.items)
-      })
-      .catch(console.error)
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
+  const load = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const page = await api.listDocuments()
+      setDocuments(page.items)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load documents')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
+    load()
   }, [])
 
   const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setError(null)
     try {
       await api.uploadDocument(file)
-      setLoading(true)
-      const page = await api.listDocuments()
-      setDocuments(page.items)
-      setLoading(false)
+      await load()
     } catch (err) {
-      console.error(err)
-      alert('Upload failed')
+      setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
       e.target.value = ''
@@ -49,20 +65,27 @@ export function DocumentsPage() {
       await api.deleteDocument(id)
       setDocuments((prev) => prev.filter((d) => d.id !== id))
     } catch (err) {
-      console.error(err)
+      setError(err instanceof Error ? err.message : 'Could not delete document')
     }
   }
 
   return (
     <div className="page page--documents">
       <header className="page__header">
-        <h1>Documents</h1>
-        <p>Upload PDF, TXT, or DOCX files to extend FitAI's knowledge.</p>
+        <h1>Knowledge base</h1>
+        <p>Upload PDF, TXT, or DOCX files to extend what FitAI knows about fitness and nutrition.</p>
       </header>
 
+      {error && (
+        <div className="page__alert page__alert--error">
+          <AlertCircle size={18} />
+          {error}
+        </div>
+      )}
+
       <div className="page__section">
-        <label className="documents__upload">
-          <Upload size={20} />
+        <label className={`documents__upload ${uploading ? 'documents__upload--busy' : ''}`}>
+          {uploading ? <Loader2 className="page__spinner" size={20} /> : <Upload size={20} />}
           <span>{uploading ? 'Uploading…' : 'Upload document'}</span>
           <input type="file" accept=".pdf,.txt,.docx" onChange={handleUpload} disabled={uploading} />
         </label>
@@ -73,7 +96,11 @@ export function DocumentsPage() {
           <Loader2 className="page__spinner" size={24} />
         </div>
       ) : documents.length === 0 ? (
-        <div className="page__empty">No documents uploaded yet.</div>
+        <div className="page__empty">
+          <FileText size={48} />
+          <p>No documents uploaded yet.</p>
+          <span>Your private docs stay yours and only appear in your searches.</span>
+        </div>
       ) : (
         <ul className="documents__list">
           {documents.map((doc) => (
@@ -84,9 +111,10 @@ export function DocumentsPage() {
               <div className="documents__info">
                 <div className="documents__name">{doc.filename}</div>
                 <div className="documents__meta">
-                  {doc.content_type} · {doc.status}
+                  {doc.content_type} · {new Date(doc.created_at).toLocaleDateString()}
                 </div>
               </div>
+              <div className={getStatusClass(doc.status)}>{formatStatus(doc.status)}</div>
               <button
                 type="button"
                 className="documents__delete"

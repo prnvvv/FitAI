@@ -1186,6 +1186,11 @@
   color: var(--text-primary);
 }
 
+.documents__upload--busy {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 .documents__upload input {
   display: none;
 }
@@ -1244,6 +1249,35 @@
 }
 
 .documents__delete:hover {
+  background-color: var(--error-bg);
+  color: var(--error);
+}
+
+.documents__status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.documents__status--pending {
+  background-color: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
+.documents__status--processing {
+  background-color: rgba(47, 107, 255, 0.12);
+  color: var(--accent);
+}
+
+.documents__status--indexed {
+  background-color: rgba(34, 197, 94, 0.12);
+  color: var(--success);
+}
+
+.documents__status--failed {
   background-color: var(--error-bg);
   color: var(--error);
 }
