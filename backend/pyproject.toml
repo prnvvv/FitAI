@@ -90,6 +90,16 @@ ignore = [
     "E501", # line-too-long is handled by the formatter
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.File",
+    "fastapi.Query",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Path",
+    "fastapi.Cookie",
+]
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
@@ -113,6 +123,21 @@ exclude = [
     "venv",
 ]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# Binary-heavy third-party libraries ship stubs that may use newer syntax
+# than the project's mypy target. Ignore errors in them instead of failing
+# the whole run.
+module = [
+    "numpy",
+    "numpy.*",
+    "onnxruntime.*",
+    "tokenizers.*",
+    "chromadb",
+    "chromadb.*",
+]
+ignore_errors = true
+follow_imports = "skip"
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
