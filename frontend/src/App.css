@@ -1469,11 +1469,7 @@
 }
 
 @media (min-width: 768px) {
-  .app-shell__main {
+  .sidebar--open + .app-shell__main {
     margin-left: var(--sidebar-width);
-  }
-
-  .sidebar__open-btn {
-    display: none;
   }
 }
