@@ -6,13 +6,16 @@ Person 2's advanced fitness intelligence.
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import CurrentUser, DbSession, Pagination
-from app.models.enums import MeasurementType
+from app.models.enums import ActivityEventType, MeasurementType
 from app.schemas.common import Page
 from app.schemas.progress import ExerciseMaxLoadOut
 from app.schemas.workout import MeasurementCreate, MeasurementOut
+from app.services.activity_event_service import ActivityEventService
 from app.services.progress_service import ProgressService
 from app.services.workout_service import WorkoutService
 
@@ -38,6 +41,14 @@ def create_measurement(
         payload.measured_at,
         notes=payload.notes,
     )
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.METRIC_LOGGED,
+        entity_type="measurement",
+        entity_id=str(measurement.id),
+        occurred_at=payload.measured_at,
+        payload={"type": payload.type.value, "value": str(payload.value), "unit": payload.unit},
+    )
     return MeasurementOut.model_validate(measurement)
 
 
@@ -61,6 +72,16 @@ def list_measurements(
         limit=pagination.limit,
         offset=pagination.offset,
     )
+
+
+@router.delete("/measurements/{measurement_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+def delete_measurement(
+    measurement_id: UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    """Delete one of the authenticated user's measurements."""
+    WorkoutService(db).delete_measurement(current_user.id, measurement_id)
 
 
 @router.get("/weight", response_model=list[MeasurementOut])

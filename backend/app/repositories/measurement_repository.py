@@ -62,6 +62,20 @@ class MeasurementRepository:
         self._db.flush()
         return measurement
 
+    def get(self, user_id: UUID, measurement_id: UUID) -> Measurement | None:
+        """Return a measurement only when it belongs to ``user_id``."""
+        from sqlalchemy import select
+
+        statement = select(Measurement).where(
+            Measurement.id == measurement_id, Measurement.user_id == user_id
+        )
+        return self._db.scalar(statement)
+
+    def delete(self, measurement: Measurement) -> None:
+        """Delete a measurement."""
+        self._db.delete(measurement)
+        self._db.flush()
+
     def series(
         self, user_id: UUID, measurement_type: MeasurementType
     ) -> list[Measurement]:

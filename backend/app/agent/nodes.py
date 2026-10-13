@@ -11,6 +11,7 @@ from typing import Any, Protocol
 
 from app.llm.prompts import RESPONSE_GENERATION
 from app.memory.change_detector import MemoryEntry, detect_changes
+from app.tools.activity import get_activity_log
 from app.tools.nearby_gyms import nearby_gyms
 from app.tools.web_search import web_search
 from app.memory.confirmation import (
@@ -60,6 +61,7 @@ class AgentDeps:
     profile_reader: ProfileReader | None = None
     retriever: Retriever | None = None
     tools: Mapping[str, Tool] = dc_field(default_factory=dict)
+    db_session: object | None = None
     policy: ConfirmationPolicy = dc_field(default_factory=ConfirmationPolicy)
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
 
@@ -101,6 +103,8 @@ def _select_tools(msg: str) -> list[str]:
     selected: list[str] = []
     if _GYM_INTENT.search(msg):
         selected.append("nearby_gyms")
+    elif re.search(r"\b(what did i do|how (have|has) my|my week|recent|activity|log|train(?:ing)? been|workouts lately)\b", msg, re.I):
+        selected.append("activity_log")
     elif _LIVE_INFO_INTENT.search(msg):
         # Prefer web search for general live-info questions unless they are
         # explicitly gym-location questions.
@@ -198,6 +202,14 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
             errs.append(f"retriever: {type(exc).__name__}")
 
     for tool_name in _select_tools(state["user_message"]):
+        if tool_name == "activity_log":
+            try:
+                result = get_activity_log(state["user_id"], db_session=deps.db_session)
+                tool_results.append({"tool": tool_name, "result": result})
+            except Exception as exc:
+                log.warning("tool %s failed: %s", tool_name, exc)
+                errs.append(f"{tool_name}: {type(exc).__name__}")
+            continue
         tool = deps.tools.get(tool_name)
         if tool is None:
             continue
@@ -272,6 +284,14 @@ def _format_tool_context(tool_results: list[dict[str, Any]]) -> str:
                         f"- {place.get('name', '')} ({place.get('type', '')}) "
                         f"— {place.get('address', '')} — {place.get('map_url', '')}"
                     )
+        elif tool == "activity_log":
+            result = r.get("result", {})
+            if result.get("error"):
+                lines.append(f"Activity log: {result['error']}")
+            elif result.get("events"):
+                lines.append("Recent activity:")
+                for event in result["events"][:15]:
+                    lines.append(f"- {event.get('occurred_at', '')}: {event.get('type', '')}")
     return "\n".join(lines) if lines else "(none)"
 
 

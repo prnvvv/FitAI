@@ -106,3 +106,16 @@ class MeasurementType(str, enum.Enum):
     ARM = "arm"
     THIGH = "thigh"
     NECK = "neck"
+
+
+class ActivityEventType(str, enum.Enum):
+    """Types of user-facing activity events."""
+
+    SESSION_COMPLETED = "session_completed"
+    SESSION_PLANNED = "session_planned"
+    PLAN_EDITED = "plan_edited"
+    MEAL_LOGGED = "meal_logged"
+    METRIC_LOGGED = "metric_logged"
+    DOCUMENT_ADDED = "document_added"
+    DOCUMENT_DELETED = "document_deleted"
+    PROFILE_UPDATED = "profile_updated"

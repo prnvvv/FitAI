@@ -110,6 +110,14 @@ class WorkoutService:
         self._db.refresh(measurement)
         return measurement
 
+    def delete_measurement(self, user_id: UUID, measurement_id: UUID) -> None:
+        """Delete the user's measurement."""
+        measurement = self._measurements.get(user_id, measurement_id)
+        if measurement is None:
+            raise NotFoundError("Measurement not found.")
+        self._measurements.delete(measurement)
+        self._commit()
+
     def _commit(self) -> None:
         try:
             self._db.commit()

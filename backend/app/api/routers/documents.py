@@ -14,8 +14,10 @@ from fastapi import APIRouter, File, UploadFile, status
 from app.api.deps import CurrentUser, DbSession, Pagination
 from app.core.config import settings
 from app.core.errors import PayloadTooLargeError
+from app.models.enums import ActivityEventType
 from app.schemas.common import Page
 from app.schemas.document import DocumentOut
+from app.services.activity_event_service import ActivityEventService
 from app.services.document_service import DocumentService
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -56,6 +58,13 @@ async def upload_document(
         file.filename or "upload",
         file.content_type or "application/octet-stream",
         data,
+    )
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.DOCUMENT_ADDED,
+        entity_type="document",
+        entity_id=str(document.id),
+        payload={"filename": document.filename, "size_bytes": document.size_bytes},
     )
     return DocumentOut.model_validate(document)
 
