@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.errors import AppError, NotFoundError
+from app.core.errors import AppError
 from app.models.profile import Profile
 from app.repositories.profile_repository import ProfileRepository
 
