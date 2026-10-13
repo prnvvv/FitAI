@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -34,6 +35,22 @@ class WorkoutRepository:
             .offset(offset)
         )
         return list(self._db.scalars(statement)), int(total or 0)
+
+    def list_sessions_between(
+        self, user_id: UUID, *, start: datetime, end: datetime
+    ) -> list[WorkoutSession]:
+        """Return the user's sessions with ``start <= performed_at <= end``, oldest first."""
+        statement = (
+            select(WorkoutSession)
+            .where(
+                WorkoutSession.user_id == user_id,
+                WorkoutSession.performed_at >= start,
+                WorkoutSession.performed_at <= end,
+            )
+            .options(selectinload(WorkoutSession.sets))
+            .order_by(WorkoutSession.performed_at.asc())
+        )
+        return list(self._db.scalars(statement))
 
     def get_session(self, session_id: UUID, user_id: UUID) -> WorkoutSession | None:
         """Return a workout session only when it belongs to ``user_id``."""

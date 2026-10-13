@@ -35,6 +35,12 @@ class WorkoutService:
         """Return a page of the user's workout sessions."""
         return self._workouts.list_sessions(user_id, limit=limit, offset=offset)
 
+    def list_sessions_between(
+        self, user_id: UUID, *, start: datetime, end: datetime
+    ) -> list[WorkoutSession]:
+        """Return the user's workout sessions with ``start <= performed_at <= end``."""
+        return self._workouts.list_sessions_between(user_id, start=start, end=end)
+
     def get_session(self, user_id: UUID, session_id: UUID) -> WorkoutSession:
         """Return the user's workout session or raise NotFoundError."""
         session = self._workouts.get_session(session_id, user_id)
