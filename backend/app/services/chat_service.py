@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -14,7 +15,7 @@ from app.llm.client import GroqClient
 from app.memory.change_detector import DetectedChange, MemoryEntry
 from app.memory.confirmation import Decision, MemoryWriter
 from app.memory.history import HistoryRecord
-from app.models.enums import MessageRole
+from app.models.enums import MemoryKey, MessageRole
 from app.models.user import User
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
@@ -56,11 +57,26 @@ class _MemoryWriterAdapter(MemoryWriter):
 
     def apply_update(self, user_id: str, change: DetectedChange) -> bool:
         try:
-            for item in self._service.list_current(UUID(user_id)):
-                if item.key == change.fact.key:
-                    self._service.correct(item.id, UUID(user_id), change.fact.value)
+            service = self._service
+            uid = UUID(user_id)
+            try:
+                key = MemoryKey(change.fact.key)
+            except ValueError:
+                # Not part of the provisional memory taxonomy: cannot persist.
+                return False
+            for item in service.list_current(uid):
+                if item.key == key:
+                    service.correct(item.id, uid, change.fact.value)
                     return True
-            return False
+            service.create(
+                uid,
+                key,
+                change.fact.value,
+                confidence=Decimal(str(change.fact.confidence)),
+                source="agent",
+                effective_at=change.fact.timestamp,
+            )
+            return True
         except Exception:
             return False
 

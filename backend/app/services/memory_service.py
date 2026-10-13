@@ -49,9 +49,7 @@ class MemoryService:
             raise NotFoundError("Memory not found.")
         return memory
 
-    def list_history(
-        self, user_id: UUID, *, limit: int, offset: int
-    ) -> tuple[list[object], int]:
+    def list_history(self, user_id: UUID, *, limit: int, offset: int) -> tuple[list[object], int]:
         """Return a page of the user's memory history."""
         return self._memory.list_history(user_id, limit=limit, offset=offset)
 
@@ -79,6 +77,47 @@ class MemoryService:
             previous_value=previous,
             new_value=new_value,
             source="user_correction",
+        )
+        self._commit()
+        self._db.refresh(memory)
+        return memory
+
+    def create(
+        self,
+        user_id: UUID,
+        key: MemoryKey,
+        value: object,
+        *,
+        confidence: Decimal | None = None,
+        source: str | None = None,
+        effective_at: datetime | None = None,
+    ) -> Memory:
+        """Create a new current memory fact with a CREATE history record.
+
+        Shared interface for Person 2's memory updates. Refuses to create a new
+        row while an active memory already exists for the key.
+        """
+        validate_memory_value(key, value)
+        if self._memory.get_active(user_id, key) is not None:
+            raise ConflictError("An active memory already exists for this key.")
+        memory = self._memory.create(
+            user_id,
+            key,
+            value,
+            confidence=confidence,
+            source=source,
+            effective_at=effective_at,
+        )
+        self._memory.add_history(
+            user_id,
+            memory.id,
+            key,
+            MemoryChangeType.CREATE,
+            previous_value=None,
+            new_value=value,
+            confidence=confidence,
+            source=source,
+            effective_at=effective_at,
         )
         self._commit()
         self._db.refresh(memory)
