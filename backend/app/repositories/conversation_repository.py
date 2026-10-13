@@ -66,9 +66,7 @@ class MessageRepository:
     ) -> tuple[list[Message], int]:
         """Return a chronological page of messages and the total count."""
         base_filter = Message.conversation_id == conversation_id
-        total = self._db.scalar(
-            select(func.count()).select_from(Message).where(base_filter)
-        )
+        total = self._db.scalar(select(func.count()).select_from(Message).where(base_filter))
         statement = (
             select(Message)
             .where(base_filter)
@@ -77,6 +75,18 @@ class MessageRepository:
             .offset(offset)
         )
         return list(self._db.scalars(statement)), int(total or 0)
+
+    def list_recent_for_conversation(self, conversation_id: UUID, *, limit: int) -> list[Message]:
+        """Return the most recent messages in chronological (oldest-first) order."""
+        statement = (
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .limit(limit)
+        )
+        rows = list(self._db.scalars(statement))
+        rows.reverse()
+        return rows
 
     def create(
         self,

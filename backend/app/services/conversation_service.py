@@ -67,9 +67,18 @@ class ConversationService:
     ) -> tuple[list[Message], int]:
         """Return a page of messages after verifying conversation ownership."""
         self.get(user_id, conversation_id)
-        return self._messages.list_for_conversation(
-            conversation_id, limit=limit, offset=offset
-        )
+        return self._messages.list_for_conversation(conversation_id, limit=limit, offset=offset)
+
+    def list_recent_messages(
+        self, user_id: UUID, conversation_id: UUID, *, limit: int
+    ) -> list[Message]:
+        """Return the most recent messages in chronological order.
+
+        Shared interface for the chat pipeline; ownership is verified before
+        the messages are read.
+        """
+        self.get(user_id, conversation_id)
+        return self._messages.list_recent_for_conversation(conversation_id, limit=limit)
 
     def add_message(
         self,

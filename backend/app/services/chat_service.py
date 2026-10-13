@@ -1,4 +1,5 @@
 """Chat orchestration: run one turn through the agent graph and persist messages."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -108,19 +109,12 @@ class ChatService:
             )
         )
 
-        messages, _ = self._conversations.list_messages(
-            user_id, conversation_id, limit=20, offset=0
-        )
-        context = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in reversed(messages)
-        ]
+        messages = self._conversations.list_recent_messages(user_id, conversation_id, limit=20)
+        context = [{"role": msg.role.value, "content": msg.content} for msg in messages]
 
         response = run_turn(graph, str(user_id), message, context)
 
-        self._conversations.add_message(
-            user_id, conversation_id, MessageRole.ASSISTANT, response
-        )
+        self._conversations.add_message(user_id, conversation_id, MessageRole.ASSISTANT, response)
 
         return {
             "conversation_id": conversation_id,
