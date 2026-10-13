@@ -25,6 +25,20 @@ def test_upload_rejects_unsupported_type(client) -> None:
     assert response.status_code == 415
 
 
+def test_accepted_types_match_the_document_loader(client) -> None:
+    """Anything we accept must be parseable, or it can only ever fail indexing."""
+    from app.rag.loader import SUPPORTED_EXTENSIONS
+    from app.services.document_service import ALLOWED_EXTENSIONS
+
+    assert ALLOWED_EXTENSIONS == SUPPORTED_EXTENSIONS
+
+
+def test_upload_rejects_types_the_loader_cannot_parse(client) -> None:
+    files = {"file": ("notes.md", b"# notes", "text/markdown")}
+    response = client.post("/api/v1/documents", files=files)
+    assert response.status_code == 415
+
+
 def test_upload_defers_ingestion_to_background_task(client, monkeypatch, tmp_path) -> None:
     """The upload response must not wait for parsing and embedding."""
     monkeypatch.setattr("app.services.document_storage.settings.document_storage_backend", "local")

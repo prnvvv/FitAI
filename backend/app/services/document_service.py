@@ -26,16 +26,14 @@ from app.models.enums import DocumentStatus
 from app.repositories.document_repository import DocumentRepository
 from app.services.document_storage import DocumentStorage, get_document_storage
 
+# Must stay aligned with the RAG loader: a file type we accept but cannot
+# parse would be stored and then always fail indexing.
 ALLOWED_CONTENT_TYPES = {
     "application/pdf",
     "text/plain",
-    "text/markdown",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "image/png",
-    "image/jpeg",
-    "image/webp",
 }
-ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx"}
 
 
 def _utcnow() -> datetime:
@@ -190,7 +188,7 @@ class DocumentService:
             suffix = filename[filename.rfind(".") :].lower()
         if content_type not in ALLOWED_CONTENT_TYPES and suffix not in ALLOWED_EXTENSIONS:
             raise UnsupportedMediaTypeError(
-                "Only PDF, TXT, MD, DOCX, PNG, JPG and WEBP files are supported.",
+                "Only PDF, TXT and DOCX files are supported.",
                 details={"content_type": content_type},
             )
 

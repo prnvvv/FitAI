@@ -159,12 +159,12 @@ export function LibraryPage() {
       <header className="page__header page__header--row">
         <div>
           <h1>Library</h1>
-          <p>Files and images FitAI can use when it answers you.</p>
+          <p>Documents FitAI can read when it answers you.</p>
         </div>
         <label className={`library__add-btn ${uploading ? 'library__add-btn--busy' : ''}`}>
           {uploading ? <Loader2 className="page__spinner" size={16} /> : <Upload size={16} />}
           <span>{uploading ? 'Adding…' : 'Add'}</span>
-          <input type="file" accept=".pdf,.txt,.docx,.md,.png,.jpg,.jpeg,.webp" onChange={handleFileInput} disabled={uploading} />
+          <input type="file" accept=".pdf,.txt,.docx" onChange={handleFileInput} disabled={uploading} />
         </label>
       </header>
 
@@ -192,7 +192,7 @@ export function LibraryPage() {
       >
         <Upload size={24} />
         <p>Drag and drop a file, or click Add.</p>
-        <span>PDF, TXT, DOCX, MD, PNG, JPG, WEBP. Max 10 MB.</span>
+        <span>PDF, TXT, DOCX. Max 10 MB.</span>
       </div>
 
       {loading ? (
@@ -203,7 +203,7 @@ export function LibraryPage() {
         <div className="page__empty page__empty--compact">
           <FileText size={32} />
           <p>Nothing in your library yet.</p>
-          <span>Add files or images and FitAI can reference them in chat.</span>
+          <span>Add a document and FitAI can reference it in chat.</span>
         </div>
       ) : (
         <ul className="library__list">
