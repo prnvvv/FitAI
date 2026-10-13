@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 
+from app.core.security import AuthUser
 from app.services.document_service import DocumentService
 from app.services.document_storage import LocalDocumentStorage
 
@@ -66,3 +67,18 @@ def test_mark_status_records_completion(db_session, tmp_path) -> None:
     updated = service.mark_status(user_id, document.id, DocumentStatus.INDEXED)
     assert updated.status == "indexed"
     assert updated.completed_at is not None
+
+
+def test_document_ownership_is_enforced(make_client, db_session, tmp_path) -> None:
+    owner_user = AuthUser(id=uuid.uuid4())
+    other_user = AuthUser(id=uuid.uuid4())
+    owner = make_client(owner_user)
+    other = make_client(other_user)
+
+    storage = LocalDocumentStorage(str(tmp_path))
+    service = DocumentService(db_session, storage=storage)
+    document = service.create(owner_user.id, "owner.txt", "text/plain", b"secret")
+
+    assert other.get(f"/api/v1/documents/{document.id}").status_code == 404
+    assert other.delete(f"/api/v1/documents/{document.id}").status_code == 404
+    assert owner.get(f"/api/v1/documents/{document.id}").status_code == 200

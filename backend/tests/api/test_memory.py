@@ -81,3 +81,22 @@ def test_stale_confirmation_returns_409(make_client, db_session) -> None:
 
     response = client.post(f"/api/v1/memory/pending/{stale.id}/confirm")
     assert response.status_code == 409
+
+
+def test_memory_ownership_is_enforced(make_client, db_session) -> None:
+    owner_user = AuthUser(id=uuid.uuid4())
+    other_user = AuthUser(id=uuid.uuid4())
+    owner = _provision(make_client, owner_user)
+    other = make_client(other_user)
+
+    service = MemoryService(db_session)
+    memory = service.create(owner_user.id, MemoryKey.WEIGHT, {"value": 72.0, "unit": "kg"})
+    proposal = service.create_proposal(owner_user.id, MemoryKey.GOAL, "build muscle")
+
+    assert other.get("/api/v1/memory").json()["total"] == 0
+    assert other.patch(f"/api/v1/memory/{memory.id}", json={"value": 70}).status_code == 404
+    assert other.delete(f"/api/v1/memory/{memory.id}").status_code == 404
+    assert other.post(f"/api/v1/memory/pending/{proposal.id}/confirm").status_code == 404
+    assert other.post(f"/api/v1/memory/pending/{proposal.id}/reject").status_code == 404
+
+    assert owner.get("/api/v1/memory").json()["total"] == 1
