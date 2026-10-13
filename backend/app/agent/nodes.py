@@ -27,9 +27,15 @@ log = logging.getLogger(__name__)
 
 
 class MemoryReader(Protocol):
-    """Read-only view of the profile service. Values in canonical units (kg, cm, %)."""
+    """Read-only view of the memory service. Values in canonical units (kg, cm, %)."""
 
     def get_current_memory(self, user_id: str) -> Mapping[str, MemoryEntry]: ...
+
+
+class ProfileReader(Protocol):
+    """Read-only view of the user profile as pinned core memory."""
+
+    def get_profile(self, user_id: str) -> Mapping[str, object] | None: ...
 
 
 class Retriever(Protocol):
@@ -43,6 +49,7 @@ class AgentDeps:
     llm: TextCompleter
     memory_reader: MemoryReader
     memory_writer: MemoryWriter
+    profile_reader: ProfileReader | None = None
     retriever: Retriever | None = None
     policy: ConfirmationPolicy = dc_field(default_factory=ConfirmationPolicy)
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
@@ -101,6 +108,19 @@ def _load_memory(state: AgentState, deps: AgentDeps) -> tuple[dict[str, MemoryEn
         return None, [f"memory_read: {type(exc).__name__}"]
 
 
+def _load_profile(state: AgentState, deps: AgentDeps) -> dict[str, object] | None:
+    if state.get("retrieved_profile") is not None:
+        return state["retrieved_profile"]
+    if deps.profile_reader is None:
+        return None
+    try:
+        profile = deps.profile_reader.get_profile(state["user_id"])
+        return dict(profile) if profile else None
+    except Exception as exc:
+        log.warning("profile read failed: %s", exc)
+        return None
+
+
 def detect_changes_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     if _blocked(state) or not state.get("user_id"):
         return {}
@@ -129,6 +149,9 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     errs += e
     if memory is not None:
         out["retrieved_memory"] = memory
+    profile = _load_profile(state, deps)
+    if profile is not None:
+        out["retrieved_profile"] = profile
     if deps.retriever:
         try:
             docs = deps.retriever.search(state["user_message"], state["user_id"])
@@ -160,13 +183,23 @@ def _status_footer(tool_results: list[dict[str, Any]], errors: list[str]) -> str
     return ("\n\n" + "\n".join(dict.fromkeys(lines))) if lines else ""
 
 
+def _format_profile(mem: dict[str, MemoryEntry], profile: dict[str, object] | None) -> str:
+    lines: list[str] = []
+    for k, e in mem.items():
+        lines.append(f"{k}: {e.value}{' ' + e.unit if e.unit else ''}")
+    if profile:
+        lines.append("profile: " + ", ".join(f"{k}={v}" for k, v in profile.items() if v))
+    return "\n".join(lines) if lines else "(none)"
+
+
 def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     ctx = state.get("conversation_context", [])[-10:]
     history = "\n".join(f"{m.get('role', 'user')}: {str(m.get('content', ''))[:500]}" for m in ctx)
     mem = state.get("retrieved_memory") or {}
-    profile = "\n".join(f"{k}: {e.value}{' ' + e.unit if e.unit else ''}" for k, e in mem.items())
+    profile = state.get("retrieved_profile")
+    profile_text = _format_profile(mem, profile)
     docs = [d for r in state.get("tool_results", []) if r.get("tool") == "retriever" for d in r.get("docs", [])]
-    prompt = (f"Conversation so far:\n{history or '(none)'}\n\nUser profile:\n{profile or '(none)'}\n\n"
+    prompt = (f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
               f"Reference documents:\n{chr(10).join(docs) or '(none)'}\n\nUser message:\n{state['user_message']}")
     try:
         text = deps.llm(RESPONSE_GENERATION, prompt).strip()

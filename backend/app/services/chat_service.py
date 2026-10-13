@@ -9,7 +9,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.agent import AgentDeps, MemoryReader, build_graph, run_turn
+from app.agent import AgentDeps, MemoryReader, ProfileReader, build_graph, run_turn
 from app.core.config import settings
 from app.llm.client import GroqClient
 from app.memory.change_detector import DetectedChange, MemoryEntry
@@ -19,6 +19,35 @@ from app.models.enums import MemoryKey, MessageRole
 from app.models.user import User
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
+from app.services.profile_service import ProfileService
+
+
+class _ProfileReaderAdapter(ProfileReader):
+    """Adapt ProfileService to the agent's ProfileReader protocol."""
+
+    def __init__(self, db: Session, user_id: UUID) -> None:
+        self._service = ProfileService(db)
+        self._user_id = user_id
+
+    def get_profile(self, user_id: str) -> Mapping[str, object] | None:
+        profile = self._service.get(self._user_id)
+        if profile is None:
+            return None
+        prefs = profile.preferences or {}
+        data: dict[str, object] = {
+            "height_cm": profile.height_cm,
+            "weight_kg": profile.weight_kg,
+            "activity_level": profile.activity_level,
+            "goal": profile.goal,
+            "dietary_preferences": profile.dietary_preferences or [],
+            "dietary_restrictions": profile.dietary_restrictions or [],
+            "display_name": prefs.get("display_name") if isinstance(prefs, dict) else None,
+            "about_you": prefs.get("about_you") if isinstance(prefs, dict) else None,
+            "assistant_should_know": prefs.get("assistant_should_know") if isinstance(prefs, dict) else None,
+            "preferred_tone": prefs.get("preferred_tone") if isinstance(prefs, dict) else None,
+            "units": prefs.get("units") if isinstance(prefs, dict) else None,
+        }
+        return {k: v for k, v in data.items() if v is not None and v != []}
 
 
 class _MemoryReaderAdapter(MemoryReader):
@@ -136,6 +165,7 @@ class ChatService:
                 llm=self._build_llm(),
                 memory_reader=_MemoryReaderAdapter(self._db, user_id),
                 memory_writer=_MemoryWriterAdapter(self._db, user_id),
+                profile_reader=_ProfileReaderAdapter(self._db, user_id),
                 retriever=None,
             )
         )

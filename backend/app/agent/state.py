@@ -17,6 +17,7 @@ class AgentState(TypedDict, total=False):
     user_id: str                                   # authenticated ID, set by caller only
     conversation_context: list[dict[str, str]]     # [{"role","content"}, ...]
     retrieved_memory: dict[str, MemoryEntry]
+    retrieved_profile: dict[str, object] | None    # pinned core memory from user profile
     extracted_facts: list[ExtractedFact]
     proposed_updates: list[Decision]
     tool_results: Annotated[list[dict[str, Any]], operator.add]  # retrieval + memory write outcomes
