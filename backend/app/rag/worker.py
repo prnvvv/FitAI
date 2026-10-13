@@ -1,0 +1,79 @@
+"""Background ingestion for uploaded documents.
+
+Parsing and embedding are slow and can require a one-off model download, so the
+upload request must never wait for them. The API stores metadata and returns
+immediately; this worker indexes the document afterwards and records the result
+through the agreed ``DocumentService.mark_status`` interface.
+
+The worker owns its own database session because the request-scoped session is
+closed once the response is sent.
+"""
+
+from __future__ import annotations
+
+import contextlib
+from uuid import UUID
+
+from app.core.config import settings
+from app.core.logging import get_logger
+from app.models.enums import DocumentStatus
+from app.services.document_service import DocumentService
+
+logger = get_logger(__name__)
+
+
+def _mark_failed(service: DocumentService, user_id: UUID, document_id: UUID, reason: str) -> None:
+    with contextlib.suppress(Exception):
+        service.mark_status(user_id, document_id, DocumentStatus.FAILED, error_message=reason[:500])
+
+
+def ingest_document(user_id: UUID, document_id: UUID, data: bytes) -> None:
+    """Index one uploaded document and update its status.
+
+    Never raises: a failed background job must not surface as a server error,
+    but the document must be left in a truthful ``failed`` state.
+    """
+    from app.db.session import SessionLocal
+    from app.rag.pipeline import IngestionPipeline
+    from app.rag.vector_store import VectorStore
+
+    db = SessionLocal()
+    try:
+        service = DocumentService(db)
+        try:
+            document = service.get(user_id, document_id)
+        except Exception as exc:  # noqa: BLE001 - deleted before indexing finished
+            logger.warning("document_ingestion_skipped", doc_id=str(document_id), error=str(exc))
+            return
+
+        if document.status == DocumentStatus.INDEXED:
+            return
+
+        service.mark_status(user_id, document_id, DocumentStatus.PROCESSING)
+
+        try:
+            pipeline = IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
+            result = pipeline.ingest_user_document_bytes(
+                data,
+                document.filename,
+                str(user_id),
+                str(document_id),
+                metadata={
+                    "storage_key": document.storage_key,
+                    "content_type": document.content_type,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("document_ingestion_failed", doc_id=str(document_id), error=str(exc))
+            _mark_failed(service, user_id, document_id, str(exc) or "Ingestion failed")
+            return
+
+        if result.status == "indexed":
+            service.mark_status(user_id, document_id, DocumentStatus.INDEXED)
+        else:
+            _mark_failed(service, user_id, document_id, result.error or "Ingestion failed")
+    except Exception as exc:  # noqa: BLE001
+        logger.error("document_ingestion_crashed", doc_id=str(document_id), error=str(exc))
+        _mark_failed(DocumentService(db), user_id, document_id, "Ingestion failed")
+    finally:
+        db.close()

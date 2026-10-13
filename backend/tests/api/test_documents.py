@@ -25,6 +25,42 @@ def test_upload_rejects_unsupported_type(client) -> None:
     assert response.status_code == 415
 
 
+def test_upload_defers_ingestion_to_background_task(client, monkeypatch, tmp_path) -> None:
+    """The upload response must not wait for parsing and embedding."""
+    monkeypatch.setattr("app.services.document_storage.settings.document_storage_backend", "local")
+    monkeypatch.setattr("app.services.document_storage.settings.upload_dir", str(tmp_path))
+    calls: list[tuple[str, str, bytes]] = []
+    monkeypatch.setattr(
+        "app.api.routers.documents.ingest_document",
+        lambda user_id, document_id, data: calls.append((str(user_id), str(document_id), data)),
+    )
+
+    files = {"file": ("plan.txt", b"hello world", "text/plain")}
+    response = client.post("/api/v1/documents", files=files)
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "pending"
+    assert len(calls) == 1
+    user_id, document_id, data = calls[0]
+    assert document_id == response.json()["id"]
+    assert data == b"hello world"
+
+
+def test_upload_does_not_index_inline(client, monkeypatch, tmp_path) -> None:
+    """No ingestion pipeline may be constructed on the request path."""
+    monkeypatch.setattr("app.services.document_storage.settings.document_storage_backend", "local")
+    monkeypatch.setattr("app.services.document_storage.settings.upload_dir", str(tmp_path))
+
+    def _fail(*args, **kwargs):  # pragma: no cover - must never be called
+        raise AssertionError("ingestion ran on the request thread")
+
+    monkeypatch.setattr("app.rag.pipeline.IngestionPipeline.__init__", _fail)
+    monkeypatch.setattr("app.api.routers.documents.ingest_document", lambda *a, **k: None)
+
+    files = {"file": ("plan.txt", b"hello world", "text/plain")}
+    assert client.post("/api/v1/documents", files=files).status_code == 201
+
+
 def test_list_documents_empty(client) -> None:
     response = client.get("/api/v1/documents")
     assert response.status_code == 200

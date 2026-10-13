@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, File, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, UploadFile, status
 
 from app.api.deps import CurrentUser, DbSession, Pagination
 from app.core.config import settings
 from app.core.errors import PayloadTooLargeError
 from app.models.enums import ActivityEventType
 from app.rag.pipeline import IngestionPipeline
-from app.rag.vector_store import VectorStore
+from app.rag.worker import ingest_document
 from app.schemas.common import Page
 from app.schemas.document import DocumentOut
 from app.services.activity_event_service import ActivityEventService
@@ -25,9 +25,6 @@ from app.services.document_service import DocumentService
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 _CHUNK_SIZE = 1024 * 1024
-
-def _get_ingestion() -> IngestionPipeline:
-    return IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
 
 
 async def _read_upload_limited(file: UploadFile) -> bytes:
@@ -53,16 +50,23 @@ async def _read_upload_limited(file: UploadFile) -> bytes:
 async def upload_document(
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> DocumentOut:
-    """Upload a document and record its metadata and initial status."""
+    """Upload a document, record its metadata, and index it in the background.
+
+    Parsing and embedding are slow and may need a one-off model download, so the
+    request returns as soon as the file is stored. The document stays `pending`
+    until the background worker updates its status.
+    """
     data = await _read_upload_limited(file)
-    service = DocumentService(db, ingestion=_get_ingestion())
+    service = DocumentService(db)
     document = service.create(
         current_user.id,
         file.filename or "upload",
         file.content_type or "application/octet-stream",
         data,
+        trigger_ingestion=False,
     )
     ActivityEventService(db).record(
         current_user.id,
@@ -71,6 +75,7 @@ async def upload_document(
         entity_id=str(document.id),
         payload={"filename": document.filename, "size_bytes": document.size_bytes},
     )
+    background_tasks.add_task(ingest_document, current_user.id, document.id, data)
     return DocumentOut.model_validate(document)
 
 
@@ -114,6 +119,7 @@ def delete_document(
     ChromaDB vector deletion for this document must be completed by Person 2.
     """
     from app.rag.vector_store import VectorStore
+
     service = DocumentService(db)
     # Delete vectors before/after metadata removal is handled in service; also try to clean vectors
     ingestion = IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
