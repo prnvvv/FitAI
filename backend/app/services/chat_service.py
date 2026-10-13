@@ -50,6 +50,8 @@ class _ProfileReaderAdapter(ProfileReader):
             else None,
             "preferred_tone": prefs.get("preferred_tone") if isinstance(prefs, dict) else None,
             "units": prefs.get("units") if isinstance(prefs, dict) else None,
+            "timezone": profile.location_timezone,
+            "location": profile.location_label,
         }
         return {k: v for k, v in data.items() if v is not None and v != []}
 

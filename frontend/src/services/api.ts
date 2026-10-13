@@ -162,6 +162,16 @@ export const api = {
   rejectMemoryUpdate: (id: string) =>
     fetchApi<PendingMemoryUpdate>(`/memory/pending/${id}/reject`, { method: 'POST' }),
 
+  // Location helpers
+  geocode: (place: string) =>
+    fetchApi<{ label: string; lat: number; lon: number; timezone?: string | null }>(
+      `/location/geocode?place=${encodeURIComponent(place)}`,
+    ),
+  reverseGeocode: (lat: number, lon: number) =>
+    fetchApi<{ label: string; lat: number; lon: number; timezone?: string | null }>(
+      `/location/reverse?lat=${lat}&lon=${lon}`,
+    ),
+
   // Profile
   getProfile: () => fetchApi<Profile>('/profile'),
   updateProfile: (patch: Partial<Profile>) =>

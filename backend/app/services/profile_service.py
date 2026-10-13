@@ -22,6 +22,10 @@ WRITABLE_FIELDS = frozenset(
         "dietary_restrictions",
         "supplements",
         "preferences",
+        "location_label",
+        "location_lat",
+        "location_lon",
+        "location_timezone",
     }
 )
 

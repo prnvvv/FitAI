@@ -1,4 +1,4 @@
-import { Loader2, Save, User, X } from 'lucide-react'
+import { Loader2, MapPin, Save, User, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../services/api'
 import type { Profile, ProfilePreferences } from '../types'
@@ -26,6 +26,7 @@ export function ProfilePage() {
   const [original, setOriginal] = useState<Partial<Profile>>(EMPTY_PROFILE)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [locating, setLocating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   useEffect(() => {
@@ -241,6 +242,80 @@ export function ProfilePage() {
             placeholder="e.g. lactose-free, gluten-free"
           />
         </label>
+
+        <div className="profile__field">
+          <span>Location</span>
+          <div className="profile__location">
+            <input
+              type="text"
+              value={profile.location_label ?? ''}
+              onChange={(e) => {
+                handleChange('location_label', e.target.value || null)
+                if (!e.target.value) {
+                  handleChange('location_lat', null)
+                  handleChange('location_lon', null)
+                  handleChange('location_timezone', null)
+                }
+              }}
+              placeholder="e.g. Mylapore, Chennai"
+              aria-label="Location"
+            />
+            <button
+              type="button"
+              className="profile__location-btn"
+              onClick={async () => {
+                setLocating(true)
+                setError(null)
+                try {
+                  const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                      enableHighAccuracy: false,
+                      timeout: 10000,
+                    })
+                  })
+                  const roundedLat = Math.round(pos.coords.latitude * 1000) / 1000
+                  const roundedLon = Math.round(pos.coords.longitude * 1000) / 1000
+                  const result = await api.reverseGeocode(roundedLat, roundedLon)
+                  handleChange('location_label', result.label)
+                  handleChange('location_lat', result.lat)
+                  handleChange('location_lon', result.lon)
+                  handleChange('location_timezone', result.timezone ?? null)
+                } catch (err) {
+                  const msg = err instanceof GeolocationPositionError
+                    ? 'Location permission denied or unavailable.'
+                    : 'Could not look up location.'
+                  setError(msg)
+                } finally {
+                  setLocating(false)
+                }
+              }}
+              disabled={locating}
+              aria-label="Use my current location"
+              title="Use my current location"
+            >
+              {locating ? <Loader2 className="page__spinner" size={16} /> : <MapPin size={16} />}
+            </button>
+            {profile.location_label && (
+              <button
+                type="button"
+                className="profile__location-btn"
+                onClick={() => {
+                  handleChange('location_label', null)
+                  handleChange('location_lat', null)
+                  handleChange('location_lon', null)
+                  handleChange('location_timezone', null)
+                }}
+                aria-label="Clear location"
+                title="Clear location"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <small className="profile__hint">
+            Used for local searches and weather. Coordinates are rounded to about 100m.
+          </small>
+        </div>
 
         <div className="profile__actions">
           <button type="submit" className="profile__save" disabled={saving || !dirty}>

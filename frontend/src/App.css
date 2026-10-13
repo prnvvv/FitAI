@@ -1119,6 +1119,46 @@
   color: var(--color-error);
 }
 
+.profile__location {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.profile__location input {
+  flex: 1;
+}
+
+.profile__location-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--divider);
+  background-color: var(--bg-composer);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.profile__location-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.profile__location-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile__hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* Welcome screen */
 .welcome-screen {
   flex: 1;

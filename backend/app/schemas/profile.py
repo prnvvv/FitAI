@@ -25,6 +25,10 @@ class _ProfileFields(BaseModel):
     dietary_restrictions: list[str] | None = None
     supplements: list[dict[str, object]] | None = None
     preferences: dict[str, object] | None = None
+    location_label: str | None = Field(default=None, max_length=255)
+    location_lat: Decimal | None = None
+    location_lon: Decimal | None = None
+    location_timezone: str | None = Field(default=None, max_length=64)
 
     @field_validator("date_of_birth")
     @classmethod

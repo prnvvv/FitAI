@@ -10,6 +10,7 @@ from dataclasses import field as dc_field
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
+from app.core.config import settings
 from app.llm.prompts import RESPONSE_GENERATION
 from app.memory.change_detector import MemoryEntry, detect_changes
 from app.memory.confirmation import (
@@ -22,7 +23,14 @@ from app.memory.confirmation import (
 from app.memory.extractor import TextCompleter, extract_facts
 from app.safety import SafetyResult, run_safety_rules
 from app.tools.activity import get_activity_log
-from app.tools.tool_definitions import TOOL_DEFINITIONS, execute_tool
+from app.tools.tool_definitions import (
+    CORE_TOOL_DEFINITIONS,
+    LOCATION_TOOL_DEFINITIONS,
+    TOOL_DEFINITIONS,
+    ToolContext,
+    build_executor,
+    execute_tool,
+)
 
 from .state import AgentState
 
@@ -349,19 +357,43 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     profile_text = _format_profile(mem, profile)
     sources = _build_sources(state.get("tool_results", []))
     tool_context = _format_tool_context(state.get("tool_results", []), sources)
+
+    # Inject authoritative date/time and, if available, the user's timezone so the
+    # model never guesses the date.
+    timezone_hint = ""
+    if profile and profile.get("timezone"):
+        timezone_hint = f"\nUser timezone: {profile['timezone']}."
+    from datetime import datetime, timezone
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
     prompt = (
         f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
+        f"Today is {today}.{timezone_hint}\n\n"
         f"Live research:\n{tool_context}\n\n"
         "If a tool returned an error or no results, say so honestly.\n\n"
         f"User message:\n{state['user_message']}"
     )
+
+    # Choose tool set based on feature flags. With all flags off this is identical
+    # to the legacy path (ddgs web_search + nearby_gyms).
+    if settings.agent_web_tools:
+        tool_definitions = list(CORE_TOOL_DEFINITIONS)
+        if settings.agent_location_tools:
+            tool_definitions.extend(LOCATION_TOOL_DEFINITIONS)
+        tool_ctx = ToolContext(user_id=state["user_id"], profile=profile)
+        executor = build_executor(tool_ctx)
+    else:
+        tool_definitions = TOOL_DEFINITIONS
+        executor = execute_tool
+
     try:
         if hasattr(deps.llm, "run_with_tools"):
             messages: list[dict[str, Any]] = [
                 {"role": "system", "content": RESPONSE_GENERATION},
                 {"role": "user", "content": prompt[:4000]},
             ]
-            text = deps.llm.run_with_tools(messages, TOOL_DEFINITIONS, execute_tool).strip()
+            text = deps.llm.run_with_tools(messages, tool_definitions, executor).strip()
         else:
             text = deps.llm(RESPONSE_GENERATION, prompt).strip()
     except Exception:

@@ -15,7 +15,7 @@ def test_tool_definitions_include_canonical_and_alias() -> None:
 
 
 def test_execute_tool_routes_web_search() -> None:
-    with patch("app.tools.tool_definitions.web_search") as mock_search:
+    with patch("app.tools.tool_definitions.ddgs_web_search") as mock_search:
         mock_search.return_value = {"results": []}
         result = execute_tool("web_search", {"query": "keto diet", "max_results": 3})
         mock_search.assert_called_once_with("keto diet", max_results=3)
@@ -23,7 +23,7 @@ def test_execute_tool_routes_web_search() -> None:
 
 
 def test_execute_tool_aliases_web_run() -> None:
-    with patch("app.tools.tool_definitions.web_search") as mock_search:
+    with patch("app.tools.tool_definitions.ddgs_web_search") as mock_search:
         mock_search.return_value = {"results": []}
         result = execute_tool("web.run", {"query": "Mylapore gyms", "topn": 5})
         mock_search.assert_called_once_with("Mylapore gyms", max_results=5)

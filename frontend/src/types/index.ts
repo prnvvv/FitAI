@@ -111,7 +111,12 @@ export interface Profile {
   activity_level?: string | null
   dietary_preferences?: string[]
   dietary_restrictions?: string[]
+  supplements?: unknown[]
   preferences?: ProfilePreferences
+  location_label?: string | null
+  location_lat?: number | null
+  location_lon?: number | null
+  location_timezone?: string | null
   created_at: string
   updated_at: string
 }

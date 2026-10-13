@@ -50,4 +50,10 @@ class Profile(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     supplements: Mapped[list[dict[str, object]] | None] = mapped_column(JSONType, nullable=True)
     preferences: Mapped[dict[str, object] | None] = mapped_column(JSONType, nullable=True)
 
+    # Optional real-world location, stored with reduced precision and never logged.
+    location_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    location_lat: Mapped[Decimal | None] = mapped_column(Numeric(8, 5), nullable=True)
+    location_lon: Mapped[Decimal | None] = mapped_column(Numeric(8, 5), nullable=True)
+    location_timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     user: Mapped[User] = relationship(back_populates="profile")

@@ -22,6 +22,7 @@ from app.api.routers import (
     chat,
     conversations,
     documents,
+    location,
     memory,
     profile,
     progress,
@@ -43,6 +44,7 @@ ROUTERS = (
     workouts.router,
     progress.router,
     activity.router,
+    location.router,
 )
 
 

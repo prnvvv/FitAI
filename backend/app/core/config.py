@@ -78,6 +78,48 @@ class Settings(BaseSettings):
     chromadb_collection_name: str = "fitai_knowledge"
     embedding_model: str = "all-MiniLM-L6-v2"
 
+    # Agent feature flags (additive, default OFF until verified)
+    agent_web_tools: bool = False
+    agent_location_tools: bool = False
+    agent_multi_agent: bool = False
+
+    # Web search provider chain (comma-separated priority list).
+    # Supported: tavily, brave, serper, ddgs. Missing/empty defaults to "ddgs".
+    search_providers: Annotated[list[str], NoDecode] = ["ddgs"]
+    tavily_api_key: str | None = None
+    brave_api_key: str | None = None
+    serper_api_key: str | None = None
+
+    # Web fetch / research budgets
+    web_fetch_timeout_seconds: float = 12.0
+    web_max_redirects: int = 3
+    web_max_content_bytes: int = 2_000_000
+    web_max_tool_calls_per_turn: int = 6
+    web_cache_ttl_seconds: int = 300
+    web_user_rate_limit_per_minute: int = 30
+
+    # Multi-agent model roles (defaults to the main Groq model)
+    router_model: str | None = None
+    research_model: str | None = None
+    synth_model: str | None = None
+
+    # Location / weather defaults
+    geocoding_provider: str = "nominatim"  # nominatim | google | mapbox
+    google_geocoding_api_key: str | None = None
+    mapbox_api_key: str | None = None
+    places_provider: str = "overpass"  # overpass | google | foursquare
+    google_places_api_key: str | None = None
+    foursquare_api_key: str | None = None
+    weather_provider: str = "open-meteo"  # open-meteo only for now
+
+    @field_validator("search_providers", mode="before")
+    @classmethod
+    def _split_providers(cls, value: object) -> object:
+        if isinstance(value, str):
+            parts = [item.strip().lower() for item in value.split(",") if item.strip()]
+            return parts if parts else ["ddgs"]
+        return value
+
     @field_validator("cors_origins", "supabase_jwt_algorithms", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
