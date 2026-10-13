@@ -1,4 +1,5 @@
 """CLI entrypoint to ingest curated knowledge-base documents into ChromaDB."""
+
 from __future__ import annotations
 
 import argparse
@@ -16,8 +17,12 @@ from app.rag.vector_store import VectorStore  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Ingest curated fitness knowledge into ChromaDB.")
-    parser.add_argument("--dir", default="knowledge_base", help="Directory of curated documents")
+    parser = argparse.ArgumentParser(
+        description="Ingest curated fitness knowledge into ChromaDB."
+    )
+    parser.add_argument(
+        "--dir", default="knowledge_base", help="Directory of curated documents"
+    )
     args = parser.parse_args(argv)
 
     store = VectorStore()
