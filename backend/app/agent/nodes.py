@@ -29,7 +29,7 @@ from app.tools.tool_definitions import (
     TOOL_DEFINITIONS,
     ToolContext,
     build_executor,
-    execute_tool,
+    build_legacy_executor,
 )
 
 from .state import AgentState
@@ -376,16 +376,19 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     )
 
     # Choose tool set based on feature flags. With all flags off this is identical
-    # to the legacy path (ddgs web_search + nearby_gyms).
+    # to the legacy path (ddgs web_search + nearby_gyms) plus the user's own
+    # workout history. The workout-history tool needs the request's DB session.
+    tool_ctx = ToolContext(
+        user_id=state.get("user_id", ""), profile=profile, db_session=deps.db_session
+    )
     if settings.agent_web_tools:
         tool_definitions = list(CORE_TOOL_DEFINITIONS)
         if settings.agent_location_tools:
             tool_definitions.extend(LOCATION_TOOL_DEFINITIONS)
-        tool_ctx = ToolContext(user_id=state["user_id"], profile=profile)
         executor = build_executor(tool_ctx)
     else:
-        tool_definitions = TOOL_DEFINITIONS
-        executor = execute_tool
+        tool_definitions = list(TOOL_DEFINITIONS)
+        executor = build_legacy_executor(tool_ctx)
 
     try:
         if hasattr(deps.llm, "run_with_tools"):
