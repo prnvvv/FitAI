@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import DbSession
 from app.api.routers import (
+    activity,
     auth,
     chat,
     conversations,
@@ -41,6 +42,7 @@ ROUTERS = (
     documents.router,
     workouts.router,
     progress.router,
+    activity.router,
 )
 
 

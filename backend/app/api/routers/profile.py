@@ -5,8 +5,9 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.errors import NotFoundError
+from app.models.enums import ActivityEventType
 from app.schemas.profile import ProfileOut, ProfilePatch, ProfileUpdate
+from app.services.activity_event_service import ActivityEventService
 from app.services.profile_service import ProfileService
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -14,13 +15,12 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 @router.get("", response_model=ProfileOut)
 def get_profile(current_user: CurrentUser, db: DbSession) -> ProfileOut:
-    """Return the authenticated user's profile.
+    """Return the authenticated user's profile, creating an empty one if absent.
 
-    Returns 404 until a profile has been created with PUT or PATCH.
+    The profile is initialized lazily so the UI can always load it without
+    treating a missing row as an error.
     """
-    profile = ProfileService(db).get(current_user.id)
-    if profile is None:
-        raise NotFoundError("Profile not found.")
+    profile = ProfileService(db).get_or_create(current_user.id)
     return ProfileOut.model_validate(profile)
 
 
@@ -33,6 +33,13 @@ def replace_profile(
     """Create or fully replace the authenticated user's profile."""
     fields = payload.model_dump(exclude_unset=False)
     profile = ProfileService(db).update(current_user.id, fields, partial=False)
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.PROFILE_UPDATED,
+        entity_type="profile",
+        entity_id=str(profile.id),
+        payload={"fields": list(fields.keys())},
+    )
     return ProfileOut.model_validate(profile)
 
 
@@ -45,4 +52,11 @@ def update_profile(
     """Partially update the authenticated user's profile."""
     fields = payload.model_dump(exclude_unset=True)
     profile = ProfileService(db).update(current_user.id, fields, partial=True)
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.PROFILE_UPDATED,
+        entity_type="profile",
+        entity_id=str(profile.id),
+        payload={"fields": list(fields.keys())},
+    )
     return ProfileOut.model_validate(profile)

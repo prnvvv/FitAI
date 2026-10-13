@@ -11,7 +11,9 @@ from fastapi import APIRouter, status
 
 from app.api.deps import CurrentUser, DbSession, Pagination
 from app.schemas.common import Page
+from app.models.enums import ActivityEventType
 from app.schemas.workout import WorkoutSessionCreate, WorkoutSessionOut
+from app.services.activity_event_service import ActivityEventService
 from app.services.workout_service import WorkoutService
 
 router = APIRouter(prefix="/workouts", tags=["workouts"])
@@ -33,6 +35,14 @@ def create_workout(
         duration_minutes=payload.duration_minutes,
         notes=payload.notes,
         sets=sets,
+    )
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.SESSION_COMPLETED,
+        entity_type="workout_session",
+        entity_id=str(session.id),
+        occurred_at=payload.performed_at,
+        payload={"name": payload.name, "set_count": len(sets)},
     )
     return WorkoutSessionOut.model_validate(session)
 

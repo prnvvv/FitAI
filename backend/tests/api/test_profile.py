@@ -5,10 +5,12 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 
-def test_get_profile_returns_404_before_creation(client: TestClient) -> None:
+def test_get_profile_creates_empty_profile_when_missing(client: TestClient) -> None:
     response = client.get("/api/v1/profile")
-    assert response.status_code == 404
-    assert response.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["goal"] is None
+    assert body["weight_kg"] is None
 
 
 def test_put_profile_creates_profile(client: TestClient) -> None:
@@ -58,4 +60,5 @@ def test_profiles_are_isolated_between_users(make_client) -> None:
     user_b = make_client()
     user_a.put("/api/v1/profile", json={"goal": "cut"})
     response = user_b.get("/api/v1/profile")
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json()["goal"] is None

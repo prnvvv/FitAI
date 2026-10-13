@@ -20,6 +20,9 @@ from app.models.user import User
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
 from app.services.profile_service import ProfileService
+from app.tools.activity import get_activity_log
+from app.tools.nearby_gyms import nearby_gyms
+from app.tools.web_search import web_search
 
 
 class _ProfileReaderAdapter(ProfileReader):
@@ -169,6 +172,8 @@ class ChatService:
                 memory_writer=_MemoryWriterAdapter(self._db, user_id),
                 profile_reader=_ProfileReaderAdapter(self._db, user_id),
                 retriever=None,
+                tools={"web_search": web_search, "nearby_gyms": nearby_gyms},
+                db_session=self._db,
             )
         )
 

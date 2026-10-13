@@ -1,4 +1,4 @@
-import { Dumbbell, FileText, MessageSquarePlus, PanelLeftClose, Search, TrendingUp, X } from 'lucide-react'
+import { BookOpen, CalendarDays, MessageSquarePlus, PanelLeftClose, Search, TrendingUp, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -108,27 +108,30 @@ export function Sidebar({
           onClick={handleNewChat}
         />
         <SidebarNavItem
-          icon={<Dumbbell size={20} />}
-          label="Workouts"
+          icon={<CalendarDays size={20} />}
+          label="Plan"
+          active={location.pathname === '/plan'}
           onClick={() => {
             onClose()
-            navigate('/workouts')
+            navigate('/plan')
           }}
         />
         <SidebarNavItem
           icon={<TrendingUp size={20} />}
           label="Progress"
+          active={location.pathname === '/progress'}
           onClick={() => {
             onClose()
             navigate('/progress')
           }}
         />
         <SidebarNavItem
-          icon={<FileText size={20} />}
-          label="Documents"
+          icon={<BookOpen size={20} />}
+          label="Library"
+          active={location.pathname === '/library'}
           onClick={() => {
             onClose()
-            navigate('/documents')
+            navigate('/library')
           }}
         />
       </div>

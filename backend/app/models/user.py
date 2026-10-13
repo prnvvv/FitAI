@@ -17,6 +17,7 @@ from app.db.base import Base
 from app.models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.activity_event import ActivityEvent
     from app.models.conversation import Conversation
     from app.models.document import Document
     from app.models.measurement import Measurement
@@ -74,4 +75,10 @@ class User(Base, TimestampMixin):
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,
+    )
+    activity_events: Mapped[list[ActivityEvent]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ActivityEvent.occurred_at.desc()",
     )
