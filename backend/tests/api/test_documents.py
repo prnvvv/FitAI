@@ -8,7 +8,10 @@ from app.services.document_service import DocumentService
 from app.services.document_storage import LocalDocumentStorage
 
 
-def test_upload_without_configured_storage_returns_503(client) -> None:
+def test_upload_without_configured_storage_returns_503(client, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.services.document_storage.settings.document_storage_backend", "unconfigured"
+    )
     files = {"file": ("plan.pdf", b"%PDF-1.4 minimal", "application/pdf")}
     response = client.post("/api/v1/documents", files=files)
     assert response.status_code == 503

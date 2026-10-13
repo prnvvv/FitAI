@@ -11,6 +11,17 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated
 
+# Work around langchain<->langchain-core version mismatch: langchain_core expects
+# ``langchain.debug`` but langchain 1.x no longer exposes it. Defining it here
+# prevents AttributeError inside LangGraph/LangChain callback configuration.
+try:
+    import langchain
+
+    if not hasattr(langchain, "debug"):
+        langchain.debug = False
+except Exception:
+    pass
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -62,7 +73,7 @@ class Settings(BaseSettings):
     # AI / retrieval configuration is owned by Person 2. These values are kept
     # here only so both developers share a single configuration source.
     groq_api_key: str | None = None
-    groq_model: str = "llama3-70b-8192"
+    groq_model: str = "openai/gpt-oss-20b"
     chromadb_persist_dir: str = "./chroma_data"
     chromadb_collection_name: str = "fitai_knowledge"
     embedding_model: str = "all-MiniLM-L6-v2"
