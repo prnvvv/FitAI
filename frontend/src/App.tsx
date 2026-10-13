@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import './App.css'
 import { AppShell } from './components/layout/AppShell'
 import { useAuth } from './context/AuthContext'
-import { api } from './services/api'
+import { useConversations } from './hooks/useConversations'
 import { ChatPage } from './pages/ChatPage'
 import { DocumentsPage } from './pages/DocumentsPage'
 import { LoginPage } from './pages/LoginPage'
@@ -11,85 +11,67 @@ import { MemoryPage } from './pages/MemoryPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ProgressPage } from './pages/ProgressPage'
 import { WorkoutsPage } from './pages/WorkoutsPage'
-import type { Conversation } from './types'
 
 function AuthenticatedApp() {
-  const { user, loading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
-  const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [conversationsLoading, setConversationsLoading] = useState(true)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('fitai_sidebar_open') : null
+    return stored !== 'false'
+  })
+
+  const {
+    conversations,
+    loading: conversationsLoading,
+    error: conversationsError,
+    searchQuery,
+    setSearchQuery,
+    activeId,
+    refresh,
+    renameConversation,
+    deleteConversation,
+    updateConversationTitle,
+  } = useConversations({ enabled: !!user })
 
   useEffect(() => {
-    if (!user) return
-    let cancelled = false
-    api
-      .listConversations()
-      .then((page) => {
-        if (!cancelled) setConversations(page.items)
-      })
-      .catch(console.error)
-      .finally(() => {
-        if (!cancelled) setConversationsLoading(false)
-      })
-    return () => {
-      cancelled = true
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('fitai_sidebar_open', String(sidebarOpen))
     }
-  }, [user])
+  }, [sidebarOpen])
 
-  const handleNewChat = useCallback(() => {
-    setSelectedId(null)
+  const handleNewChat = useCallback(async () => {
+    setSidebarOpen(false)
     navigate('/')
   }, [navigate])
 
   const handleSelectConversation = useCallback(
     (id: string) => {
-      setSelectedId(id)
+      if (id === activeId) return
+      setSidebarOpen(false)
       navigate(`/chat/${id}`)
     },
-    [navigate],
+    [navigate, activeId],
   )
 
-  const handleConversationCreated = useCallback((id: string) => {
-    setSelectedId(id)
-    setConversations((prev) => {
-      if (prev.some((c) => c.id === id)) return prev
-      return [
-        { id, title: 'New chat', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-        ...prev,
-      ]
-    })
-  }, [])
-
-  const handleRename = useCallback(async (id: string, title: string) => {
-    try {
-      await api.renameConversation(id, title)
-      setConversations((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, title } : c)),
-      )
-    } catch (err) {
-      console.error(err)
-    }
-  }, [])
+  const handleConversationCreated = useCallback(
+    (id: string, title: string | null) => {
+      updateConversationTitle(id, title)
+      refresh().catch(console.error)
+    },
+    [updateConversationTitle, refresh],
+  )
 
   const handleDelete = useCallback(
     async (id: string) => {
-      try {
-        await api.deleteConversation(id)
-        setConversations((prev) => prev.filter((c) => c.id !== id))
-        if (selectedId === id) {
-          setSelectedId(null)
-          navigate('/')
-        }
-      } catch (err) {
-        console.error(err)
+      await deleteConversation(id)
+      if (activeId === id) {
+        navigate('/')
       }
     },
-    [navigate, selectedId],
+    [deleteConversation, activeId, navigate],
   )
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="auth-loading">
         <div className="auth-loading__spinner" />
@@ -109,17 +91,24 @@ function AuthenticatedApp() {
           <AppShell
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
+            onCloseSidebar={() => setSidebarOpen(false)}
             conversations={conversations}
-            selectedId={selectedId}
+            selectedId={activeId}
             conversationsLoading={conversationsLoading}
+            conversationsError={conversationsError}
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
             onSelectConversation={handleSelectConversation}
             onNewChat={handleNewChat}
-            onRename={handleRename}
+            onRename={renameConversation}
             onDelete={handleDelete}
           />
         }
       >
-        <Route index element={<ChatPage onConversationCreated={handleConversationCreated} />} />
+        <Route
+          index
+          element={<ChatPage onConversationCreated={handleConversationCreated} />}
+        />
         <Route
           path="chat/:conversationId"
           element={<ChatPage onConversationCreated={handleConversationCreated} />}

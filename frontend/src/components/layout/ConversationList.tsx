@@ -1,11 +1,12 @@
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Conversation } from '../../types'
 
 interface ConversationListProps {
   conversations: Conversation[]
   selectedId: string | null
   loading: boolean
+  error: string | null
   onSelect: (id: string) => void
   onRename: (id: string, title: string) => void
   onDelete: (id: string) => void
@@ -40,12 +41,28 @@ function ConversationItem({
 
   const handleRename = () => {
     const trimmed = editTitle.trim()
-    if (trimmed) onRename(conversation.id, trimmed)
+    if (trimmed && trimmed !== (conversation.title ?? '')) {
+      onRename(conversation.id, trimmed)
+    }
     setEditing(false)
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleRename()
+    }
+    if (e.key === 'Escape') {
+      setEditTitle(conversation.title ?? '')
+      setEditing(false)
+    }
+  }
+
   return (
-    <div className={`conversation-item ${selected ? 'conversation-item--selected' : ''}`}>
+    <div
+      className={`conversation-item ${selected ? 'conversation-item--selected' : ''}`}
+      data-testid={`conversation-item-${conversation.id}`}
+    >
       {editing ? (
         <input
           type="text"
@@ -53,14 +70,9 @@ function ConversationItem({
           value={editTitle}
           onChange={(e) => setEditTitle(e.target.value)}
           onBlur={handleRename}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleRename()
-            if (e.key === 'Escape') {
-              setEditTitle(conversation.title ?? '')
-              setEditing(false)
-            }
-          }}
+          onKeyDown={handleKeyDown}
           autoFocus
+          aria-label="Rename conversation"
         />
       ) : (
         <button
@@ -79,6 +91,7 @@ function ConversationItem({
           type="button"
           className="conversation-item__menu-btn"
           aria-label="Conversation options"
+          aria-expanded={menuOpen}
           onClick={(e) => {
             e.stopPropagation()
             setMenuOpen((v) => !v)
@@ -125,6 +138,7 @@ export function ConversationList({
   conversations,
   selectedId,
   loading,
+  error,
   onSelect,
   onRename,
   onDelete,
@@ -139,16 +153,24 @@ export function ConversationList({
     )
   }
 
+  if (error) {
+    return (
+      <div className="conversation-list conversation-list--empty">
+        <span>Error loading chats</span>
+      </div>
+    )
+  }
+
   if (conversations.length === 0) {
     return (
       <div className="conversation-list conversation-list--empty">
-        <span>No recent chats</span>
+        <span>No chats found</span>
       </div>
     )
   }
 
   return (
-    <div className="conversation-list">
+    <div className="conversation-list" role="list">
       {conversations.map((conversation) => (
         <ConversationItem
           key={conversation.id}

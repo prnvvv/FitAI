@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Composer } from '../components/chat/Composer'
 import { MessageList } from '../components/chat/MessageList'
@@ -7,7 +7,7 @@ import { api } from '../services/api'
 import type { Message } from '../types'
 
 interface ChatPageProps {
-  onConversationCreated?: (id: string) => void
+  onConversationCreated?: (id: string, title: string | null) => void
 }
 
 export function ChatPage({ onConversationCreated }: ChatPageProps) {
@@ -16,10 +16,21 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const lastConversationId = useRef<string | undefined>(conversationId)
+  const sendLock = useRef(false)
 
-  /* eslint-disable react/set-state-in-effect */
   useEffect(() => {
-    if (!conversationId) return
+    if (conversationId === lastConversationId.current) return
+    lastConversationId.current = conversationId
+    setError(null)
+
+    if (!conversationId) {
+      setMessages([])
+      setLoading(false)
+      return
+    }
+
     let cancelled = false
     setLoading(true)
     api
@@ -27,7 +38,11 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
       .then((page) => {
         if (!cancelled) setMessages(page.items)
       })
-      .catch(console.error)
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load messages')
+        }
+      })
       .finally(() => {
         if (!cancelled) setLoading(false)
       })
@@ -35,11 +50,14 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
       cancelled = true
     }
   }, [conversationId])
-  /* eslint-enable react/set-state-in-effect */
 
   const handleSend = useCallback(
     async (text: string, _files: File[]) => {
+      if (sendLock.current || streaming) return
+      sendLock.current = true
       setStreaming(true)
+      setError(null)
+
       const optimisticUserMessage: Message = {
         id: `temp-${Date.now()}`,
         conversation_id: conversationId ?? '',
@@ -55,7 +73,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
           conversation_id: conversationId,
         })
 
-        onConversationCreated?.(result.conversation_id)
+        onConversationCreated?.(result.conversation_id, result.title)
 
         if (result.conversation_id !== conversationId) {
           navigate(`/chat/${result.conversation_id}`, { replace: true })
@@ -81,28 +99,32 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
         )
       } catch (err) {
         console.error(err)
+        const message = err instanceof Error ? err.message : 'Failed to send message'
+        setError(message)
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === optimisticUserMessage.id
-              ? { ...m, content: `${m.content}\n\n_Error sending message. Please try again._` }
-              : m,
-          ),
+          prev.filter((m) => m.id !== optimisticUserMessage.id),
         )
       } finally {
         setStreaming(false)
+        sendLock.current = false
       }
     },
-    [conversationId, navigate, onConversationCreated],
+    [conversationId, navigate, onConversationCreated, streaming],
   )
 
   const hasMessages = messages.length > 0
 
   return (
     <div className="chat-page">
-      {!hasMessages && !loading ? (
+      {!hasMessages && !loading && !error ? (
         <WelcomeScreen onSuggestion={(text) => handleSend(text, [])} />
       ) : (
         <MessageList messages={messages} loading={streaming} />
+      )}
+      {error && (
+        <div className="chat-page__error" role="alert">
+          {error}
+        </div>
       )}
       <div className="chat-page__composer">
         <Composer onSend={handleSend} disabled={streaming} streaming={streaming} />
