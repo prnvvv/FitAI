@@ -1249,6 +1249,25 @@
 }
 
 /* Memory */
+.memory__section {
+  margin-bottom: 24px;
+}
+
+.page__alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.page__alert--error {
+  background-color: var(--error-bg);
+  color: var(--error);
+}
+
 .memory__list {
   list-style: none;
   margin: 0;
@@ -1266,6 +1285,36 @@
   border: 1px solid var(--divider);
   border-radius: 10px;
   background-color: var(--bg-composer);
+}
+
+.memory__item--pending {
+  border-color: var(--accent);
+  background-color: rgba(16, 163, 127, 0.05);
+}
+
+.memory__edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.memory__edit input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background-color: var(--bg-composer);
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  outline: none;
+}
+
+.memory__edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .memory__key {
@@ -1337,6 +1386,24 @@
 .memory__approve:hover {
   background-color: var(--success-bg);
   color: var(--success);
+}
+
+.memory__edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.memory__edit-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* Profile */
