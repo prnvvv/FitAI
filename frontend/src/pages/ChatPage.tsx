@@ -84,9 +84,14 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
           conversation_id: result.conversation_id,
           role: 'assistant',
           content: result.response,
-          metadata: result.tool_events && result.tool_events.length > 0
-            ? { tool_events: result.tool_events }
-            : null,
+          metadata: {
+            sources: result.sources ?? [],
+            actions: result.actions ?? [],
+            activity: (result.tool_events ?? []).map((e) => ({
+              tool: e.tool,
+              status: e.status,
+            })),
+          },
           created_at: new Date().toISOString(),
         }
         setMessages((prev) =>

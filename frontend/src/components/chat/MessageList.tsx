@@ -3,12 +3,26 @@ import { ChevronDown } from 'lucide-react'
 import type { Message } from '../../types'
 import { MessageBubble } from './MessageBubble'
 
+interface ActivityEvent {
+  tool: string
+  status?: string
+}
+
 interface MessageListProps {
   messages: Message[]
   loading?: boolean
+  activity?: ActivityEvent[]
 }
 
-export function MessageList({ messages, loading }: MessageListProps) {
+function activityLabel(activity: ActivityEvent[]): string {
+  if (activity.some((a) => a.tool === 'web_search')) return 'Searching the web…'
+  if (activity.some((a) => a.tool === 'nearby_gyms')) return 'Finding nearby places…'
+  if (activity.some((a) => a.tool === 'retriever')) return 'Reviewing sources…'
+  if (activity.some((a) => a.tool === 'memory_write')) return 'Updating memory…'
+  return 'Thinking…'
+}
+
+export function MessageList({ messages, loading, activity = [] }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -42,7 +56,8 @@ export function MessageList({ messages, loading }: MessageListProps) {
           <div className="message message--assistant">
             <div className="message__avatar">F</div>
             <div className="message__bubble message__bubble--assistant">
-              <div className="message__thinking" aria-label="FitAI is thinking">
+              <div className="message__thinking" aria-label={activityLabel(activity)}>
+                <span className="message__thinking-label">{activityLabel(activity)}</span>
                 <span className="message__thinking-dot" />
                 <span className="message__thinking-dot" />
                 <span className="message__thinking-dot" />

@@ -242,25 +242,7 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
 
 
 # ---- response ---------------------------------------------------------------------
-def _status_footer(tool_results: list[dict[str, Any]], errors: list[str]) -> str:
-    lines: list[str] = []
-    for r in tool_results:
-        if r.get("tool") == "memory_read" and r.get("status") == "failed":
-            lines.append("I couldn't check your saved profile, so nothing was updated.")
-        if r.get("tool") != "memory_write":
-            continue
-        s, summ = r.get("status"), r.get("summary", r.get("key", ""))
-        if s == "applied":
-            lines.append(
-                f"Saved: {summ}" + (" (added to history)" if r.get("history_recorded") else "")
-            )
-        elif s == "history_recorded":
-            lines.append(f"Added to history: {summ}")
-        elif s == "pending_created":
-            lines.append(f"Please confirm before I save: {summ}")
-        elif s == "failed":
-            lines.append(f"Couldn't save {r.get('key')}; nothing was changed.")
-    return ("\n\n" + "\n".join(dict.fromkeys(lines))) if lines else ""
+_CITATION_RE = re.compile(r"\[(\d+)\]")
 
 
 def _format_profile(mem: dict[str, MemoryEntry], profile: dict[str, object] | None) -> str:
@@ -272,7 +254,47 @@ def _format_profile(mem: dict[str, MemoryEntry], profile: dict[str, object] | No
     return "\n".join(lines) if lines else "(none)"
 
 
-def _format_tool_context(tool_results: list[dict[str, Any]]) -> str:
+def _build_sources(tool_results: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Collect numbered sources from web search and nearby-gyms results."""
+    sources: list[dict[str, str]] = []
+    for r in tool_results:
+        tool = r.get("tool")
+        if tool == "web_search":
+            for item in r.get("result", {}).get("results", []):
+                url = item.get("url") or item.get("href")
+                if not url:
+                    continue
+                sources.append(
+                    {
+                        "title": item.get("title", "Source") or "Source",
+                        "url": url,
+                        "snippet": item.get("snippet", "") or item.get("body", ""),
+                    }
+                )
+        elif tool == "nearby_gyms":
+            for place in r.get("result", {}).get("places", []):
+                url = place.get("map_url")
+                if not url:
+                    continue
+                sources.append(
+                    {
+                        "title": place.get("name", "Gym") or "Gym",
+                        "url": url,
+                        "snippet": place.get("address", ""),
+                    }
+                )
+
+    seen: set[str] = set()
+    unique: list[dict[str, str]] = []
+    for s in sources:
+        if s["url"] in seen:
+            continue
+        seen.add(s["url"])
+        unique.append(s)
+    return unique
+
+
+def _format_tool_context(tool_results: list[dict[str, Any]], sources: list[dict[str, str]]) -> str:
     lines: list[str] = []
     for r in tool_results:
         tool = r.get("tool")
@@ -281,29 +303,6 @@ def _format_tool_context(tool_results: list[dict[str, Any]]) -> str:
             if docs:
                 lines.append("Reference documents:")
                 lines.extend(f"- {d}" for d in docs)
-        elif tool == "web_search":
-            result = r.get("result", {})
-            if result.get("error"):
-                lines.append(f"Web search: {result['error']}")
-            elif result.get("results"):
-                lines.append("Web search results:")
-                for item in result["results"]:
-                    lines.append(
-                        f"- {item.get('title', '')}: {item.get('snippet', '')} ({item.get('url', '')})"
-                    )
-        elif tool == "nearby_gyms":
-            result = r.get("result", {})
-            if result.get("error"):
-                lines.append(f"Nearby gyms: {result['error']}")
-            elif result.get("places"):
-                lines.append(
-                    f"Nearby fitness facilities near {result.get('location', 'the requested area')}:"
-                )
-                for place in result["places"]:
-                    lines.append(
-                        f"- {place.get('name', '')} ({place.get('type', '')}) "
-                        f"— {place.get('address', '')} — {place.get('map_url', '')}"
-                    )
         elif tool == "activity_log":
             result = r.get("result", {})
             if result.get("error"):
@@ -312,7 +311,34 @@ def _format_tool_context(tool_results: list[dict[str, Any]]) -> str:
                 lines.append("Recent activity:")
                 for event in result["events"][:15]:
                     lines.append(f"- {event.get('occurred_at', '')}: {event.get('type', '')}")
+
+    if sources:
+        lines.append("Sources (cite using [1], [2], etc.):")
+        for i, s in enumerate(sources, start=1):
+            lines.append(f"[{i}] {s['title']} — {s['url']}")
+            if s.get("snippet"):
+                lines.append(f"    {s['snippet']}")
+
     return "\n".join(lines) if lines else "(none)"
+
+
+def _build_actions(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Surface pending memory confirmations as actionable items."""
+    actions: list[dict[str, Any]] = []
+    for r in tool_results:
+        if r.get("tool") != "memory_write" or r.get("status") != "pending_created":
+            continue
+        actions.append(
+            {
+                "type": "memory_confirm",
+                "proposal_id": r.get("proposal_id"),
+                "key": r.get("key"),
+                "summary": r.get("summary"),
+                "title": "Confirm update",
+                "description": f"Proposed: {r.get('summary') or r.get('key')}",
+            }
+        )
+    return actions
 
 
 def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -321,7 +347,8 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     mem = state.get("retrieved_memory") or {}
     profile = state.get("retrieved_profile")
     profile_text = _format_profile(mem, profile)
-    tool_context = _format_tool_context(state.get("tool_results", []))
+    sources = _build_sources(state.get("tool_results", []))
+    tool_context = _format_tool_context(state.get("tool_results", []), sources)
     prompt = (
         f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
         f"Live research:\n{tool_context}\n\n"
@@ -340,6 +367,12 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     except Exception:
         log.warning("response generation failed", exc_info=True)
         text = "Sorry, I couldn't generate a response right now. Please try again."
-    return {
-        "response": text + _status_footer(state.get("tool_results", []), state.get("errors", []))
-    }
+
+    used_indices = {int(m) for m in _CITATION_RE.findall(text)}
+    used_sources = [
+        {**s, "index": i}
+        for i, s in enumerate(sources, start=1)
+        if i in used_indices or not used_indices
+    ]
+    actions = _build_actions(state.get("tool_results", []))
+    return {"response": text, "sources": used_sources, "actions": actions}

@@ -32,10 +32,28 @@ export interface ChatRequest {
   conversation_id?: string
 }
 
+export interface Source {
+  index: number
+  title: string
+  url: string
+  snippet?: string
+}
+
+export interface ActionItem {
+  type: string
+  proposal_id?: string
+  key?: string
+  summary?: string
+  title: string
+  description: string
+}
+
 export interface ChatResponse {
   conversation_id: string
   response: string
   title: string | null
+  sources?: Source[]
+  actions?: ActionItem[]
   tool_events?: ToolEvent[]
 }
 

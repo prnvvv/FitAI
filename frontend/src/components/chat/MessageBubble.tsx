@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Check, Copy, Database, Sparkles, Wrench } from 'lucide-react'
-import type { Message, ToolEvent } from '../../types'
+import { Check, Copy, Database, Sparkles, Wrench, X, AlertCircle, ExternalLink } from 'lucide-react'
+import { api } from '../../services/api'
+import type { ActionItem, Message, Source, ToolEvent } from '../../types'
 
 interface MessageBubbleProps {
   message: Message
@@ -10,7 +11,13 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false)
+  const [resolvedActions, setResolvedActions] = useState<Set<string>>(new Set())
+  const [actionError, setActionError] = useState<string | null>(null)
   const isUser = message.role === 'user'
+
+  const sources = (message.metadata?.sources as Source[] | undefined) ?? []
+  const actions = (message.metadata?.actions as ActionItem[] | undefined) ?? []
+  const toolEvents = (message.metadata?.tool_events as ToolEvent[] | undefined) ?? []
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content)
@@ -18,7 +25,33 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const toolEvents = (message.metadata?.tool_events as ToolEvent[] | undefined) ?? []
+  const handleConfirm = async (action: ActionItem) => {
+    if (!action.proposal_id) return
+    setActionError(null)
+    try {
+      await api.confirmMemoryUpdate(action.proposal_id)
+      setResolvedActions((prev) => new Set(prev).add(action.proposal_id!))
+    } catch (err) {
+      setActionError('Could not confirm. Please try again.')
+    }
+  }
+
+  const handleDismiss = async (action: ActionItem) => {
+    if (!action.proposal_id) return
+    setActionError(null)
+    try {
+      await api.rejectMemoryUpdate(action.proposal_id)
+      setResolvedActions((prev) => new Set(prev).add(action.proposal_id!))
+    } catch (err) {
+      setActionError('Could not dismiss. Please try again.')
+    }
+  }
+
+  // Transform inline [1], [2] markers into markdown links that our custom
+  // renderer turns into compact citation chips.
+  const contentWithCitations = sources.length
+    ? message.content.replace(/\[(\d+)\]/g, '[$1](#source-$1)')
+    : message.content
 
   const eventLabel = (event: ToolEvent): string => {
     if (event.tool === 'memory_write') {
@@ -45,7 +78,61 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           <div className="message__text">{message.content}</div>
         ) : (
           <div className="message__markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                a: ({ href, children, ...props }) => {
+                  const sourceMatch = href?.match(/^#source-(\d+)$/)
+                  if (sourceMatch) {
+                    const index = Number(sourceMatch[1])
+                    return (
+                      <a
+                        href={href}
+                        className="message__citation"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          document
+                            .getElementById(`source-${message.id}-${index}`)
+                            ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+                        }}
+                        {...props}
+                      >
+                        {children}
+                      </a>
+                    )
+                  }
+                  return (
+                    <a href={href} target="_blank" rel="noopener noreferrer" {...props}>
+                      {children}
+                    </a>
+                  )
+                },
+              }}
+            >
+              {contentWithCitations}
+            </ReactMarkdown>
+            {sources.length > 0 && (
+              <div className="message__sources">
+                <div className="message__sources-header">Sources</div>
+                <div className="message__sources-list">
+                  {sources.map((source) => (
+                    <a
+                      key={`${message.id}-source-${source.index}`}
+                      id={`source-${message.id}-${source.index}`}
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="message__source"
+                      title={source.snippet}
+                    >
+                      <ExternalLink size={12} />
+                      <span className="message__source-index">[{source.index}]</span>
+                      <span className="message__source-title">{source.title}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -62,10 +149,47 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </button>
         </div>
       )}
+      {!isUser && actions.length > 0 && (
+        <div className="message__actions-row">
+          {actions.map((action) => {
+            if (action.type !== 'memory_confirm' || !action.proposal_id) return null
+            if (resolvedActions.has(action.proposal_id)) return null
+            return (
+              <div key={action.proposal_id} className="message__action-card">
+                <div className="message__action-card-icon">
+                  <AlertCircle size={14} />
+                </div>
+                <div className="message__action-card-body">
+                  <div className="message__action-card-title">{action.title}</div>
+                  <div className="message__action-card-desc">{action.description}</div>
+                </div>
+                <div className="message__action-card-buttons">
+                  <button
+                    type="button"
+                    className="message__action-card-btn message__action-card-btn--primary"
+                    onClick={() => handleConfirm(action)}
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    className="message__action-card-btn"
+                    onClick={() => handleDismiss(action)}
+                    aria-label="Dismiss"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+          {actionError && <div className="message__action-error">{actionError}</div>}
+        </div>
+      )}
       {!isUser && toolEvents.length > 0 && (
         <div className="message__tool-events">
           {toolEvents.map((event, index) => (
-            <span key={`${event.tool}-${index}`} className="message__tool-event" title={JSON.stringify(event)}>
+            <span key={`${event.tool}-${index}`} className="message__tool-event">
               {eventIcon(event)}
               {eventLabel(event)}
             </span>

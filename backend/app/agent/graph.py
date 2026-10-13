@@ -123,4 +123,9 @@ def run_turn(
             "errors": [],
         }
     )
-    return {"response": str(out.get("response", "")), "tool_results": out.get("tool_results", [])}
+    return {
+        "response": str(out.get("response", "")),
+        "sources": out.get("sources", []),
+        "actions": out.get("actions", []),
+        "tool_results": out.get("tool_results", []),
+    }

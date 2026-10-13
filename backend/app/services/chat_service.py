@@ -188,6 +188,8 @@ class ChatService:
             "conversation_id": conversation_id,
             "response": response,
             "title": conversation.title,
+            "sources": turn.get("sources", []),
+            "actions": turn.get("actions", []),
             "tool_events": turn.get("tool_results", []),
         }
 

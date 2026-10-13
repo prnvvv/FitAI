@@ -24,4 +24,6 @@ class AgentState(TypedDict, total=False):
     tool_results: Annotated[list[dict[str, Any]], operator.add]  # retrieval + memory write outcomes
     safety: SafetyResult
     response: str
+    sources: list[dict[str, Any]]
+    actions: list[dict[str, Any]]
     errors: Annotated[list[str], operator.add]

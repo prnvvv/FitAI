@@ -109,7 +109,7 @@ def test_retrieve_context_node_loads_memory_and_docs(
     assert result["tool_results"][0]["docs"] == ["[source] protein info"]
 
 
-def test_generate_response_includes_status_footer(
+def test_generate_response_returns_actions_for_pending_updates(
     fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
 ) -> None:
     fake_llm.response = "You need more protein."
@@ -119,18 +119,20 @@ def test_generate_response_includes_status_footer(
         "tool_results": [
             {
                 "tool": "memory_write",
-                "status": "applied",
+                "status": "pending_created",
+                "proposal_id": "prop-1",
                 "summary": "weight = 70 kg",
                 "key": "weight",
-                "history_recorded": False,
             }
         ],
         "errors": [],
     }
     deps = _deps(fake_llm, fake_memory_reader, fake_memory_writer)
     result = generate_response(state, deps)
-    assert "You need more protein." in result["response"]
-    assert "Saved: weight = 70 kg" in result["response"]
+    assert result["response"] == "You need more protein."
+    assert len(result["actions"]) == 1
+    assert result["actions"][0]["type"] == "memory_confirm"
+    assert result["actions"][0]["proposal_id"] == "prop-1"
 
 
 def test_generate_response_uses_tool_loop_when_available(
