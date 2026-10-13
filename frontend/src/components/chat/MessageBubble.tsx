@@ -54,19 +54,39 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     : message.content
 
   const eventLabel = (event: ToolEvent): string => {
-    if (event.tool === 'memory_write') {
+    const t = event.tool
+    if (t === 'memory_write') {
       if (event.status === 'applied') return `Saved ${event.summary ?? event.key}`
       if (event.status === 'pending_created') return `Proposed ${event.summary ?? event.key}`
       if (event.status === 'history_recorded') return `Recorded ${event.summary ?? event.key}`
       return `Memory ${event.status ?? 'update'}`
     }
-    if (event.tool === 'retriever') return `Searched knowledge base`
-    return `Used ${event.tool}`
+    if (t === 'retriever') return 'Searched knowledge base'
+    if (t === 'web_search') {
+      const count = event.sources ?? event.result?.results?.length ?? 0
+      return count ? `Searched the web (${count} sources)` : 'Searched the web'
+    }
+    if (t === 'read_webpage') return `Read ${event.pages ?? 1} page${event.pages === 1 ? '' : 's'}`
+    if (t === 'news_search') return 'Searched news'
+    if (t === 'find_places') {
+      if (!event.location) return 'Looked for places'
+      const count = event.places ?? 0
+      return count ? `Found ${count} place${count === 1 ? '' : 's'} near ${event.location}` : `Searched near ${event.location}`
+    }
+    if (t === 'get_weather') return `Checked weather for ${event.location ?? 'your area'}`
+    if (t === 'geocode' || t === 'reverse_geocode') return 'Resolved location'
+    if (t === 'get_datetime') return 'Checked date and time'
+    if (t === 'multi_agent') return `Research mode: ${event.route ?? 'mixed'}`
+    if (t === 'router') return `Route: ${event.route ?? 'mixed'}`
+    return `Used ${t}`
   }
 
   const eventIcon = (event: ToolEvent) => {
     if (event.tool === 'memory_write') return <Database size={12} />
     if (event.tool === 'retriever') return <Sparkles size={12} />
+    if (['web_search', 'read_webpage', 'news_search', 'multi_agent', 'router'].includes(event.tool)) {
+      return <ExternalLink size={12} />
+    }
     return <Wrench size={12} />
   }
 

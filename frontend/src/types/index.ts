@@ -64,6 +64,13 @@ export interface ToolEvent {
   key?: string
   history_recorded?: boolean
   docs?: string[]
+  result?: { results?: unknown[] }
+  sources?: number
+  pages?: number
+  places?: number
+  location?: string
+  route?: string
+  [key: string]: unknown
 }
 
 export interface Document {

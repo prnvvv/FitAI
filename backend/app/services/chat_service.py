@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.agent import AgentDeps, MemoryReader, ProfileReader, build_graph, run_turn
+from app.agent.multi import run_multi_turn
 from app.core.config import settings
 from app.llm.client import GroqClient
 from app.memory.change_detector import DetectedChange, MemoryEntry
@@ -166,33 +167,42 @@ class ChatService:
         conversation_id = conversation.id
         self._conversations.add_message(user_id, conversation_id, MessageRole.USER, message)
 
-        graph = build_graph(
-            AgentDeps(
-                llm=self._build_llm(),
-                memory_reader=_MemoryReaderAdapter(self._db, user_id),
-                memory_writer=_MemoryWriterAdapter(self._db, user_id),
-                profile_reader=_ProfileReaderAdapter(self._db, user_id),
-                retriever=None,
-                tools={"web_search": web_search, "nearby_gyms": nearby_gyms},
-                db_session=self._db,
-            )
+        graph_deps = AgentDeps(
+            llm=self._build_llm(),
+            memory_reader=_MemoryReaderAdapter(self._db, user_id),
+            memory_writer=_MemoryWriterAdapter(self._db, user_id),
+            profile_reader=_ProfileReaderAdapter(self._db, user_id),
+            retriever=None,
+            tools={"web_search": web_search, "nearby_gyms": nearby_gyms},
+            db_session=self._db,
         )
 
         messages = self._conversations.list_recent_messages(user_id, conversation_id, limit=20)
         context = [{"role": msg.role.value, "content": msg.content} for msg in messages]
 
-        turn = run_turn(graph, str(user_id), message, context)
+        if settings.agent_multi_agent:
+            turn = run_multi_turn(graph_deps, str(user_id), message, context)
+        else:
+            graph = build_graph(graph_deps)
+            turn = run_turn(graph, str(user_id), message, context)
         response = turn["response"]
 
-        self._conversations.add_message(user_id, conversation_id, MessageRole.ASSISTANT, response)
+        metadata = {
+            "sources": turn.get("sources", []),
+            "actions": turn.get("actions", []),
+            "tool_events": turn.get("tool_results", []),
+        }
+        self._conversations.add_message(
+            user_id, conversation_id, MessageRole.ASSISTANT, response, metadata=metadata
+        )
 
         return {
             "conversation_id": conversation_id,
             "response": response,
             "title": conversation.title,
-            "sources": turn.get("sources", []),
-            "actions": turn.get("actions", []),
-            "tool_events": turn.get("tool_results", []),
+            "sources": metadata["sources"],
+            "actions": metadata["actions"],
+            "tool_events": metadata["tool_events"],
         }
 
     @staticmethod
