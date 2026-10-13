@@ -8,8 +8,14 @@ After memory handling, questions still get context retrieval.
 """
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from typing import Any
+
+from langchain_core._api.deprecation import LangChainPendingDeprecationWarning
+
+# Suppress noisy LangGraph pending-deprecation warning about default allowed_objects.
+warnings.filterwarnings("ignore", category=LangChainPendingDeprecationWarning)
 
 from langgraph.graph import END, StateGraph
 
