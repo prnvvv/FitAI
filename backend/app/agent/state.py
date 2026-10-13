@@ -1,0 +1,30 @@
+"""Typed LangGraph state."""
+from __future__ import annotations
+
+import operator
+from typing import Annotated, Any, TypedDict
+
+from pydantic import BaseModel
+
+from app.memory.change_detector import MemoryEntry
+from app.memory.confirmation import Decision
+from app.memory.extractor import ExtractedFact
+
+
+class SafetyResult(BaseModel):
+    blocked: bool = False
+    category: str | None = None
+    response: str | None = None  # fixed safe reply when blocked
+
+
+class AgentState(TypedDict, total=False):
+    user_message: str
+    user_id: str                                   # authenticated ID, set by caller only
+    conversation_context: list[dict[str, str]]     # [{"role","content"}, ...]
+    retrieved_memory: dict[str, MemoryEntry]
+    extracted_facts: list[ExtractedFact]
+    proposed_updates: list[Decision]
+    tool_results: Annotated[list[dict[str, Any]], operator.add]  # retrieval + memory write outcomes
+    safety: SafetyResult
+    response: str
+    errors: Annotated[list[str], operator.add]
