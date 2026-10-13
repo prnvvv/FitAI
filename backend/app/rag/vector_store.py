@@ -108,7 +108,10 @@ class VectorStore:
                     metadatas=[c.metadata for c in b],
                 )
         except Exception as exc:
-            raise VectorStoreError(f"indexing failed: {exc}") from exc
+            # Keep the traceback: a bare "[Errno 22] Invalid argument" tells us
+            # nothing about which write actually failed.
+            log.exception("indexing failed for %s chunk(s)", len(chunks))
+            raise VectorStoreError(f"indexing failed: {type(exc).__name__}: {exc}") from exc
         return len(chunks)
 
     def query(
