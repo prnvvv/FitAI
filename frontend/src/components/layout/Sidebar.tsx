@@ -1,5 +1,5 @@
 import { Dumbbell, FileText, MessageSquarePlus, PanelLeftClose, Search, TrendingUp, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import type { Conversation } from '../../types'
@@ -41,6 +41,15 @@ export function Sidebar({
   const location = useLocation()
   const [accountOpen, setAccountOpen] = useState(false)
   const isChat = location.pathname === '/' || location.pathname.startsWith('/chat/')
+
+  useEffect(() => {
+    if (!open) return
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [open, onClose])
 
   const handleNewChat = () => {
     onNewChat()
@@ -124,7 +133,7 @@ export function Sidebar({
         />
       </div>
 
-      <div className="sidebar__section-label">Recents</div>
+      <div className="sidebar__section-label">Chat history</div>
       <ConversationList
         conversations={conversations}
         selectedId={selectedId}

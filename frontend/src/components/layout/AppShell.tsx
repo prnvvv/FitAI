@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { Outlet } from 'react-router-dom'
 import type { Conversation } from '../../types'
 import { Sidebar } from './Sidebar'
@@ -34,24 +35,37 @@ export function AppShell({
   onRename,
   onDelete,
 }: AppShellProps) {
+  const toggleRef = useRef<HTMLButtonElement>(null)
+
+  const handleClose = () => {
+    onCloseSidebar()
+    toggleRef.current?.focus()
+  }
+
   return (
     <div className="app-shell">
       <Sidebar
         open={sidebarOpen}
-        onClose={onCloseSidebar}
+        onClose={handleClose}
         conversations={conversations}
         selectedId={selectedId}
         loading={conversationsLoading}
         error={conversationsError}
         searchQuery={searchQuery}
         onSearchQueryChange={onSearchQueryChange}
-        onSelectConversation={onSelectConversation}
-        onNewChat={onNewChat}
+        onSelectConversation={(id) => {
+          onSelectConversation(id)
+          handleClose()
+        }}
+        onNewChat={() => {
+          onNewChat()
+          handleClose()
+        }}
         onRename={onRename}
         onDelete={onDelete}
       />
       <div className={`app-shell__content ${sidebarOpen ? 'app-shell__content--shifted' : ''}`}>
-        <TopBar onToggleSidebar={onToggleSidebar} />
+        <TopBar ref={toggleRef} onToggleSidebar={onToggleSidebar} />
         <main className="app-shell__main">
           <Outlet />
         </main>
@@ -61,7 +75,7 @@ export function AppShell({
           type="button"
           className="sidebar-overlay"
           aria-label="Close sidebar"
-          onClick={onCloseSidebar}
+          onClick={handleClose}
         />
       )}
     </div>

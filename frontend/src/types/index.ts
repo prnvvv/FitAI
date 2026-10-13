@@ -82,8 +82,17 @@ export interface Profile {
   activity_level?: string | null
   dietary_preferences?: string[]
   dietary_restrictions?: string[]
+  preferences?: ProfilePreferences
   created_at: string
   updated_at: string
+}
+
+export interface ProfilePreferences {
+  display_name?: string | null
+  about_you?: string | null
+  assistant_should_know?: string | null
+  preferred_tone?: string | null
+  units?: 'metric' | 'imperial' | null
 }
 
 export interface NavItem {

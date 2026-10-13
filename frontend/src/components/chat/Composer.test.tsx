@@ -7,7 +7,7 @@ describe('Composer', () => {
     const onSend = vi.fn()
     render(<Composer onSend={onSend} />)
 
-    const input = screen.getByPlaceholderText('Ask FitAI about workouts, nutrition, or recovery')
+    const input = screen.getByPlaceholderText('Ask anything')
     fireEvent.change(input, { target: { value: 'Hello' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 

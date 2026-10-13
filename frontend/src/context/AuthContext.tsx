@@ -1,5 +1,6 @@
 import type { User } from '../types'
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { api } from '../services/api'
 import { supabase, toAppUser } from '../services/supabase'
 
 interface AuthContextValue {
@@ -52,6 +53,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
   }
+
+  // Wire API 401 handling to sign-out/redirect.
+  const hasSetHandler = useRef(false)
+  useEffect(() => {
+    if (hasSetHandler.current) return
+    hasSetHandler.current = true
+    api.onAuthError = async () => {
+      await supabase.auth.signOut()
+    }
+  }, [])
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>

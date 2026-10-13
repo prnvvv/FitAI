@@ -22,9 +22,17 @@ async function getToken(): Promise<string | null> {
   return data.session?.access_token ?? null
 }
 
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 300
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function fetchApi<T>(
   path: string,
   options: RequestInit = {},
+  retryCount = 0,
 ): Promise<T> {
   const token = await getToken()
   const headers = new Headers(options.headers)
@@ -36,21 +44,38 @@ async function fetchApi<T>(
     headers.set('Content-Type', 'application/json')
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  })
+  const isGet = !options.method || options.method.toUpperCase() === 'GET'
 
-  if (!response.ok) {
-    const text = await response.text().catch(() => 'Unknown error')
-    throw new ApiError(response.status, text)
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    })
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => 'Unknown error')
+      if (response.status === 401 && api.onAuthError) {
+        api.onAuthError()
+      }
+      throw new ApiError(response.status, text)
+    }
+
+    if (response.status === 204) {
+      return undefined as T
+    }
+
+    return response.json() as Promise<T>
+  } catch (err) {
+    const isNetworkError = err instanceof TypeError
+    if (isNetworkError && isGet && retryCount < MAX_RETRIES) {
+      await sleep(RETRY_DELAY_MS * (retryCount + 1))
+      return fetchApi<T>(path, options, retryCount + 1)
+    }
+    if (isNetworkError) {
+      throw new NetworkError('The backend is unreachable. Please check your connection and try again.')
+    }
+    throw err
   }
-
-  if (response.status === 204) {
-    return undefined as T
-  }
-
-  return response.json() as Promise<T>
 }
 
 export class ApiError extends Error {
@@ -65,7 +90,16 @@ export class ApiError extends Error {
   }
 }
 
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'NetworkError'
+  }
+}
+
 export const api = {
+  onAuthError: null as (() => void) | null,
+
   // Auth
   me: () => fetchApi<{ id: string; email: string | null }>('/auth/me'),
 

@@ -1,7 +1,7 @@
-import { Loader2, Save, User } from 'lucide-react'
+import { Loader2, Save, User, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../services/api'
-import type { Profile } from '../types'
+import type { Profile, ProfilePreferences } from '../types'
 
 const EMPTY_PROFILE: Partial<Profile> = {
   date_of_birth: undefined,
@@ -12,34 +12,69 @@ const EMPTY_PROFILE: Partial<Profile> = {
   activity_level: '',
   dietary_preferences: [],
   dietary_restrictions: [],
+  preferences: {
+    display_name: '',
+    about_you: '',
+    assistant_should_know: '',
+    preferred_tone: '',
+    units: 'metric',
+  },
 }
 
 export function ProfilePage() {
   const [profile, setProfile] = useState<Partial<Profile>>(EMPTY_PROFILE)
+  const [original, setOriginal] = useState<Partial<Profile>>(EMPTY_PROFILE)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
   useEffect(() => {
     api
       .getProfile()
-      .then((p) => setProfile(p))
-      .catch(() => setProfile(EMPTY_PROFILE))
+      .then((p) => {
+        const normalized = { ...EMPTY_PROFILE, ...p }
+        setProfile(normalized)
+        setOriginal(JSON.parse(JSON.stringify(normalized)))
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load profile'))
       .finally(() => setLoading(false))
   }, [])
 
+  const dirty = JSON.stringify(profile) !== JSON.stringify(original)
+
   const handleChange = (field: keyof Profile, value: unknown) => {
     setProfile((prev) => ({ ...prev, [field]: value }))
+    setSuccess(false)
+  }
+
+  const handlePreferenceChange = (field: keyof ProfilePreferences, value: unknown) => {
+    setProfile((prev) => ({
+      ...prev,
+      preferences: { ...prev.preferences, [field]: value },
+    }))
+    setSuccess(false)
+  }
+
+  const handleCancel = () => {
+    if (dirty && !confirm('Discard unsaved changes?')) return
+    setProfile(JSON.parse(JSON.stringify(original)))
+    setError(null)
+    setSuccess(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
+    setError(null)
+    setSuccess(false)
     try {
       const updated = await api.updateProfile(profile)
-      setProfile(updated)
+      const normalized = { ...EMPTY_PROFILE, ...updated }
+      setProfile(normalized)
+      setOriginal(JSON.parse(JSON.stringify(normalized)))
+      setSuccess(true)
     } catch (err) {
-      console.error(err)
-      alert('Failed to save profile')
+      setError(err instanceof Error ? err.message : 'Failed to save profile')
     } finally {
       setSaving(false)
     }
@@ -56,8 +91,8 @@ export function ProfilePage() {
   return (
     <div className="page page--profile">
       <header className="page__header">
-        <h1>Fitness profile</h1>
-        <p>Keep your stats up to date for better recommendations.</p>
+        <h1>Profile</h1>
+        <p>Tell FitAI what matters to you. This shapes every answer.</p>
       </header>
 
       <form onSubmit={handleSubmit} className="profile__form">
@@ -65,28 +100,64 @@ export function ProfilePage() {
           <User size={40} />
         </div>
 
-        <div className="profile__row">
-          <label className="profile__field">
-            <span>Date of birth</span>
-            <input
-              type="date"
-              value={profile.date_of_birth ?? ''}
-              onChange={(e) => handleChange('date_of_birth', e.target.value || null)}
-            />
-          </label>
+        {error && <div className="profile__alert profile__alert--error">{error}</div>}
+        {success && <div className="profile__alert profile__alert--success">Profile saved.</div>}
+        {dirty && <div className="profile__dirty">Unsaved changes</div>}
 
-          <label className="profile__field">
-            <span>Age</span>
-            <input
-              type="number"
-              min={10}
-              max={120}
-              disabled
-              value={profile.age ?? ''}
-              placeholder="Derived from date of birth"
-            />
-          </label>
-        </div>
+        <label className="profile__field">
+          <span>Display name</span>
+          <input
+            type="text"
+            value={profile.preferences?.display_name ?? ''}
+            onChange={(e) => handlePreferenceChange('display_name', e.target.value)}
+            placeholder="What should we call you?"
+          />
+        </label>
+
+        <label className="profile__field">
+          <span>About you</span>
+          <textarea
+            rows={3}
+            value={profile.preferences?.about_you ?? ''}
+            onChange={(e) => handlePreferenceChange('about_you', e.target.value)}
+            placeholder="A few sentences about yourself"
+          />
+        </label>
+
+        <label className="profile__field">
+          <span>Things the assistant should know</span>
+          <textarea
+            rows={3}
+            value={profile.preferences?.assistant_should_know ?? ''}
+            onChange={(e) => handlePreferenceChange('assistant_should_know', e.target.value)}
+            placeholder="Goals, routines, limitations, equipment, dietary preferences..."
+          />
+        </label>
+
+        <label className="profile__field">
+          <span>Preferred tone</span>
+          <select
+            value={profile.preferences?.preferred_tone ?? ''}
+            onChange={(e) => handlePreferenceChange('preferred_tone', e.target.value)}
+          >
+            <option value="">Default</option>
+            <option value="friendly">Friendly and casual</option>
+            <option value="direct">Direct and concise</option>
+            <option value="detailed">Detailed and explanatory</option>
+            <option value="encouraging">Encouraging</option>
+          </select>
+        </label>
+
+        <label className="profile__field">
+          <span>Units</span>
+          <select
+            value={profile.preferences?.units ?? 'metric'}
+            onChange={(e) => handlePreferenceChange('units', e.target.value)}
+          >
+            <option value="metric">Metric (kg, cm)</option>
+            <option value="imperial">Imperial (lb, ft/in)</option>
+          </select>
+        </label>
 
         <div className="profile__row">
           <label className="profile__field">
@@ -137,7 +208,7 @@ export function ProfilePage() {
             type="text"
             value={profile.goal ?? ''}
             onChange={(e) => handleChange('goal', e.target.value)}
-            placeholder="e.g. Build muscle, lose fat, run a 5K"
+            placeholder="e.g. Run a 5K, get stronger, sleep better"
           />
         </label>
 
@@ -171,10 +242,21 @@ export function ProfilePage() {
           />
         </label>
 
-        <button type="submit" className="profile__save" disabled={saving}>
-          {saving ? <Loader2 className="page__spinner" size={18} /> : <Save size={18} />}
-          Save profile
-        </button>
+        <div className="profile__actions">
+          <button type="submit" className="profile__save" disabled={saving || !dirty}>
+            {saving ? <Loader2 className="page__spinner" size={18} /> : <Save size={18} />}
+            Save
+          </button>
+          <button
+            type="button"
+            className="profile__cancel"
+            onClick={handleCancel}
+            disabled={!dirty}
+          >
+            <X size={18} />
+            Cancel
+          </button>
+        </div>
       </form>
     </div>
   )

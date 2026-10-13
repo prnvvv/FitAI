@@ -1,39 +1,24 @@
-import { Dumbbell, TrendingUp, Utensils } from 'lucide-react'
-
 interface SuggestionListProps {
   onSelect: (text: string) => void
 }
 
 const SUGGESTIONS = [
-  {
-    id: 'workout-plan',
-    text: 'Build me a 4-day workout plan',
-    icon: Dumbbell,
-  },
-  {
-    id: 'meal-plan',
-    text: 'Plan high-protein meals for this week',
-    icon: Utensils,
-  },
-  {
-    id: 'progress-review',
-    text: 'Review my progress and suggest next steps',
-    icon: TrendingUp,
-  },
+  'Help me plan my week',
+  'What should I eat after a late workout?',
+  'Explain progressive overload simply',
 ]
 
 export function SuggestionList({ onSelect }: SuggestionListProps) {
   return (
     <div className="suggestion-list">
-      {SUGGESTIONS.map((suggestion) => (
+      {SUGGESTIONS.map((text) => (
         <button
-          key={suggestion.id}
+          key={text}
           type="button"
           className="suggestion-item"
-          onClick={() => onSelect(suggestion.text)}
+          onClick={() => onSelect(text)}
         >
-          <suggestion.icon size={20} />
-          <span>{suggestion.text}</span>
+          <span>{text}</span>
         </button>
       ))}
     </div>

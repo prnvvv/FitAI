@@ -1,4 +1,4 @@
-import { LogOut, Settings, User } from 'lucide-react'
+import { Brain, FileText, LogOut, Settings, User } from 'lucide-react'
 import { useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -59,7 +59,31 @@ export function AccountMenu({ open, onClose }: AccountMenuProps) {
         }}
       >
         <User size={20} />
-        <span>Fitness profile</span>
+        <span>Profile</span>
+      </button>
+      <button
+        type="button"
+        className="account-menu__item"
+        role="menuitem"
+        onClick={() => {
+          onClose()
+          navigate('/memory')
+        }}
+      >
+        <Brain size={20} />
+        <span>Memory</span>
+      </button>
+      <button
+        type="button"
+        className="account-menu__item"
+        role="menuitem"
+        onClick={() => {
+          onClose()
+          navigate('/documents')
+        }}
+      >
+        <FileText size={20} />
+        <span>Knowledge base</span>
       </button>
       <button
         type="button"

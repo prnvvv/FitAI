@@ -14,7 +14,7 @@ export function Composer({
   disabled,
   streaming,
   onStop,
-  placeholder = 'Ask FitAI about workouts, nutrition, or recovery',
+  placeholder = 'Ask anything',
 }: ComposerProps) {
   const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])
