@@ -54,8 +54,8 @@ def route_after_detect(state: AgentState) -> str:
     return route_after_updates(state)
 
 
-def _bind(fn: Callable[[AgentState, AgentDeps], dict], deps: AgentDeps) -> Callable[[AgentState], dict]:
-    def node(state: AgentState) -> dict:
+def _bind(fn: Callable[[AgentState, AgentDeps], dict[str, Any]], deps: AgentDeps) -> Callable[[AgentState], dict[str, Any]]:
+    def node(state: AgentState) -> dict[str, Any]:
         return fn(state, deps)
     return node
 
@@ -87,6 +87,6 @@ def build_graph(deps: AgentDeps) -> Any:
 
 def run_turn(graph: Any, user_id: str, message: str, context: list[dict[str, str]] | None = None) -> str:
     """Run one turn. `user_id` must come from authentication, never from the message."""
-    out = graph.invoke({"user_id": user_id, "user_message": message,
-                        "conversation_context": context or [], "tool_results": [], "errors": []})
-    return out.get("response", "")
+    out: dict[str, Any] = graph.invoke({"user_id": user_id, "user_message": message,
+                                        "conversation_context": context or [], "tool_results": [], "errors": []})
+    return str(out.get("response", ""))
