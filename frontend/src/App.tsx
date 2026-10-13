@@ -5,12 +5,12 @@ import { AppShell } from './components/layout/AppShell'
 import { useAuth } from './context/AuthContext'
 import { useConversations } from './hooks/useConversations'
 import { ChatPage } from './pages/ChatPage'
-import { DocumentsPage } from './pages/DocumentsPage'
+import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
 import { MemoryPage } from './pages/MemoryPage'
+import { PlanPage } from './pages/PlanPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ProgressPage } from './pages/ProgressPage'
-import { WorkoutsPage } from './pages/WorkoutsPage'
 
 function AuthenticatedApp() {
   const { user, loading: authLoading } = useAuth()
@@ -113,12 +113,14 @@ function AuthenticatedApp() {
           path="chat/:conversationId"
           element={<ChatPage onConversationCreated={handleConversationCreated} />}
         />
-        <Route path="documents" element={<DocumentsPage />} />
+        <Route path="library" element={<LibraryPage />} />
         <Route path="memory" element={<MemoryPage />} />
         <Route path="profile" element={<ProfilePage />} />
-        <Route path="workouts" element={<WorkoutsPage />} />
+        <Route path="plan" element={<PlanPage />} />
         <Route path="progress" element={<ProgressPage />} />
         <Route path="settings" element={<ProfilePage />} />
+        <Route path="workouts" element={<Navigate to="/plan" replace />} />
+        <Route path="documents" element={<Navigate to="/library" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -188,4 +188,11 @@ export const api = {
 
   // Progress
   weightSeries: () => fetchApi<Measurement[]>('/progress/weight'),
+  createMeasurement: (payload: { type: string; value: number; unit: string; measured_at: string; notes?: string }) =>
+    fetchApi<Measurement>('/progress/measurements', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteMeasurement: (id: string) =>
+    fetchApi<void>(`/progress/measurements/${id}`, { method: 'DELETE' }),
 }

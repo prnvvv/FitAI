@@ -79,11 +79,11 @@ export function AccountMenu({ open, onClose }: AccountMenuProps) {
         role="menuitem"
         onClick={() => {
           onClose()
-          navigate('/documents')
+          navigate('/library')
         }}
       >
         <FileText size={20} />
-        <span>Knowledge base</span>
+        <span>Library</span>
       </button>
       <button
         type="button"
