@@ -11,6 +11,8 @@ from typing import Any, Protocol
 
 from app.llm.prompts import RESPONSE_GENERATION
 from app.memory.change_detector import MemoryEntry, detect_changes
+from app.tools.nearby_gyms import nearby_gyms
+from app.tools.web_search import web_search
 from app.memory.confirmation import (
     Action,
     ConfirmationPolicy,
@@ -44,6 +46,12 @@ class Retriever(Protocol):
     def search(self, query: str, user_id: str, k: int = 4) -> list[str]: ...
 
 
+class Tool(Protocol):
+    """A callable research tool returning a JSON-serialisable result dict."""
+
+    def __call__(self, *args: Any, **kwargs: Any) -> dict[str, Any]: ...
+
+
 @dataclass
 class AgentDeps:
     llm: TextCompleter
@@ -51,6 +59,7 @@ class AgentDeps:
     memory_writer: MemoryWriter
     profile_reader: ProfileReader | None = None
     retriever: Retriever | None = None
+    tools: Mapping[str, Tool] = dc_field(default_factory=dict)
     policy: ConfirmationPolicy = dc_field(default_factory=ConfirmationPolicy)
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
 
@@ -70,6 +79,33 @@ def looks_personal(msg: str) -> bool:
 
 def looks_like_question(msg: str) -> bool:
     return bool(_QUESTION.search(msg))
+
+
+# ---- tool selection (cheap routing; no LLM call) ------------------------------
+_GYM_INTENT = re.compile(
+    r"\b(gym|gyms|fitness centre|fitness center|sports centre|sports center|"
+    r"workout place|place to work out)\b.*\b(near|nearby|around|close|closest|"
+    r"open now|open today|near me|in my area)\b|\b(near me|nearby)\b.*\b(gym|gyms|fitness)\b",
+    re.I,
+)
+_LIVE_INFO_INTENT = re.compile(
+    r"\b(latest|current|recent|news|today|now|update|guidelines|recommendations|"
+    r"weather|compare|prices|pricing|hours|open now|find|search|look up|"
+    r"what are the best|top rated)\b|\?",
+    re.I,
+)
+
+
+def _select_tools(msg: str) -> list[str]:
+    """Return the names of research tools likely useful for this message."""
+    selected: list[str] = []
+    if _GYM_INTENT.search(msg):
+        selected.append("nearby_gyms")
+    elif _LIVE_INFO_INTENT.search(msg):
+        # Prefer web search for general live-info questions unless they are
+        # explicitly gym-location questions.
+        selected.append("web_search")
+    return selected
 
 
 # ---- safety -------------------------------------------------------------------
@@ -152,12 +188,28 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     profile = _load_profile(state, deps)
     if profile is not None:
         out["retrieved_profile"] = profile
+
+    tool_results: list[dict[str, Any]] = []
     if deps.retriever:
         try:
             docs = deps.retriever.search(state["user_message"], state["user_id"])
-            out["tool_results"] = [{"tool": "retriever", "docs": docs}]
+            tool_results.append({"tool": "retriever", "docs": docs})
         except Exception as exc:
             errs.append(f"retriever: {type(exc).__name__}")
+
+    for tool_name in _select_tools(state["user_message"]):
+        tool = deps.tools.get(tool_name)
+        if tool is None:
+            continue
+        try:
+            result = tool(state["user_message"])
+            tool_results.append({"tool": tool_name, "result": result})
+        except Exception as exc:
+            log.warning("tool %s failed: %s", tool_name, exc)
+            errs.append(f"{tool_name}: {type(exc).__name__}")
+
+    if tool_results:
+        out["tool_results"] = tool_results
     if errs:
         out["errors"] = errs
     return out
@@ -192,15 +244,49 @@ def _format_profile(mem: dict[str, MemoryEntry], profile: dict[str, object] | No
     return "\n".join(lines) if lines else "(none)"
 
 
+def _format_tool_context(tool_results: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for r in tool_results:
+        tool = r.get("tool")
+        if tool == "retriever":
+            docs = r.get("docs", [])
+            if docs:
+                lines.append("Reference documents:")
+                lines.extend(f"- {d}" for d in docs)
+        elif tool == "web_search":
+            result = r.get("result", {})
+            if result.get("error"):
+                lines.append(f"Web search: {result['error']}")
+            elif result.get("results"):
+                lines.append("Web search results:")
+                for item in result["results"]:
+                    lines.append(f"- {item.get('title', '')}: {item.get('snippet', '')} ({item.get('url', '')})")
+        elif tool == "nearby_gyms":
+            result = r.get("result", {})
+            if result.get("error"):
+                lines.append(f"Nearby gyms: {result['error']}")
+            elif result.get("places"):
+                lines.append(f"Nearby fitness facilities near {result.get('location', 'the requested area')}:")
+                for place in result["places"]:
+                    lines.append(
+                        f"- {place.get('name', '')} ({place.get('type', '')}) "
+                        f"— {place.get('address', '')} — {place.get('map_url', '')}"
+                    )
+    return "\n".join(lines) if lines else "(none)"
+
+
 def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     ctx = state.get("conversation_context", [])[-10:]
     history = "\n".join(f"{m.get('role', 'user')}: {str(m.get('content', ''))[:500]}" for m in ctx)
     mem = state.get("retrieved_memory") or {}
     profile = state.get("retrieved_profile")
     profile_text = _format_profile(mem, profile)
-    docs = [d for r in state.get("tool_results", []) if r.get("tool") == "retriever" for d in r.get("docs", [])]
+    tool_context = _format_tool_context(state.get("tool_results", []))
     prompt = (f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
-              f"Reference documents:\n{chr(10).join(docs) or '(none)'}\n\nUser message:\n{state['user_message']}")
+              f"Live research:\n{tool_context}\n\n"
+              "When using live search or nearby facility results, cite the source URLs plainly. "
+              "If a tool returned an error or no results, say so honestly.\n\n"
+              f"User message:\n{state['user_message']}")
     try:
         text = deps.llm(RESPONSE_GENERATION, prompt).strip()
     except Exception as exc:
