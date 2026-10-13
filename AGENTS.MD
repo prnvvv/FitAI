@@ -420,6 +420,7 @@ Use environment variables for secrets and deployment-specific settings.
 - Avoid unnecessary dependencies.
 - Do not put server-only secrets in frontend variables.
 - Document any new environment variables introduced.
+- Keep `requirements.txt` in the repository root only. Do not create separate `requirements.txt` files inside subfolders; backend dependencies are declared authoritatively in `backend/pyproject.toml` and surfaced via the root `requirements.txt`.
 
 The existing `pyproject.toml`, frontend package manifest, and lockfiles should remain the authoritative dependency configuration for their respective tools.
 
