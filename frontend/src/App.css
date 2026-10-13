@@ -1234,6 +1234,39 @@
   color: var(--error);
 }
 
+.memory__section-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 20px 0 10px;
+}
+
+.memory__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.memory__approve {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.memory__approve:hover {
+  background-color: var(--success-bg);
+  color: var(--success);
+}
+
 /* Profile */
 .profile__form {
   display: flex;

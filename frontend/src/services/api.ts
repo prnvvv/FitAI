@@ -7,6 +7,7 @@ import type {
   Memory,
   Message,
   Page,
+  PendingMemoryUpdate,
   Profile,
   WorkoutSession,
   WorkoutSessionCreate,
@@ -118,6 +119,14 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ value }),
     }),
+
+  // Pending memory proposals
+  listPendingMemory: (limit = 50, offset = 0) =>
+    fetchApi<Page<PendingMemoryUpdate>>(`/memory/pending?limit=${limit}&offset=${offset}`),
+  confirmMemoryUpdate: (id: string) =>
+    fetchApi<Memory>(`/memory/pending/${id}/confirm`, { method: 'POST' }),
+  rejectMemoryUpdate: (id: string) =>
+    fetchApi<PendingMemoryUpdate>(`/memory/pending/${id}/reject`, { method: 'POST' }),
 
   // Profile
   getProfile: () => fetchApi<Profile>('/profile'),

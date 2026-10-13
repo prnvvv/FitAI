@@ -58,6 +58,19 @@ export interface Memory {
   updated_at: string
 }
 
+export interface PendingMemoryUpdate {
+  id: string
+  key: string
+  proposed_value: unknown
+  previous_value: unknown
+  confidence: number | null
+  source: string | null
+  reason: string | null
+  status: string
+  created_at: string
+  resolved_at: string | null
+}
+
 export interface Profile {
   id: string
   user_id: string
