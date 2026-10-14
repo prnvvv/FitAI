@@ -9,8 +9,7 @@ from app.models.enums import DocumentStatus
 from app.services.document_service import DocumentService
 from app.services.document_storage import LocalDocumentStorage
 
-JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+TEXT_CONTENT = b"hello world, this is a test document"
 
 
 class _FakeResult:
@@ -46,18 +45,18 @@ def _service(db_session, tmp_path, ingestion) -> DocumentService:
 def test_ingestion_progresses_queued_reading_ready(db_session, tmp_path) -> None:
     ingestion = _FakeIngestion([_FakeResult("indexed")])
     document, _dup = _service(db_session, tmp_path, ingestion).create(
-        uuid.uuid4(), "plan.jpg", "image/jpeg", JPEG
+        uuid.uuid4(), "plan.txt", "text/plain", TEXT_CONTENT
     )
 
-    assert ingestion.calls == [("plan.jpg", str(document.id))]
+    assert ingestion.calls == [("plan.txt", str(document.id))]
     assert document.status == DocumentStatus.INDEXED
     assert document.error_message is None
 
 
 def test_ingestion_failure_stores_a_readable_reason(db_session, tmp_path) -> None:
-    ingestion = _FakeIngestion([_FakeResult("failed", "no extractable text in image")])
+    ingestion = _FakeIngestion([_FakeResult("failed", "no extractable text in this file")])
     document, _dup = _service(db_session, tmp_path, ingestion).create(
-        uuid.uuid4(), "plan.jpg", "image/jpeg", JPEG
+        uuid.uuid4(), "plan.txt", "text/plain", TEXT_CONTENT
     )
 
     assert document.status == DocumentStatus.FAILED
@@ -68,7 +67,7 @@ def test_ingestion_failure_stores_a_readable_reason(db_session, tmp_path) -> Non
 def test_ingestion_exception_is_turned_into_a_failure_status(db_session, tmp_path) -> None:
     ingestion = _FakeIngestion([RuntimeError("chroma unavailable")])
     document, _dup = _service(db_session, tmp_path, ingestion).create(
-        uuid.uuid4(), "plan.png", "image/png", PNG
+        uuid.uuid4(), "plan.md", "text/markdown", TEXT_CONTENT
     )
 
     assert document.status == DocumentStatus.FAILED
@@ -79,7 +78,7 @@ def test_retry_reprocesses_a_failed_document(db_session, tmp_path) -> None:
     user_id = uuid.uuid4()
     ingestion = _FakeIngestion([_FakeResult("failed", "vision model timed out")])
     service = _service(db_session, tmp_path, ingestion)
-    document, _dup = service.create(user_id, "photo.jpg", "image/jpeg", JPEG)
+    document, _dup = service.create(user_id, "notes.txt", "text/plain", TEXT_CONTENT)
     assert document.status == DocumentStatus.FAILED
 
     ingestion.outcomes = [_FakeResult("indexed")]
@@ -95,7 +94,7 @@ def test_retry_reprocesses_a_failed_document(db_session, tmp_path) -> None:
 def test_retry_of_another_users_document_is_404(db_session, tmp_path) -> None:
     ingestion = _FakeIngestion([_FakeResult("indexed")])
     service = _service(db_session, tmp_path, ingestion)
-    document, _dup = service.create(uuid.uuid4(), "notes.txt", "text/plain", b"hello")
+    document, _dup = service.create(uuid.uuid4(), "notes.txt", "text/plain", TEXT_CONTENT)
 
     import pytest
 
@@ -109,7 +108,7 @@ def test_delete_removes_row_and_stored_file(db_session, tmp_path) -> None:
     user_id = uuid.uuid4()
     service = _service(db_session, tmp_path, _FakeIngestion([]))
     document, _dup = service.create(
-        user_id, "notes.txt", "text/plain", b"hello", trigger_ingestion=False
+        user_id, "notes.txt", "text/plain", TEXT_CONTENT, trigger_ingestion=False
     )
 
     service.delete(user_id, document.id)
@@ -123,8 +122,8 @@ def test_upload_allowlist_comes_from_the_ingestion_registry(db_session, tmp_path
     from app.rag.loader import SUPPORTED_EXTENSIONS
 
     assert set(SUPPORTED_EXTENSIONS) == document_service.ALLOWED_EXTENSIONS
-    assert "image/jpeg" in document_service.ALLOWED_CONTENT_TYPES
     assert "application/pdf" in document_service.ALLOWED_CONTENT_TYPES
+    assert "text/plain" in document_service.ALLOWED_CONTENT_TYPES
     assert ".exe" not in document_service.ALLOWED_EXTENSIONS
 
 
@@ -193,32 +192,11 @@ def test_failure_reasons_are_short_and_human_readable(db_session, tmp_path) -> N
     assert len(reason) < 120
 
 
-def test_image_without_a_vision_model_fails_with_a_specific_reason(
-    db_session, tmp_path, monkeypatch
-) -> None:
-    ingestion = _RaisingIngestion(RuntimeError, "Image reading isn't available right now.")
-    document, _dup = _service(db_session, tmp_path, ingestion).create(
-        uuid.uuid4(), "WhatsApp Image 2026-10-14 at 12.40.14 PM.jpeg", "image/jpeg", JPEG
-    )
-
-    assert document.status == DocumentStatus.FAILED
-    assert document.error_message == "Image reading isn't available right now."
-
-
-class _RaisingIngestion:
-    def __init__(self, error: type[Exception], message: str) -> None:
-        self._error = error
-        self._message = message
-
-    def ingest_user_document_bytes(self, *_args: object, **_kwargs: object):
-        raise self._error(self._message)
-
-
-def test_image_without_readable_text_is_ready_with_a_note(db_session, tmp_path) -> None:
-    """A photo with no text is a valid, Ready result - not a failure."""
+def test_document_without_readable_text_is_ready_with_a_note(db_session, tmp_path) -> None:
+    """A document with no text is a valid, Ready result - not a failure."""
     ingestion = _FakeIngestion([_FakeResult("indexed", note="No readable text found")])
     document, _dup = _service(db_session, tmp_path, ingestion).create(
-        uuid.uuid4(), "wall.png", "image/png", PNG
+        uuid.uuid4(), "empty.txt", "text/plain", TEXT_CONTENT
     )
 
     assert document.status == DocumentStatus.INDEXED
@@ -232,7 +210,7 @@ def test_a_new_note_replaces_the_previous_one(db_session, tmp_path) -> None:
         [_FakeResult("indexed", note="No readable text found"), _FakeResult("indexed")]
     )
     service = _service(db_session, tmp_path, ingestion)
-    document, _dup = service.create(user_id, "wall.png", "image/png", PNG)
+    document, _dup = service.create(user_id, "empty.txt", "text/plain", TEXT_CONTENT)
 
     retried = service.retry(user_id, document.id)
 
@@ -249,16 +227,16 @@ def test_stuck_documents_are_failed_by_the_startup_reconciliation(db_session) ->
     now = datetime.now(timezone.utc)
     old = DocumentRepository(db_session).create(
         uuid.uuid4(),
-        "old.png",
-        "image/png",
+        "old.txt",
+        "text/plain",
         10,
         status=DocumentStatus.PROCESSING,
     )
     old.created_at = now - timedelta(hours=3)
     fresh = DocumentRepository(db_session).create(
         uuid.uuid4(),
-        "fresh.png",
-        "image/png",
+        "fresh.txt",
+        "text/plain",
         10,
         status=DocumentStatus.PENDING,
     )

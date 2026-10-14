@@ -183,18 +183,18 @@ def test_upload_with_spaces_and_uppercase_extension_is_accepted(
         "/api/v1/documents",
         files={
             "file": (
-                "WhatsApp Image 2026-10-14 at 12.40.14 PM.JPEG",
-                b"\xff\xd8\xff\xe0",
-                "image/jpeg",
+                "WhatsApp Document 2026-10-14 at 12.40.14 PM.TXT",
+                b"hello world",
+                "text/plain",
             )
         },
     )
     assert response.status_code == 201
-    assert response.json()["filename"].endswith(".JPEG")
+    assert response.json()["filename"].endswith(".TXT")
 
 
 def test_document_response_exposes_the_empty_text_note(db_session, tmp_path, monkeypatch) -> None:
-    """A Ready-but-empty image reports its note instead of failing."""
+    """A Ready-but-empty document reports its note instead of failing."""
     from app.models.enums import DocumentStatus
     from app.schemas.document import DocumentOut
 
@@ -203,7 +203,7 @@ def test_document_response_exposes_the_empty_text_note(db_session, tmp_path, mon
     storage = LocalDocumentStorage(str(tmp_path))
     service = DocumentService(db_session, storage=storage)
     document, _dup = service.create(
-        uuid.uuid4(), "wall.png", "image/png", b"\x89PNG\r\n\x1a\n", trigger_ingestion=False
+        uuid.uuid4(), "empty.txt", "text/plain", b"   ", trigger_ingestion=False
     )
     service.mark_status(
         document.user_id,
