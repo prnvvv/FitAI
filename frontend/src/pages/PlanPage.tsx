@@ -10,10 +10,7 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../services/api'
 import type { WorkoutSession, WorkoutSessionCreate } from '../types'
-
-function formatDateKey(d: Date): string {
-  return d.toISOString().split('T')[0]
-}
+import { formatDateKey, parseDateKey } from '../utils/date'
 
 function startOfWeek(d: Date): Date {
   const date = new Date(d)
@@ -82,7 +79,12 @@ export function PlanPage() {
 
   const selectedSessions = sessionsByDate[selectedDate] ?? []
   const selectedDateLabel = useMemo(
-    () => new Date(selectedDate).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }),
+    () =>
+      parseDateKey(selectedDate).toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      }),
     [selectedDate],
   )
 
@@ -91,7 +93,7 @@ export function PlanPage() {
     if (validSets.length === 0) return
     setSaving(true)
     try {
-      const performedAt = new Date(selectedDate)
+      const performedAt = parseDateKey(selectedDate)
       performedAt.setHours(10, 0, 0, 0)
       const payload: WorkoutSessionCreate = {
         performed_at: performedAt.toISOString(),
