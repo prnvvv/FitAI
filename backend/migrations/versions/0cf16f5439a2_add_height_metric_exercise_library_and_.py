@@ -46,7 +46,9 @@ def _check_sql(values: list[str]) -> str:
 
 def upgrade() -> None:
     # Widen the measurements.type check constraint to include new metric types.
-    op.drop_constraint("ck_measurements_measurement_type", "measurements")
+    # The initial migration creates the constraint with an auto-generated name.
+    # We need to drop it by the actual name PostgreSQL assigned.
+    op.drop_constraint("ck_measurements_ck_measurements_measurement_type", "measurements")
     op.create_check_constraint(
         "ck_measurements_measurement_type",
         "measurements",
@@ -118,6 +120,7 @@ def downgrade() -> None:
     op.drop_table("planned_sessions")
     op.drop_table("exercise_library")
 
+    # Drop the constraint with the actual name (as created by the upgrade above)
     op.drop_constraint("ck_measurements_measurement_type", "measurements")
     op.create_check_constraint(
         "ck_measurements_measurement_type",
