@@ -7,6 +7,7 @@ from typing import Any
 
 from app.agent.nodes import (
     AgentDeps,
+    _select_tools,
     extract_facts_node,
     generate_response,
     looks_like_question,
@@ -14,6 +15,7 @@ from app.agent.nodes import (
     retrieve_context_node,
     safe_response,
     safety_check,
+    wants_personal_data_answer,
 )
 from app.agent.state import AgentState
 from app.memory.change_detector import MemoryEntry
@@ -282,3 +284,47 @@ def test_generate_response_includes_fitness_context(
     assert "training and progress records" in prompt
     assert "Weight trend" in prompt
     assert "Most recent sessions" in prompt
+
+
+# ---- personal-data questions answered from the user's own records ----------
+def test_personal_data_question_detection() -> None:
+    assert wants_personal_data_answer("What do I like to do every day?") is True
+    assert wants_personal_data_answer("What are my preferences?") is True
+    assert wants_personal_data_answer("What do you know about me?") is True
+    # Not personal-data questions: keep normal web/fitness behavior.
+    assert wants_personal_data_answer("What are the best protein sources?") is False
+    assert wants_personal_data_answer("How has my progress been?") is False
+
+
+def test_select_tools_skips_web_for_personal_questions() -> None:
+    assert _select_tools("What do I like to do every day?") == []
+    # A general live-info question still prefers web search.
+    assert "web_search" in _select_tools("find the latest protein guidelines?")
+
+
+def test_generate_response_forbids_web_tools_for_personal_questions(
+    fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    class _ToolLoopLLM:
+        def __init__(self) -> None:
+            self.tools_passed: list[dict[str, Any]] | None = None
+
+        def __call__(self, system: str, user: str, *, json_mode: bool = False) -> str:
+            return "fallback"
+
+        def run_with_tools(self, messages, tools, execute, *, max_iterations: int = 3) -> str:
+            self.tools_passed = tools
+            return "You told me you like cycling every day."
+
+    llm = _ToolLoopLLM()
+    state: AgentState = {
+        "user_message": "What do I like to do every day?",
+        "conversation_context": [],
+        "tool_results": [],
+        "errors": [],
+        "retrieved_profile": {"interests": ["cycling"]},
+    }
+    deps = _deps(llm, fake_memory_reader, fake_memory_writer)
+    result = generate_response(state, deps)
+    assert result["response"].startswith("You told me you like cycling")
+    assert llm.tools_passed == []  # no live web tools for personal questions

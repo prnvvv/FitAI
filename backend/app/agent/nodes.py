@@ -118,8 +118,29 @@ _LIVE_INFO_INTENT = re.compile(
 )
 
 
+_PERSONAL_DATA_QUESTION = re.compile(
+    r"\b(what|which|do|tell me|show me)\b.*\b(i like|i prefer|i enjoy|i love|my preference|"
+    r"my preferences|my hobby|my hobbies|my interest|my interests|my favourite|my favorite|"
+    r"my likes|my goal|my goals|my routine|my schedule|my plan|my profile)\b|"
+    r"\b(about me|what do you know about me|what do you remember about me|"
+    r"what have i (told|said)|my dietary|my restrictions)\b",
+    re.I,
+)
+
+
+def wants_personal_data_answer(msg: str) -> bool:
+    """True when the question should be answered from the user's own persisted
+    facts (profile/memory/RAG), not from live web search."""
+    return bool(_PERSONAL_DATA_QUESTION.search(msg))
+
+
 def _select_tools(msg: str) -> list[str]:
     """Return the names of research tools likely useful for this message."""
+    # Questions about the user's own preferences/facts are answered from the
+    # persisted profile/memory/RAG context, never from the web, so retrieval
+    # isn't drowned out by unrelated live results.
+    if wants_personal_data_answer(msg):
+        return []
     selected: list[str] = []
     if _GYM_INTENT.search(msg):
         selected.append("nearby_gyms")
@@ -495,6 +516,11 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     else:
         tool_definitions = TOOL_DEFINITIONS
         executor = execute_tool
+
+    # For questions about the user's own data, answer purely from the provided
+    # profile/memory/RAG context; do not let the model call live web tools.
+    if wants_personal_data_answer(state.get("user_message", "")):
+        tool_definitions = []
 
     try:
         if hasattr(deps.llm, "run_with_tools"):
