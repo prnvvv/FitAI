@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -40,6 +41,31 @@ class DocumentRepository:
             Document.user_id == user_id,
         )
         return self._db.scalar(statement)
+
+    def list_all(self, user_id: UUID | None = None) -> list[Document]:
+        """Return every document, optionally scoped to one user.
+
+        Used by the library/ChromaDB reconciliation audit, which needs the whole
+        picture (including other users' rows) to spot orphan vectors.
+        """
+        statement = select(Document).order_by(Document.created_at.asc())
+        if user_id is not None:
+            statement = statement.where(Document.user_id == user_id)
+        return list(self._db.scalars(statement))
+
+    def find_stuck(
+        self,
+        before: datetime,
+        *,
+        statuses: tuple[DocumentStatus, ...] = (DocumentStatus.PENDING, DocumentStatus.PROCESSING),
+    ) -> list[Document]:
+        """Return documents that have been queued/processing since ``before``."""
+        statement = (
+            select(Document)
+            .where(Document.status.in_(statuses), Document.created_at < before)
+            .order_by(Document.created_at.asc())
+        )
+        return list(self._db.scalars(statement))
 
     def get_by_content_hash(self, user_id: UUID, content_hash: str) -> Document | None:
         """Return this user's document with identical bytes, if there is one."""

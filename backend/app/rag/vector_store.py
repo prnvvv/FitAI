@@ -60,6 +60,7 @@ class VectorStore:
             path=_persist_path(persist_dir),
             settings=Settings(anonymized_telemetry=False),
         )
+        self.persist_dir = persist_dir or _persist_path(None)
         self._ef = embedding_function or get_embedding_function()
         self._cols: dict[str, Any] = {}
 
@@ -165,3 +166,99 @@ class VectorStore:
             return len(col.get(where=scoped, include=[])["ids"]) if scoped else col.count()
         except Exception as exc:
             raise VectorStoreError(f"count failed: {exc}") from exc
+
+    def document_vector_count(
+        self, collection: str, doc_id: str, owner_id: str | None = None
+    ) -> int:
+        """Number of vectors stored for one document, always owner-scoped."""
+        return len(self.get_chunks(collection, doc_id, owner_id, limit=None))
+
+    def get_chunks(
+        self,
+        collection: str,
+        doc_id: str,
+        owner_id: str | None = None,
+        *,
+        limit: int | None = None,
+    ) -> list[SearchHit]:
+        """Return the stored chunks of one document (empty text, metadata only)."""
+        scoped = self._scope(collection, owner_id, {"doc_id": doc_id})
+        col = self._col(collection)
+        try:
+            result = col.get(where=scoped, include=["metadatas"])
+        except Exception as exc:
+            raise VectorStoreError(f"chunk lookup failed: {exc}") from exc
+        ids = result.get("ids") or []
+        metadatas = result.get("metadatas") or []
+        pairs = [(i, dict(m or {})) for i, m in zip(ids, metadatas, strict=False)]
+        if limit is not None:
+            pairs = pairs[:limit]
+        return [SearchHit(i, "", meta, 0.0) for i, meta in pairs]
+
+    def stored_chunk_texts(
+        self, collection: str, doc_id: str, owner_id: str | None = None
+    ) -> list[str]:
+        """Return the chunk texts of one document, in stored order."""
+        scoped = self._scope(collection, owner_id, {"doc_id": doc_id})
+        col = self._col(collection)
+        try:
+            result = col.get(where=scoped, include=["documents"])
+        except Exception as exc:
+            raise VectorStoreError(f"chunk lookup failed: {exc}") from exc
+        return [str(text or "") for text in (result.get("documents") or [])]
+
+    def all_chunk_owners(self, collection: str) -> list[tuple[str, str, str]]:
+        """Return ``(chunk_id, doc_id, owner_id)`` for every stored vector.
+
+        Used by the library audit to find vectors whose document no longer has a
+        database row. Never returns the chunk text.
+        """
+        if collection != USER_COLLECTION:
+            raise PermissionError("only the user collection is auditable")
+        col = self._col(collection)
+        rows: list[tuple[str, str, str]] = []
+        try:
+            result = col.get(include=["metadatas"])
+        except Exception as exc:
+            raise VectorStoreError(f"audit read failed: {exc}") from exc
+        ids = result.get("ids") or []
+        metadatas = result.get("metadatas") or []
+        for chunk_id, meta in zip(ids, metadatas, strict=False):
+            metadata = meta or {}
+            rows.append(
+                (
+                    str(chunk_id),
+                    str(metadata.get("doc_id", "")),
+                    str(metadata.get("owner_id", "")),
+                )
+            )
+        return rows
+
+    def delete_document_pair(self, doc_id: str, owner_id: str) -> int:
+        """Delete every vector of ``(doc_id, owner_id)``; returns the count."""
+        return self.delete_document(USER_COLLECTION, doc_id, owner_id=owner_id)
+
+    def embedding_dimension(self) -> int:
+        """Dimension produced by the configured embedding function."""
+        vectors = self._ef(["dimension probe"])
+        if not vectors or not len(vectors[0]):
+            raise VectorStoreError("embedding function returned no vector")
+        return int(len(vectors[0]))
+
+    def collection_info(self, collection: str) -> dict[str, Any]:
+        """Return name, vector count, embedding model and dimension of a collection."""
+        col = self._col(collection)
+        dimension: int | None = None
+        try:
+            sample = col.get(limit=1, include=["embeddings"])
+            embeddings = sample.get("embeddings") or []
+            if len(embeddings) and len(embeddings[0]):
+                dimension = len(embeddings[0])
+        except Exception as exc:  # noqa: BLE001 - reported, never fatal for a read-only audit
+            log.warning("collection_dimension_probe_failed: %s", type(exc).__name__)
+        return {
+            "name": collection,
+            "count": int(col.count()),
+            "embedding_model": (col.metadata or {}).get("embedding_model"),
+            "dimension": dimension,
+        }
