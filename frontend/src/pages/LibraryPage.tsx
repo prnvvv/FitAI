@@ -32,6 +32,13 @@ export function friendlyType(contentType: string, filename: string): string {
   return shortExt ? `Document · ${shortExt}` : 'Document'
 }
 
+const POLL_INTERVAL_MS = 3000
+const POLL_MAX_MS = 5 * 60 * 1000
+
+function isUnsettled(status: string): boolean {
+  return status === 'pending' || status === 'processing'
+}
+
 function statusClass(status: string): string {
   const map: Record<string, string> = {
     pending: 'library__status--pending',
@@ -53,8 +60,10 @@ export function LibraryPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) {
+      setLoading(true)
+    }
     setError(null)
     try {
       const page = await api.listDocuments()
@@ -62,7 +71,9 @@ export function LibraryPage() {
     } catch (err) {
       setError(toMessage(err, 'Your library could not be loaded.'))
     } finally {
-      setLoading(false)
+      if (!quiet) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -70,13 +81,37 @@ export function LibraryPage() {
     load()
   }, [load])
 
+  // Indexing happens on the server after the upload response, so refresh while
+  // any document is still settling instead of leaving it stuck on "Queued".
+  const hasUnsettled = documents.some((d) => isUnsettled(d.status))
+  useEffect(() => {
+    if (!hasUnsettled) return
+    let cancelled = false
+    const startedAt = Date.now()
+    let timer = 0
+
+    const tick = async () => {
+      if (cancelled) return
+      if (Date.now() - startedAt > POLL_MAX_MS) return
+      await load(true)
+      if (cancelled) return
+      timer = window.setTimeout(tick, POLL_INTERVAL_MS)
+    }
+
+    timer = window.setTimeout(tick, POLL_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [hasUnsettled, load])
+
   const handleUpload = async (file: File) => {
     setUploading(true)
     setError(null)
     try {
       const { duplicate } = await api.uploadDocument(file)
       setNotice(duplicate ? `Already in your library: ${file.name}` : null)
-      await load()
+      await load(true)
     } catch (err) {
       setError(toMessage(err, `“${file.name}” could not be uploaded. Try again.`))
     } finally {
@@ -161,7 +196,7 @@ export function LibraryPage() {
         <div className="page__alert page__alert--error" role="alert">
           <AlertCircle size={18} />
           <span>{error}</span>
-          <button type="button" className="page__alert-action" onClick={load}>
+          <button type="button" className="page__alert-action" onClick={() => load()}>
             Retry
           </button>
           <button type="button" className="page__alert-close" onClick={() => setError(null)} aria-label="Dismiss">

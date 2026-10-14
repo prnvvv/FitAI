@@ -37,6 +37,8 @@ async function getToken(): Promise<string | null> {
 
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 300
+const DEFAULT_TIMEOUT_MS = 30_000
+const CHAT_TIMEOUT_MS = 120_000
 
 async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -44,26 +46,32 @@ async function sleep(ms: number): Promise<void> {
 
 async function fetchApi<T>(
   path: string,
-  options: RequestInit = {},
+  options: RequestInit & { timeoutMs?: number } = {},
   retryCount = 0,
   capture?: (response: Response) => void,
 ): Promise<T> {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, ...init } = options
   const token = await getToken()
-  const headers = new Headers(options.headers)
+  const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
   }
-  if (options.body && !(options.body instanceof FormData)) {
+  if (init.body && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
 
-  const isGet = !options.method || options.method.toUpperCase() === 'GET'
+  const isGet = !init.method || init.method.toUpperCase() === 'GET'
+
+  // A stalled backend must surface as an error instead of an endless spinner.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const response = await fetch(`${API_BASE}${path}`, {
-      ...options,
+      ...init,
       headers,
+      signal: controller.signal,
     })
 
     if (!response.ok) {
@@ -82,6 +90,11 @@ async function fetchApi<T>(
 
     return response.json() as Promise<T>
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new TimeoutError(
+        `The request took longer than ${Math.round(timeoutMs / 1000)} seconds and was cancelled.`,
+      )
+    }
     const isNetworkError = err instanceof TypeError
     if (isNetworkError && isGet && retryCount < MAX_RETRIES) {
       await sleep(RETRY_DELAY_MS * (retryCount + 1))
@@ -91,6 +104,8 @@ async function fetchApi<T>(
       throw new NetworkError('The backend is unreachable. Please check your connection and try again.')
     }
     throw err
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -110,6 +125,13 @@ export class NetworkError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'NetworkError'
+  }
+}
+
+export class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TimeoutError'
   }
 }
 
@@ -271,13 +293,14 @@ export const api = {
     fetchApi<ChatResponse>('/chat', {
       method: 'POST',
       body: JSON.stringify(payload),
+      timeoutMs: CHAT_TIMEOUT_MS,
     }),
 
   // Documents
   listDocuments: (limit = 50, offset = 0) =>
     fetchApi<Page<Document>>(`/documents?limit=${limit}&offset=${offset}`),
   /** Returns the existing item when the same bytes are already in the library. */
-  uploadDocument: async (file: File) => {
+  uploadDocument: async (file: File): Promise<UploadResult> => {
     const formData = new FormData()
     formData.append('file', file)
     let duplicate = false

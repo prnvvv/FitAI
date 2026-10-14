@@ -207,6 +207,17 @@ class DocumentService:
         self._db.refresh(document)
         return self._ingest(document, data)
 
+    def ingest(self, user_id: UUID, document_id: UUID, data: bytes) -> Document:
+        """Run ingestion for an already-stored document and record its status.
+
+        Shared entry point for the background worker. A document that is already
+        indexed is left untouched so a retried job cannot redo finished work.
+        """
+        document = self.get(user_id, document_id)
+        if document.status == DocumentStatus.INDEXED:
+            return document
+        return self._ingest(document, data)
+
     def _ingest(self, document: Document, data: bytes) -> Document:
         """Run the ingestion pipeline and record a readable terminal status.
 
@@ -322,7 +333,7 @@ class DocumentService:
     def _set_note(document: Document, note: str | None) -> None:
         """Store (or clear) the ingestion note in the document's metadata JSON."""
         metadata = dict(document.ingestion_metadata or {})
-        if note:
+        if isinstance(note, str) and note:
             metadata["note"] = note
         else:
             metadata.pop("note", None)
@@ -342,7 +353,7 @@ class DocumentService:
             suffix = filename[filename.rfind(".") :].lower()
         if content_type not in ALLOWED_CONTENT_TYPES and suffix not in ALLOWED_EXTENSIONS:
             raise UnsupportedMediaTypeError(
-                "Only PDF, TXT, MD, DOCX, PNG, JPG and WEBP files are supported.",
+                "Only PDF, TXT and DOCX files are supported.",
                 details={"content_type": content_type},
             )
 

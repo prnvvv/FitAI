@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, File, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
@@ -20,6 +20,7 @@ from app.core.logging import get_logger
 from app.models.enums import ActivityEventType
 from app.rag.pipeline import IngestionPipeline
 from app.rag.vector_store import VectorStore
+from app.rag.worker import ingest_document
 from app.schemas.common import Page
 from app.schemas.document import DocumentOut, DocumentRename
 from app.services.activity_event_service import ActivityEventService
@@ -64,20 +65,24 @@ async def _read_upload_limited(file: UploadFile) -> bytes:
 async def upload_document(
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> JSONResponse:
-    """Upload a document and record its metadata and initial status.
+    """Upload a document, record its metadata, and index it in the background.
 
     Uploading identical bytes twice returns the existing item with 200 and an
-    ``X-Duplicate: true`` header instead of creating a second row.
+    ``X-Duplicate: true`` header instead of creating a second row. Parsing and
+    embedding are slow, so the file is stored here and indexed by a background
+    worker; the item stays ``pending`` until the worker updates its status.
     """
     data = await _read_upload_limited(file)
-    service = DocumentService(db, ingestion=_get_ingestion())
+    service = DocumentService(db)
     document, is_duplicate = service.create(
         current_user.id,
         file.filename or "upload",
         file.content_type or "application/octet-stream",
         data,
+        trigger_ingestion=False,
     )
     body = jsonable_encoder(DocumentOut.from_document(document))
 
@@ -95,6 +100,7 @@ async def upload_document(
         entity_id=str(document.id),
         payload={"filename": document.filename, "size_bytes": document.size_bytes},
     )
+    background_tasks.add_task(ingest_document, current_user.id, document.id, data)
     return JSONResponse(status_code=status.HTTP_201_CREATED, content=body)
 
 

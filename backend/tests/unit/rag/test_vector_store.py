@@ -52,6 +52,22 @@ def test_vector_store_add_chunks_user_requires_matching_owner() -> None:
         store.add_chunks(USER_COLLECTION, [chunk], owner_id="user-1")
 
 
+def test_indexing_failure_keeps_the_underlying_error_type() -> None:
+    """A bare '[Errno 22] Invalid argument' is useless without the exception type."""
+    col = _mock_collection()
+    col.upsert.side_effect = OSError(22, "Invalid argument")
+    client = MagicMock()
+    client.get_or_create_collection.return_value = col
+    store = VectorStore(client=client, embedding_function=MagicMock())
+
+    chunk = Chunk(id="c1", text="hello", metadata={"owner_id": "user-1"})
+    with pytest.raises(VectorStoreError) as excinfo:
+        store.add_chunks(USER_COLLECTION, [chunk], owner_id="user-1")
+
+    assert "OSError" in str(excinfo.value)
+    assert "Invalid argument" in str(excinfo.value)
+
+
 def test_vector_store_query_requires_positive_n() -> None:
     store = VectorStore(client=MagicMock(), embedding_function=MagicMock())
     with pytest.raises(ValueError, match="n_results must be >= 1"):

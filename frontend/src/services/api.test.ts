@@ -6,6 +6,7 @@ import {
   normalizeDaySummaries,
   normalizePlannedSessions,
   normalizeWorkoutSessions,
+  TimeoutError,
   validationIssues,
 } from './api'
 import type { Page, WorkoutSession } from '../types'
@@ -57,6 +58,44 @@ describe('ApiError', () => {
       { field: 'value', message: 'weight must be between 20 and 500 kg.' },
       { field: 'unit', message: 'wrong unit' },
     ])
+  })
+})
+
+describe('request timeout', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('aborts and reports a timeout instead of hanging forever', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          )
+        }),
+    )
+
+    try {
+      const file = new File(['data'], 'plan.txt', { type: 'text/plain' })
+      const settled = api.uploadDocument(file).catch((err: unknown) => err)
+      await vi.advanceTimersByTimeAsync(30_000)
+      await expect(settled).resolves.toBeInstanceOf(TimeoutError)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('passes an abort signal so the request can be cancelled', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0 }), { status: 200 }))
+
+    await api.listDocuments()
+
+    const init = fetchSpy.mock.calls[0][1] as RequestInit
+    expect(init.signal).toBeInstanceOf(AbortSignal)
   })
 })
 
