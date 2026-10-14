@@ -62,3 +62,9 @@ Thumbs.db
 # OS
 *.tmp
 *.bak
+
+# Local test files
+test_upload.py
+test_upload.sh
+test_workout.jpg
+test_workout.pdf
