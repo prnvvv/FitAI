@@ -23,6 +23,7 @@ from app.agent.multi import run_multi_turn
 from app.core.config import settings
 from app.extraction.extractor import GroqActivityExtractor, RecordExtractor
 from app.extraction.persistence import persist_extraction
+from app.extraction.schemas import RecordedOutcome
 from app.llm.client import GroqClient
 from app.memory.change_detector import DetectedChange, MemoryEntry
 from app.memory.confirmation import Decision, MemoryWriter
@@ -415,7 +416,7 @@ class ChatService:
             log.warning("activity extractor could not be initialised", exc_info=True)
             return None
 
-    def _extract_and_persist(self, user_id, message: str) -> tuple[list[dict], list[str]]:
+    def _extract_and_persist(self, user_id: UUID, message: str) -> tuple[list[dict], list[str]]:
         """Extract structured records and persist them to the right services.
 
         Returns (tool_events, confirmations). Containment is total: any failure
@@ -452,7 +453,7 @@ class ChatService:
         return events, confirmations
 
 
-def _confirmation_line(outcome) -> str | None:
+def _confirmation_line(outcome: RecordedOutcome) -> str | None:
     """Deterministic, truthful user-facing line for a persistence outcome."""
     kind = outcome.kind.replace("_", " ")
     if outcome.kind == "completed_workout":

@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.models.enums import MeasurementType
 from app.schemas.workout import MEASUREMENT_RANGES, MEASUREMENT_UNITS
@@ -51,7 +51,7 @@ class ProgressRecord(_Candidate):
 
     @field_validator("unit")
     @classmethod
-    def _unit_ok(cls, unit: str, info) -> str:
+    def _unit_ok(cls, unit: str, info: ValidationInfo) -> str:
         mtype = info.data.get("measurement_type")
         if isinstance(mtype, MeasurementType):
             allowed = MEASUREMENT_UNITS.get(mtype, frozenset())
@@ -63,7 +63,7 @@ class ProgressRecord(_Candidate):
 
     @field_validator("value")
     @classmethod
-    def _value_in_range(cls, value: float, info) -> float:
+    def _value_in_range(cls, value: float, info: ValidationInfo) -> float:
         mtype = info.data.get("measurement_type")
         if isinstance(mtype, MeasurementType) and mtype in MEASUREMENT_RANGES:
             low, high = MEASUREMENT_RANGES[mtype]
@@ -124,8 +124,10 @@ class RecordedOutcome(BaseModel):
 
     model_config = ConfigDict(use_enum_values=True)
 
-    kind: str  # completed_workout | planned_workout | progress_record | user_preference
-    status: str  # saved | duplicate
+    kind: str  # completed_workout | planned_workout | progress_record | user_preference | profile_fact
+    # saved = durably committed; duplicate = already present (idempotent);
+    # failed = the write did not commit; skipped = intentionally not persisted here.
+    status: str
     record_id: str | None = None
     summary: str = ""
     detail: str | None = None

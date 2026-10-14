@@ -21,6 +21,7 @@ from typing import Protocol
 
 from app.extraction.prompts import ACTIVITY_EXTRACTION
 from app.extraction.schemas import ExtractionResult
+from app.memory.extractor import TextCompleter
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ class GroqActivityExtractor:
     separate from the primary assistant's credentials.
     """
 
-    def __init__(self, api_key: str, model: str, *, llm=None) -> None:
+    def __init__(self, api_key: str, model: str, *, llm: TextCompleter | None = None) -> None:
         # A completer can be injected (tests / alternate providers). Otherwise a
         # dedicated Groq client is built from this component's OWN key + model.
         if llm is not None:
@@ -84,7 +85,7 @@ class GroqActivityExtractor:
         return _validate_result(data)
 
 
-def _validate_result(data: dict) -> ExtractionResult:
+def _validate_result(data: dict[str, object]) -> ExtractionResult:
     from pydantic import ValidationError
 
     from app.extraction import schemas

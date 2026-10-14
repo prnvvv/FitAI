@@ -25,13 +25,22 @@ from __future__ import annotations
 
 import contextlib
 import logging
+from collections.abc import Iterator
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.extraction.schemas import ExtractionResult, RecordedOutcome
+from app.extraction.schemas import (
+    CompletedWorkout,
+    ExtractionResult,
+    PlannedWorkout,
+    ProfileFact,
+    ProgressRecord,
+    RecordedOutcome,
+    UserPreference,
+)
 from app.models.enums import ActivityEventType, MeasurementType
 from app.repositories.workout_repository import WorkoutRepository
 from app.services.activity_event_service import ActivityEventService
@@ -76,7 +85,7 @@ class ExtractionPersister:
         return outcomes
 
     # -- completed workouts ---------------------------------------------------
-    def _completed(self, item, today: date, now: datetime) -> RecordedOutcome:
+    def _completed(self, item: CompletedWorkout, today: date, now: datetime) -> RecordedOutcome:
         activity = _norm(item.activity)
         day = item.performed_on or today
         when = _day_datetime(day, now)
@@ -132,7 +141,7 @@ class ExtractionPersister:
         return None
 
     # -- planned workouts -----------------------------------------------------
-    def _planned(self, item, today: date, now: datetime) -> RecordedOutcome:
+    def _planned(self, item: PlannedWorkout, today: date, now: datetime) -> RecordedOutcome:
         activity = _norm(item.activity)
         day = item.planned_on or (today + timedelta(days=1))
         duration = item.duration_minutes
@@ -169,7 +178,7 @@ class ExtractionPersister:
         return self._outcome("planned_workout", "saved", str(planned.id), item.activity)
 
     # -- progress measurements ------------------------------------------------
-    def _progress_record(self, item, today: date, now: datetime) -> RecordedOutcome:
+    def _progress_record(self, item: ProgressRecord, today: date, now: datetime) -> RecordedOutcome:
         day = item.measured_on or today
         when = _day_datetime(day, now)
         mtype: MeasurementType = item.measurement_type
@@ -206,10 +215,10 @@ class ExtractionPersister:
         )
 
     # -- preferences & profile facts (profile.preferences JSON) ----------------
-    def _preference(self, item) -> RecordedOutcome:
+    def _preference(self, item: UserPreference) -> RecordedOutcome:
         return self._append_profile_list("interests", item.preference, "user_preference")
 
-    def _profile_fact(self, item) -> RecordedOutcome:
+    def _profile_fact(self, item: ProfileFact) -> RecordedOutcome:
         return self._append_profile_list("profile_notes", item.text, "profile_fact")
 
     def _append_profile_list(self, key: str, value: str, kind: str) -> RecordedOutcome:
@@ -217,7 +226,8 @@ class ExtractionPersister:
         try:
             profile = self._profiles.get_or_create(self._user_id)
             prefs = dict(profile.preferences or {})
-            items = list(prefs.get(key) or [])
+            existing = prefs.get(key)
+            items: list[str] = [str(x) for x in existing] if isinstance(existing, list) else []
             if text in items:
                 return self._outcome(kind, "duplicate", str(profile.id), text)
             items.append(text)
@@ -229,7 +239,13 @@ class ExtractionPersister:
         return self._outcome(kind, "saved", str(saved.id), text)
 
     # -- helpers --------------------------------------------------------------
-    def _log_event(self, event_type, entity_id, occurred_at, payload) -> None:
+    def _log_event(
+        self,
+        event_type: ActivityEventType,
+        entity_id: str,
+        occurred_at: datetime,
+        payload: dict[str, object],
+    ) -> None:
         # Best-effort; the primary write has already committed.
         with _suppress():
             self._events.record(
@@ -259,7 +275,7 @@ def persist_extraction(
 
 
 @contextlib.contextmanager
-def _suppress():
+def _suppress() -> Iterator[None]:
     try:
         yield
     except Exception:  # pragma: no cover - event logging is best-effort
