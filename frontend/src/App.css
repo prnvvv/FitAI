@@ -3991,7 +3991,7 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  font-size: 1rem;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -4003,7 +4003,7 @@
 }
 
 .daypanel__today-chip {
-  background-color: rgba(47, 107, 255, 0.15);
+  background-color: var(--accent-soft);
   color: var(--accent-hover);
 }
 
@@ -4026,7 +4026,7 @@
 .plan__tabs {
   display: inline-flex;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -4037,7 +4037,7 @@
   border-right: 1px solid var(--divider);
   background-color: var(--bg-composer);
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   cursor: pointer;
 }
 
