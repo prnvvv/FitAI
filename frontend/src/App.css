@@ -2499,12 +2499,13 @@
   gap: 8px;
   padding: 10px 16px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background-color: var(--accent);
   color: white;
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
   cursor: pointer;
+  transition: background var(--transition-fast);
 }
 
 .library__add-btn:hover:not(.library__add-btn--busy) {
@@ -2527,17 +2528,17 @@
   gap: 8px;
   padding: 32px;
   border: 2px dashed var(--divider);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background-color: var(--bg-composer);
   color: var(--text-secondary);
   text-align: center;
   margin-bottom: 24px;
-  transition: border-color 0.15s, background-color 0.15s;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
 
 .library__drop--active {
   border-color: var(--accent);
-  background-color: rgba(47, 107, 255, 0.05);
+  background-color: var(--accent-soft);
 }
 
 .library__drop p {
@@ -2547,7 +2548,7 @@
 }
 
 .library__drop span {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
 }
 
 .library__list {
@@ -2565,8 +2566,14 @@
   gap: 12px;
   padding: 12px;
   border: 1px solid var(--divider);
-  border-radius: 10px;
-  background-color: var(--bg-composer);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.library__item:hover {
+  border-color: var(--divider-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .library__icon {
@@ -2575,9 +2582,10 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 8px;
-  background-color: var(--bg-hover);
+  border-radius: var(--radius-md);
+  background-color: var(--accent-soft);
   color: var(--accent);
+  flex-shrink: 0;
 }
 
 .library__info {
@@ -2594,36 +2602,39 @@
 }
 
 .library__meta {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
 .library__status {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   white-space: nowrap;
 }
 
 .library__status--pending {
-  background-color: rgba(250, 204, 21, 0.12);
-  color: #facc15;
+  background-color: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
 }
 
 .library__status--reading {
-  background-color: rgba(47, 107, 255, 0.12);
+  background-color: var(--accent-soft);
   color: var(--accent);
 }
 
 .library__status--ready {
-  background-color: rgba(34, 197, 94, 0.12);
+  background-color: var(--success-bg);
   color: var(--success);
+  border: 1px solid var(--success-border);
 }
 
 .library__status--failed {
   background-color: var(--error-bg);
   color: var(--error);
+  border: 1px solid var(--error-border);
 }
 
 .library__delete {
@@ -2633,10 +2644,11 @@
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .library__delete:hover {
@@ -4452,21 +4464,23 @@
   align-items: center;
   gap: 6px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background-color: var(--bg-hover);
   color: var(--text-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-sm);
   padding: 4px 10px;
   cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .library__action:hover {
   color: var(--text-primary);
+  border-color: var(--divider-strong);
 }
 
 .library__reason {
   margin: 4px 0 0;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-sm);
   color: var(--error);
 }
 
@@ -4477,10 +4491,11 @@
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .library__icon-action:hover {
@@ -4497,16 +4512,17 @@
 .library__rename-input {
   flex: 1;
   min-width: 0;
-  background-color: var(--bg-main);
+  background-color: var(--bg-input);
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   padding: 6px 8px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
+  outline: none;
+  transition: border-color var(--transition-fast);
 }
 
 .library__rename-input:focus {
-  outline: none;
   border-color: var(--accent);
 }
 
