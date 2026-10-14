@@ -350,6 +350,25 @@ class ChatService:
         # the chat response, so every failure is contained here.
         extraction_events, confirmations = self._extract_and_persist(user_id, message)
 
+        # Layer A: deterministic pre-filter + scope classifier (run before any LLM or
+        # tool call).  If the message matches a guardrails rule, refuse immediately
+        # with a fixed safe reply so the LLM never sees the offending content.
+        safety = run_safety_rules(message)
+        if safety.blocked:
+            response = safety.response or "I can't help with that request."
+            # Persist the user message and the blocked-response turn, then return.
+            self._conversations.add_message(
+                user_id, conversation_id, MessageRole.ASSISTANT, response
+            )
+            return {
+                "conversation_id": conversation_id,
+                "response": response,
+                "title": conversation.title,
+                "sources": [],
+                "actions": [],
+                "tool_events": extraction_events,
+            }
+
         try:
             retriever = Retriever(VectorStore(persist_dir=settings.chromadb_persist_dir))
         except Exception:
