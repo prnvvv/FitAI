@@ -2994,13 +2994,14 @@
   gap: 2px;
   min-height: 44px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background-color: var(--bg-main);
   color: var(--text-secondary);
   cursor: pointer;
   position: relative;
   padding: 6px 8px;
   font-variant-numeric: tabular-nums;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .plan__month-day:hover {
@@ -3019,7 +3020,7 @@
 
 .plan__month-day--selected {
   border-color: var(--accent);
-  background-color: rgba(47, 107, 255, 0.08);
+  background-color: var(--accent-soft);
   color: var(--text-primary);
 }
 
@@ -3034,7 +3035,7 @@
   line-height: 20px;
   min-width: 20px;
   text-align: center;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
 }
 
 .plan__cell-badges {
