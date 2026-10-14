@@ -68,6 +68,8 @@ class _ProfileReaderAdapter(ProfileReader):
             else None,
             "preferred_tone": prefs.get("preferred_tone") if isinstance(prefs, dict) else None,
             "units": prefs.get("units") if isinstance(prefs, dict) else None,
+            "interests": prefs.get("interests") if isinstance(prefs, dict) else None,
+            "profile_notes": prefs.get("profile_notes") if isinstance(prefs, dict) else None,
             "timezone": profile.location_timezone,
             "location": profile.location_label,
         }

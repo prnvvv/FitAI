@@ -8,12 +8,17 @@ providers from real database behaviour.
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.extraction.schemas import CompletedWorkout, ExtractionResult, UserPreference
+from app.repositories.user_repository import UserRepository
 from app.services import chat_service as chat_service_module
+from app.services.profile_service import ProfileService
 
 _RESULT = ExtractionResult(
     completed_workouts=[
@@ -143,3 +148,17 @@ def test_extraction_failure_does_not_break_chat(client: TestClient, monkeypatch)
 
 def wired_workouts_total(client: TestClient) -> int:
     return client.get("/api/v1/workouts?limit=20").json()["total"]
+
+
+def test_profile_reader_surfaces_stored_interests(db_session: Session) -> None:
+    from app.services.chat_service import _ProfileReaderAdapter
+
+    uid = uuid4()
+    UserRepository(db_session).get_or_create(uid, "interests@example.com")
+    ProfileService(db_session).update(
+        uid, {"preferences": {"interests": ["enjoys cycling"]}}, partial=True
+    )
+
+    profile = _ProfileReaderAdapter(db_session, uid).get_profile(str(uid))
+    assert profile is not None
+    assert profile.get("interests") == ["enjoys cycling"]
