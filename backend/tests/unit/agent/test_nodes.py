@@ -12,6 +12,7 @@ from app.agent.nodes import (
     generate_response,
     looks_like_question,
     looks_personal,
+    propose_actions_node,
     retrieve_context_node,
     safe_response,
     safety_check,
@@ -182,3 +183,51 @@ def test_generate_response_uses_tool_loop_when_available(
     assert result["response"] == "tool-loop answer"
     assert llm.tools_passed is not None
     assert any(t["function"]["name"] == "nearby_gyms" for t in llm.tools_passed)
+
+
+class _FakeActionWriter:
+    def __init__(self) -> None:
+        self.created: list[tuple[str, Any]] = []
+
+    def create(self, user_id: str, proposal: Any) -> str | None:
+        self.created.append((user_id, proposal))
+        return f"action-{len(self.created)}"
+
+
+def test_propose_actions_node_creates_action_for_workout(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    fake_llm.response = (
+        '{"is_workout": true, "activity": "Treadmill", "duration_minutes": 120,'
+        ' "performed_on": "2026-01-15", "notes": null}'
+    )
+    writer = _FakeActionWriter()
+    deps = AgentDeps(
+        llm=fake_llm,
+        memory_reader=fake_memory_reader,
+        memory_writer=fake_memory_writer,
+        action_writer=writer,
+        clock=lambda: datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+    )
+    state: AgentState = {
+        "user_id": "user-1",
+        "user_message": "I did treadmill for 2h today",
+        "safety": SafetyResult(),
+    }
+    result = propose_actions_node(state, deps)
+    assert len(writer.created) == 1
+    assert result["actions"][0]["type"] == "log_workout"
+    assert result["actions"][0]["proposal_id"] == "action-1"
+    assert "confirm" in result["response"].lower()
+
+
+def test_propose_actions_node_noop_without_writer(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    state: AgentState = {
+        "user_id": "user-1",
+        "user_message": "I did treadmill for 2h today",
+        "safety": SafetyResult(),
+    }
+    deps = _deps(fake_llm, fake_memory_reader, fake_memory_writer)
+    assert propose_actions_node(state, deps) == {}

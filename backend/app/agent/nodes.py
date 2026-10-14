@@ -338,9 +338,7 @@ def _format_profile(mem: dict[str, MemoryEntry], profile: dict[str, object] | No
         unit = f" {e.unit}" if e.unit else ""
         lines.append(f"{label}: {e.value}{unit}")
     if profile:
-        lines.append(
-            "profile: " + ", ".join(f"{k}={_display(v)}" for k, v in profile.items() if v)
-        )
+        lines.append("profile: " + ", ".join(f"{k}={_display(v)}" for k, v in profile.items() if v))
     return "\n".join(lines) if lines else "(none)"
 
 

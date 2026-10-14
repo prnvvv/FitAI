@@ -103,9 +103,7 @@ class ChatActionService:
     # ------------------------------------------------------------------
     # Executors
     # ------------------------------------------------------------------
-    def _execute(
-        self, action: PendingChatAction, user_id: UUID
-    ) -> tuple[str, dict[str, object]]:
+    def _execute(self, action: PendingChatAction, user_id: UUID) -> tuple[str, dict[str, object]]:
         if action.action_type is PendingActionType.LOG_WORKOUT:
             return self._execute_log_workout(action, user_id)
         if action.action_type is PendingActionType.USE_MEASUREMENTS:
@@ -150,15 +148,11 @@ class ChatActionService:
             f"{performed_on.isoformat()}."
         )
         metadata: dict[str, object] = {
-            "tool_events": [
-                {"tool": "log_workout", "status": "applied", "summary": action.summary}
-            ]
+            "tool_events": [{"tool": "log_workout", "status": "applied", "summary": action.summary}]
         }
         return content, metadata
 
-    def _execute_use_measurements(
-        self, action: PendingChatAction
-    ) -> tuple[str, dict[str, object]]:
+    def _execute_use_measurements(self, action: PendingChatAction) -> tuple[str, dict[str, object]]:
         payload = action.payload
         question = str(payload.get("question") or "")
         parts: list[str] = []
@@ -190,18 +184,14 @@ class ChatActionService:
         if self._completer is None:
             from app.llm.client import GroqClient
 
-            self._completer = GroqClient(
-                api_key=settings.groq_api_key, model=settings.groq_model
-            )
+            self._completer = GroqClient(api_key=settings.groq_api_key, model=settings.groq_model)
         return self._completer
 
     @staticmethod
     def _rejection_message(action_type: PendingActionType) -> str:
         if action_type is PendingActionType.LOG_WORKOUT:
             return "No problem — I didn't add anything to your calendar."
-        return (
-            "No problem. Tell me your current height and weight and I'll use those instead."
-        )
+        return "No problem. Tell me your current height and weight and I'll use those instead."
 
     @staticmethod
     def _as_int(value: object) -> int | None:

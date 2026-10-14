@@ -70,9 +70,7 @@ class PendingActionRepository:
         filters = [PendingChatAction.user_id == user_id]
         if status is not None:
             filters.append(PendingChatAction.status == status)
-        total = self._db.scalar(
-            select(func.count()).select_from(PendingChatAction).where(*filters)
-        )
+        total = self._db.scalar(select(func.count()).select_from(PendingChatAction).where(*filters))
         statement = (
             select(PendingChatAction)
             .where(*filters)
