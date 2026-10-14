@@ -49,6 +49,8 @@ local_data/
 *.sqlite
 *.dump
 *.log
+.opencode/
+backend_full_map_temp.txt
 
 # Editors
 .vscode/
