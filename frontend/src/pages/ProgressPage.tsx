@@ -457,12 +457,12 @@ export function ProgressPage() {
             type="button"
             role="tab"
             aria-selected={metric === key}
-            className={metric === key ? 'progress__tabs--active' : ''}
+            className={metric === key ? 'progress__tabs--active' : 'progress__tabs--inactive'}
             onClick={() => setMetric(key)}
           >
             {key === 'bmi' ? 'BMI' : METRIC_BY_KEY[key].label}
           </button>
-        ))}
+        )}
       </div>
 
       {error && (

@@ -279,6 +279,11 @@ input[type='number'] {
   background-color: var(--accent);
 }
 
+.progress__tabs--inactive {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-secondary) !important;
+}
+
 /* Memory item styles */
 .memory__item {
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
