@@ -597,7 +597,7 @@ export function PlanPage() {
       <span className="plan__cell-badges">
         {plannedCount > 0 && (
           <span
-            className={`plan__cell-dot ${badgeColor === 'done' ? 'plan__cell-dot--done' : badgeColor === 'in-progress' ? 'plan__cell-dot--in-progress' : badgeColor === 'planned' ? 'plan__cell-dot--planned : ''}`}
+            className={`plan__cell-dot ${badgeColor ? `plan__cell-dot--${badgeColor}` : ''}`}
             title={`${completed} of ${plannedCount} sessions completed`}
           />
         )}
