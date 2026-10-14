@@ -3691,7 +3691,7 @@
 .combobox__empty,
 .combobox__error {
   padding: 8px;
-  font-size: 0.8125rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -3704,7 +3704,7 @@
   align-items: center;
   gap: 4px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 2px 4px;
 }
 
@@ -3721,10 +3721,11 @@
   width: 22px;
   height: 22px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background-color: var(--bg-hover);
   color: var(--text-secondary);
   cursor: pointer;
+  transition: color var(--transition-fast);
 }
 
 .stepper__btn:hover {
@@ -3737,7 +3738,7 @@
   border: none;
   color: var(--text-primary);
   text-align: center;
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
 }
 
 .stepper__input:focus {
@@ -3746,7 +3747,7 @@
 
 .field__error {
   color: var(--error);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-sm);
   margin: 4px 0 0;
 }
 
@@ -3757,7 +3758,7 @@
 .plan__segmented {
   display: inline-flex;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background-color: var(--bg-main);
   flex-shrink: 0;
