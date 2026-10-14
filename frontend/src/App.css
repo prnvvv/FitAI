@@ -3849,7 +3849,7 @@
   border-radius: var(--radius-sm);
   background: none;
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   text-align: left;
   cursor: pointer;
 }
@@ -3875,7 +3875,7 @@
   flex-direction: column;
   gap: 10px;
   padding: 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background-color: var(--bg-popover);
   border: 1px solid var(--popover-border);
   box-shadow: var(--shadow-popover);
@@ -3883,7 +3883,7 @@
 }
 
 .plan__popover-title {
-  font-size: 0.8125rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
@@ -3897,7 +3897,7 @@
 }
 
 .plan__field-label {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
