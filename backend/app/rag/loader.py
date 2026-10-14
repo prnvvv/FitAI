@@ -122,6 +122,9 @@ class LoadedDocument:
     source: str  # file name only (no server paths)
     file_type: str  # "pdf" | "txt" | "md" | "docx" | "image"
     sections: tuple[Section, ...]
+    #: Set when the source was readable but contained no text (e.g. a photo of a
+    #: wall). Such a document is valid and Ready; it simply indexes no chunks.
+    note: str | None = None
 
     @property
     def text(self) -> str:
@@ -223,6 +226,30 @@ def _read_bytes(path: Path, max_bytes: int) -> bytes:
     return data
 
 
+def _load_image(path: Path, data: bytes) -> LoadedDocument:
+    """Read an image through the configured OCR/vision provider chain.
+
+    A vision description and the OCR text are kept as separate sections so the
+    indexed chunks carry both. An image with no readable text is a valid result
+    carrying a note, never a failure.
+    """
+    from .image_ocr import ImageOcrError, read_image
+
+    try:
+        result = read_image(data, path.name)
+    except ImageOcrError as exc:
+        raise DocumentLoadError(str(exc)) from exc
+
+    sections: list[Section] = []
+    if result.description and result.description.strip() != result.text.strip():
+        sections.append(Section(f"Image description: {result.description.strip()}"))
+    if result.text.strip():
+        sections.append(Section(result.text.strip()))
+    if not sections:
+        return LoadedDocument(source=path.name, file_type="image", sections=(), note=result.note)
+    return LoadedDocument(source=path.name, file_type="image", sections=tuple(sections))
+
+
 def load_file(path: str | Path, max_bytes: int = DEFAULT_MAX_BYTES) -> LoadedDocument:
     """Extract text from a supported document or image file.
 
@@ -234,15 +261,7 @@ def load_file(path: str | Path, max_bytes: int = DEFAULT_MAX_BYTES) -> LoadedDoc
     handler = resolve_handler(p.name, data)
 
     if handler.kind == "image":
-        from .image_ocr import ImageOcrError, load_image_document
-
-        try:
-            text = load_image_document(data, p.name)
-        except ImageOcrError as exc:
-            raise DocumentLoadError(str(exc)) from exc
-        if not text.strip():
-            raise DocumentLoadError("no extractable text in image")
-        return LoadedDocument(source=p.name, file_type="image", sections=(Section(text),))
+        return _load_image(p, data)
 
     loader = {".pdf": _load_pdf, ".docx": _load_docx, ".txt": _load_txt, ".md": _load_txt}
     sections = [s for s in loader[handler.extension](p) if s.text]

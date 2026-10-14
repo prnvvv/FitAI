@@ -121,7 +121,7 @@ def list_documents(
         current_user.id, limit=pagination.limit, offset=pagination.offset
     )
     return Page[DocumentOut](
-        items=[DocumentOut.model_validate(item) for item in items],
+        items=[DocumentOut.from_document(item) for item in items],
         total=total,
         limit=pagination.limit,
         offset=pagination.offset,

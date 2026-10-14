@@ -27,6 +27,9 @@ class IngestionResult:
     chunks_indexed: int = 0
     attempts: int = 0
     error: str | None = None
+    #: Human-readable note for a document that was read but holds no text. Such a
+    #: document is indexed (status "indexed") with zero chunks on purpose.
+    note: str | None = None
 
 
 def _file_hash(path: Path) -> str:
@@ -137,6 +140,12 @@ class IngestionPipeline:
         except (DocumentLoadError, ValueError, OSError) as exc:
             log.info("ingestion rejected %s: %s", path.name, exc)
             return _fail(str(exc))
+
+        if not chunks and doc.note:
+            # Readable file, nothing to index. Clear any stale chunks for this
+            # document so a previous, different version cannot stay retrievable.
+            self._store.delete_document(collection, did, owner_id)
+            return IngestionResult(did, path.name, scope, "indexed", 0, 0, None, doc.note)
 
         last: Exception | None = None
         for attempt in range(1, self._retries + 1):

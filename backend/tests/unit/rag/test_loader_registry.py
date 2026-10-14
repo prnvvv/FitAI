@@ -114,13 +114,15 @@ def test_load_file_rejects_spoofed_file(tmp_path: Path) -> None:
 
 def test_images_are_routed_to_the_vision_handler(tmp_path: Path, monkeypatch) -> None:
     """Images must not be parsed as text documents."""
+    from app.rag.image_ocr import ImageReadResult
+
     called: list[str] = []
 
-    def _fake_load(data: bytes, filename: str, api_key: str | None = None) -> str:
+    def _fake_read(data: bytes, filename: str, **kwargs: object) -> ImageReadResult:
         called.append(filename)
-        return "Bulgarian split squat 3x10"
+        return ImageReadResult(text="Bulgarian split squat 3x10", provider="rapidocr")
 
-    monkeypatch.setattr("app.rag.image_ocr.load_image_document", _fake_load)
+    monkeypatch.setattr("app.rag.image_ocr.read_image", _fake_read)
 
     p = tmp_path / "photo.jpg"
     p.write_bytes(JPEG_BYTES)
@@ -129,6 +131,45 @@ def test_images_are_routed_to_the_vision_handler(tmp_path: Path, monkeypatch) ->
     assert loaded.file_type == "image"
     assert loaded.text == "Bulgarian split squat 3x10"
     assert called == ["photo.jpg"]
+
+
+def test_image_with_a_vision_description_keeps_both_sections(tmp_path: Path, monkeypatch) -> None:
+    from app.rag.image_ocr import ImageReadResult
+
+    monkeypatch.setattr(
+        "app.rag.image_ocr.read_image",
+        lambda *a, **k: ImageReadResult(
+            text="Squat 3x10\n80 kg",
+            description="A photo of a barbell squat setup",
+            provider="groq",
+        ),
+    )
+    p = tmp_path / "lift.png"
+    p.write_bytes(PNG_BYTES)
+
+    loaded = load_file(p)
+
+    assert "Image description: A photo of a barbell squat setup" in loaded.text
+    assert "Squat 3x10" in loaded.text
+    assert loaded.note is None
+
+
+def test_image_without_text_is_ready_with_a_note(tmp_path: Path, monkeypatch) -> None:
+    from app.rag.image_ocr import ImageReadResult
+
+    monkeypatch.setattr(
+        "app.rag.image_ocr.read_image",
+        lambda *a, **k: ImageReadResult(
+            text="", provider="rapidocr", note="No readable text found"
+        ),
+    )
+    p = tmp_path / "wall.jpg"
+    p.write_bytes(JPEG_BYTES)
+
+    loaded = load_file(p)
+
+    assert loaded.sections == ()
+    assert loaded.note == "No readable text found"
 
 
 def test_empty_image_is_rejected(tmp_path: Path) -> None:
@@ -144,7 +185,7 @@ def test_image_ocr_failure_becomes_a_load_error(tmp_path: Path, monkeypatch) -> 
     def _boom(*_args: object, **_kwargs: object) -> str:
         raise ImageOcrError("vision unavailable")
 
-    monkeypatch.setattr("app.rag.image_ocr.load_image_document", _boom)
+    monkeypatch.setattr("app.rag.image_ocr.read_image", _boom)
     p = tmp_path / "photo.png"
     p.write_bytes(PNG_BYTES)
 

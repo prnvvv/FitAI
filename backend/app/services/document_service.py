@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import suppress
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -54,6 +54,37 @@ FAILURE_COPY: dict[str, str] = {
     "couldn't read this image": "Couldn't read this image.",
 }
 DEFAULT_FAILURE_REASON = "This file could not be processed."
+#: Shown for a file that was read successfully but held no indexable text.
+EMPTY_TEXT_NOTE = "No readable text found"
+#: Reason recorded when ingestion never finished (process restart, crash, kill).
+STUCK_REASON = "Processing timed out. Try again or delete this file."
+#: A queued/processing document older than this is considered abandoned.
+DEFAULT_STUCK_TIMEOUT_MINUTES = 30
+
+
+def reconcile_stuck_documents(
+    db: Session,
+    *,
+    timeout_minutes: int = DEFAULT_STUCK_TIMEOUT_MINUTES,
+    now: datetime | None = None,
+) -> list[UUID]:
+    """Fail documents left queued/processing past the timeout; return their ids.
+
+    Called at application startup so an interrupted ingestion never leaves a
+    row claiming to be in progress forever. No row is deleted and no file is
+    touched: a failed row can be reprocessed with Retry.
+    """
+    moment = now or _utcnow()
+    cutoff = moment - timedelta(minutes=timeout_minutes)
+    stuck = DocumentRepository(db).find_stuck(cutoff)
+    if not stuck:
+        return []
+    for document in stuck:
+        document.status = DocumentStatus.FAILED
+        document.failed_at = moment
+        document.error_message = STUCK_REASON
+    db.commit()
+    return [document.id for document in stuck]
 
 
 def readable_failure(exc: BaseException | str) -> str:
@@ -171,6 +202,7 @@ class DocumentService:
         data = self._storage.read(document.storage_key)
         document.error_message = None
         document.failed_at = None
+        self._set_note(document, None)
         self._commit()
         self._db.refresh(document)
         return self._ingest(document, data)
@@ -217,7 +249,12 @@ class DocumentService:
             return document
 
         if result.status == "indexed":
-            self.mark_status(document.user_id, document.id, DocumentStatus.INDEXED)
+            self.mark_status(
+                document.user_id,
+                document.id,
+                DocumentStatus.INDEXED,
+                note=getattr(result, "note", None),
+            )
         else:
             self.mark_status(
                 document.user_id,
@@ -256,25 +293,40 @@ class DocumentService:
         status: DocumentStatus,
         *,
         error_message: str | None = None,
+        note: str | None = None,
     ) -> Document:
         """Update processing status.
 
-        Shared interface for Person 2's ingestion pipeline.
+        Shared interface for Person 2's ingestion pipeline. ``note`` records a
+        successful-but-empty outcome (for example an image with no readable
+        text) and clears any stale note.
         """
         document = self.get(user_id, document_id)
         document.status = status
         if status == DocumentStatus.PROCESSING:
             document.error_message = None
             document.failed_at = None
+            self._set_note(document, None)
         elif status == DocumentStatus.INDEXED:
             document.completed_at = _utcnow()
             document.error_message = None
+            self._set_note(document, note)
         elif status == DocumentStatus.FAILED:
             document.failed_at = _utcnow()
             document.error_message = (error_message or "")[:500] or None
         self._commit()
         self._db.refresh(document)
         return document
+
+    @staticmethod
+    def _set_note(document: Document, note: str | None) -> None:
+        """Store (or clear) the ingestion note in the document's metadata JSON."""
+        metadata = dict(document.ingestion_metadata or {})
+        if note:
+            metadata["note"] = note
+        else:
+            metadata.pop("note", None)
+        document.ingestion_metadata = metadata or None
 
     def _validate_upload(self, filename: str, content_type: str, size: int) -> None:
         max_bytes = settings.max_upload_size_mb * 1024 * 1024

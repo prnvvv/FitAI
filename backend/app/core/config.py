@@ -27,6 +27,8 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://localhost:3000"]
 DEFAULT_JWT_ALGORITHMS = ["ES256", "RS256"]
+#: Image-text providers ``VISION_PROVIDER_ORDER`` may name, in order.
+KNOWN_VISION_PROVIDERS = ("groq", "rapidocr")
 
 
 class Settings(BaseSettings):
@@ -83,6 +85,17 @@ class Settings(BaseSettings):
     # here only so both developers share a single configuration source.
     groq_api_key: str | None = None
     groq_model: str = "openai/gpt-oss-20b"
+    #: Vision-capable Groq model id. Leave unset to auto-detect from the
+    #: account's model list. ``GROQ_VISION_MODEL`` stays accepted as an alias.
+    vision_model: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("VISION_MODEL", "GROQ_VISION_MODEL"),
+    )
+    #: Ordered image-text providers. Supported: groq, rapidocr. The first
+    #: provider that returns text wins; local OCR needs no API key.
+    vision_provider_order: Annotated[list[str], NoDecode] = ["groq", "rapidocr"]
+    #: Longest image edge (px) used for OCR after downscaling.
+    ocr_max_side_px: int = 1600
     chromadb_persist_dir: str = "./chroma_data"
     chromadb_collection_name: str = "fitai_knowledge"
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -129,6 +142,22 @@ class Settings(BaseSettings):
             return parts if parts else ["ddgs"]
         return value
 
+    @field_validator("vision_provider_order", mode="before")
+    @classmethod
+    def _split_vision_providers(cls, value: object) -> object:
+        if isinstance(value, str):
+            parts = [item.strip().lower() for item in value.split(",") if item.strip()]
+            if not parts:
+                return []
+            unknown = [item for item in parts if item not in KNOWN_VISION_PROVIDERS]
+            if unknown:
+                raise ValueError(
+                    f"unknown VISION_PROVIDER_ORDER entries {unknown}; "
+                    f"expected any of {list(KNOWN_VISION_PROVIDERS)}"
+                )
+            return parts
+        return value
+
     @field_validator("cors_origins", "supabase_jwt_algorithms", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
@@ -141,6 +170,11 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Return True when running outside local development."""
         return self.environment.lower() in {"production", "prod"}
+
+    @property
+    def vision_providers(self) -> list[str]:
+        """Ordered image-text providers; an empty setting means "all known"."""
+        return self.vision_provider_order or list(KNOWN_VISION_PROVIDERS)
 
     @property
     def jwks_url(self) -> str | None:

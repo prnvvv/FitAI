@@ -23,6 +23,8 @@ class DocumentOut(BaseModel):
     status: DocumentStatus
     #: Short, human-readable failure reason. Never a traceback or file content.
     failure_reason: str | None = None
+    #: Short note for a successful-but-empty result (e.g. "No readable text found").
+    note: str | None = None
     content_hash: str | None = None
     created_at: dt.datetime
     updated_at: dt.datetime
@@ -34,6 +36,9 @@ class DocumentOut(BaseModel):
         """Build the response, exposing ``error_message`` as ``failure_reason``."""
         model = cls.model_validate(document)
         model.failure_reason = getattr(document, "error_message", None)
+        metadata = getattr(document, "ingestion_metadata", None) or {}
+        note = metadata.get("note") if isinstance(metadata, dict) else None
+        model.note = str(note) if note else None
         return model
 
 
