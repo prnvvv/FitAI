@@ -32,6 +32,7 @@ from app.models.enums import MemoryChangeType, MemoryKey, MessageRole
 from app.models.user import User
 from app.rag.retriever import Retriever
 from app.rag.vector_store import VectorStore
+from app.safety import run_safety_rules
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
 from app.services.profile_service import ProfileService
@@ -427,6 +428,9 @@ class ChatService:
         """
         extractor = self._extractor or self._build_extractor()
         if extractor is None:
+            return [], []
+        # Never feed unsafe/injection content to the extraction model.
+        if run_safety_rules(message).blocked:
             return [], []
         try:
             result = extractor.extract(message)
