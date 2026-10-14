@@ -1742,7 +1742,7 @@
 
 /* Memory */
 .memory__section {
-  margin-bottom: 24px;
+  margin-bottom: var(--space-6);
 }
 
 .page__alert {
@@ -1751,13 +1751,14 @@
   gap: 10px;
   margin: 0 16px 16px;
   padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
 }
 
 .page__alert--error {
   background-color: var(--error-bg);
   color: var(--error);
+  border: 1px solid var(--error-border);
 }
 
 .memory__list {
@@ -1775,13 +1776,19 @@
   gap: 12px;
   padding: 14px;
   border: 1px solid var(--divider);
-  border-radius: 10px;
-  background-color: var(--bg-composer);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.memory__item:hover {
+  border-color: var(--divider-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .memory__item--pending {
   border-color: var(--accent);
-  background-color: rgba(16, 163, 127, 0.05);
+  background-color: var(--accent-soft);
 }
 
 .memory__edit {
@@ -1796,10 +1803,10 @@
   min-width: 0;
   padding: 8px 10px;
   border: 1px solid var(--accent);
-  border-radius: 8px;
-  background-color: var(--bg-composer);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-input);
   color: var(--text-primary);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-lg);
   outline: none;
 }
 
@@ -1810,7 +1817,7 @@
 }
 
 .memory__key {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -1818,13 +1825,13 @@
 }
 
 .memory__value {
-  font-size: 1rem;
+  font-size: var(--font-size-xl);
   color: var(--text-primary);
   word-break: break-word;
 }
 
 .memory__meta {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   margin-top: 8px;
 }
@@ -1836,10 +1843,12 @@
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
 }
 
 .memory__delete:hover {
@@ -1848,7 +1857,7 @@
 }
 
 .memory__section-title {
-  font-size: 0.85rem;
+  font-size: var(--font-size-base);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1860,6 +1869,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .memory__approve {
@@ -1869,10 +1879,11 @@
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .memory__approve:hover {
@@ -1887,10 +1898,11 @@
   width: 32px;
   height: 32px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .memory__edit-btn:hover {
