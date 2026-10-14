@@ -172,11 +172,14 @@ def propose_actions_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     """
     if _blocked(state) or not state.get("user_id") or deps.action_writer is None:
         return {}
+    message = state.get("user_message", "")
+    from app.agent.proposals import looks_like_body_stats_query, looks_like_workout_log
+
+    if not (looks_like_workout_log(message) or looks_like_body_stats_query(message)):
+        return {}
     memory, errs = _load_memory(state, deps)
     profile = _load_profile(state, deps)
-    proposals = build_action_proposals(
-        state.get("user_message", ""), memory or {}, profile, deps.llm, deps.clock()
-    )
+    proposals = build_action_proposals(message, memory or {}, profile, deps.llm, deps.clock())
     if not proposals:
         return {"errors": errs} if errs else {}
 
