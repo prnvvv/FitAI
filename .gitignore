@@ -71,3 +71,5 @@ test_upload.sh
 test_full_flow.py
 test_workout.jpg
 test_workout.pdf
+ 
+TASK_LIST.md
