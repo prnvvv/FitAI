@@ -101,8 +101,10 @@ async function renderPlan(overrides: Record<string, unknown> = {}) {
 
 type Spy = ReturnType<typeof vi.fn>
 const callsOf = (spies: Record<string, unknown>, name: string) => (spies[name] as Spy).mock.calls
+const spiesOf = (spies: Record<string, unknown>): Spy[] =>
+  Object.values(spies).map((spy) => spy as Spy)
 const totalCalls = (spies: Record<string, unknown>) =>
-  Object.values(spies).reduce((n, spy) => n + (spy as Spy).mock.calls.length, 0)
+  spiesOf(spies).reduce((n, spy) => n + spy.mock.calls.length, 0)
 
 const WRITE_FNS = [
   'createWorkout',
