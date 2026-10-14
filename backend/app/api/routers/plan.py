@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import CurrentUser, DbSession
+from app.models.enums import ActivityEventType
 from app.schemas.common import Page
 from app.schemas.plan import (
     ApplyTemplateIn,
@@ -17,9 +18,18 @@ from app.schemas.plan import (
     PlannedSessionUpdate,
     TemplateOut,
 )
+from app.services.activity_event_service import ActivityEventService
 from app.services.plan_service import PlanService
 
 router = APIRouter(prefix="/plan", tags=["plan"])
+
+TEMPLATE_NAMES = {
+    "push_pull_legs": "Push / Pull / Legs",
+    "upper_lower": "Upper / Lower",
+    "full_body_3": "Full body 3-day",
+    "beginner_strength": "Beginner strength",
+    "walk_mobility": "Walk + mobility",
+}
 
 
 @router.get("/summary", response_model=list[DaySummaryOut])
@@ -51,6 +61,14 @@ def create_session(
         day_type=payload.day_type,
         notes=payload.notes,
         exercises=[e.model_dump() for e in payload.exercises],
+    )
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.SESSION_PLANNED,
+        entity_type="planned_session",
+        entity_id=str(session.id),
+        occurred_at=datetime.combine(payload.planned_date, time.min, tzinfo=timezone.utc),
+        payload={"day_type": payload.day_type, "exercise_count": len(payload.exercises)},
     )
     return PlannedSessionOut.model_validate(session)
 
@@ -94,6 +112,14 @@ def update_session(
         if payload.exercises is not None
         else None,
     )
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.PLAN_EDITED,
+        entity_type="planned_session",
+        entity_id=str(session.id),
+        occurred_at=datetime.combine(session.planned_date, time.min, tzinfo=timezone.utc),
+        payload={"fields": sorted(payload.model_fields_set)},
+    )
     return PlannedSessionOut.model_validate(session)
 
 
@@ -105,7 +131,15 @@ def complete_session(
 ) -> PlannedSessionOut:
     """Mark a planned session as completed (creates a logged workout)."""
     PlanService(db).mark_completed(session_id, current_user.id)
-    session = PlanService(db)._planned.get(session_id, current_user.id)
+    session = PlanService(db).get(session_id, current_user.id)
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.SESSION_COMPLETED,
+        entity_type="planned_session",
+        entity_id=str(session.id),
+        occurred_at=datetime.combine(session.planned_date, time.min, tzinfo=timezone.utc),
+        payload={"from_plan": True},
+    )
     return PlannedSessionOut.model_validate(session)
 
 
@@ -125,7 +159,7 @@ def delete_session(
 def list_templates() -> list[TemplateOut]:
     """Return available starter templates."""
     return [
-        TemplateOut(key=key, name=key.replace("_", " ").title(), days=days)
+        TemplateOut(key=key, name=TEMPLATE_NAMES.get(key, key.replace("_", " ").title()), days=days)
         for key, days in PlanService.list_templates().items()
     ]
 

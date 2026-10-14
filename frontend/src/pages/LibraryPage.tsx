@@ -1,7 +1,7 @@
-import { AlertCircle, FileText, Loader2, Trash2, Upload, X } from 'lucide-react'
+import { AlertCircle, FileText, Loader2, RefreshCw, Trash2, Upload, X } from 'lucide-react'
 import { useCallback, useEffect, useState, type ChangeEvent, type DragEvent } from 'react'
 import { api } from '../services/api'
-import { NetworkError } from '../services/api'
+import { toMessage } from '../services/api'
 import type { Document } from '../types'
 
 function formatStatus(status: string): string {
@@ -26,6 +26,7 @@ export function LibraryPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
   const load = useCallback(async () => {
@@ -35,27 +36,7 @@ export function LibraryPage() {
       const page = await api.listDocuments()
       setDocuments(page.items)
     } catch (err) {
-      let message = err instanceof NetworkError
-        ? 'The backend is unreachable. Check that the server is running, then retry.'
-        : err instanceof Error
-          ? err.message
-          : 'Could not load library'
-      try {
-        if (err instanceof Error && !(err instanceof NetworkError)) {
-          const m = err.message.match(/API error \d+:\s*(.+)/)
-          if (m?.[1]) {
-            message = m[1].replace(/^\{.*\}$/s, (raw) => {
-              try {
-                const parsed = JSON.parse(raw)
-                return parsed?.error?.message || parsed?.message || raw
-              } catch {
-                return raw
-              }
-            })
-          }
-        }
-      } catch {}
-      setError(message)
+      setError(toMessage(err, 'Your library could not be loaded.'))
     } finally {
       setLoading(false)
     }
@@ -72,23 +53,7 @@ export function LibraryPage() {
       await api.uploadDocument(file)
       await load()
     } catch (err) {
-      let message = err instanceof Error ? err.message : 'Upload failed'
-      try {
-        if (err instanceof Error) {
-          const m = err.message.match(/API error \d+:\s*(.+)/)
-          if (m?.[1]) {
-            message = m[1].replace(/^\{.*\}$/s, (raw) => {
-              try {
-                const parsed = JSON.parse(raw)
-                return parsed?.error?.message || parsed?.message || raw
-              } catch {
-                return raw
-              }
-            })
-          }
-        }
-      } catch {}
-      setError(message)
+      setError(toMessage(err, `“${file.name}” could not be uploaded. Try again.`))
     } finally {
       setUploading(false)
     }
@@ -109,13 +74,29 @@ export function LibraryPage() {
     await handleUpload(file)
   }
 
+  const handleRetry = async (id: string) => {
+    setBusyId(id)
+    setError(null)
+    try {
+      await api.retryDocument(id)
+      await load()
+    } catch (err) {
+      setError(toMessage(err, 'That file could not be reprocessed.'))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this item?')) return
+    setBusyId(id)
     try {
       await api.deleteDocument(id)
       setDocuments((prev) => prev.filter((d) => d.id !== id))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete')
+      setError(toMessage(err, 'That item could not be deleted.'))
+    } finally {
+      setBusyId(null)
     }
   }
 
@@ -134,7 +115,7 @@ export function LibraryPage() {
       </header>
 
       {error && (
-        <div className="page__alert page__alert--error">
+        <div className="page__alert page__alert--error" role="alert">
           <AlertCircle size={18} />
           <span>{error}</span>
           <button type="button" className="page__alert-action" onClick={load}>
@@ -183,17 +164,50 @@ export function LibraryPage() {
                   {doc.content_type} · {(doc.size_bytes / 1024).toFixed(1)} KB ·{' '}
                   {new Date(doc.created_at).toLocaleDateString()}
                 </div>
+                {doc.status === 'failed' && doc.error_message && (
+                  <p className="library__reason">{doc.error_message}</p>
+                )}
               </div>
               <span className={statusClass(doc.status)}>{formatStatus(doc.status)}</span>
-              <button
-                type="button"
-                className="library__delete"
-                onClick={() => handleDelete(doc.id)}
-                aria-label={`Delete ${doc.filename}`}
-              >
-                <Trash2 size={16} />
-              </button>
+              {doc.status === 'failed' && (
+                <>
+                  <button
+                    type="button"
+                    className="library__action"
+                    onClick={() => void handleRetry(doc.id)}
+                    disabled={busyId === doc.id}
+                  >
+                    {busyId === doc.id ? (
+                      <Loader2 className="page__spinner" size={16} />
+                    ) : (
+                      <RefreshCw size={16} />
+                    )}
+                    Retry
+                  </button>
+                  <button
+                    type="button"
+                    className="library__delete"
+                    onClick={() => void handleDelete(doc.id)}
+                    aria-label={`Delete ${doc.filename}`}
+                    disabled={busyId === doc.id}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </>
+              )}
+              {doc.status !== 'failed' && (
+                <button
+                  type="button"
+                  className="library__delete"
+                  onClick={() => void handleDelete(doc.id)}
+                  aria-label={`Delete ${doc.filename}`}
+                  disabled={busyId === doc.id}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
             </li>
+
           ))}
         </ul>
       )}

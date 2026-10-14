@@ -76,7 +76,7 @@ export function Sidebar({
       aria-expanded={open}
     >
       <div className="sidebar__header">
-        <span className="sidebar__brand">FitAI</span>
+        {open && <span className="sidebar__brand">FitAI</span>}
         <div className="sidebar__header-actions">
           <button
             type="button"

@@ -334,6 +334,13 @@ class PlanService:
 
         return [days[d] for d in sorted(days)]
 
+    def get(self, session_id: uuid.UUID, user_id: uuid.UUID) -> PlannedSession:
+        """Return one of the user's planned sessions or raise NotFoundError."""
+        session = self._planned.get(session_id, user_id)
+        if session is None:
+            raise NotFoundError("Planned session not found.")
+        return session
+
     def create_planned_session(
         self,
         user_id: uuid.UUID,

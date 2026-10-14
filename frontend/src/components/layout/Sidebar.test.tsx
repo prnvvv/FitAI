@@ -63,4 +63,43 @@ describe('Sidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
     expect(onNewChat).toHaveBeenCalledTimes(1)
   })
+
+  it('shows the wordmark only when expanded', () => {
+    const { unmount } = renderSidebar()
+    expect(screen.getByText('FitAI')).toBeInTheDocument()
+    unmount()
+
+    renderSidebar({ open: false })
+    expect(screen.queryByText('FitAI')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Open sidebar')).toBeInTheDocument()
+  })
+
+  it('keeps the collapsed rail icon-only on every route', () => {
+    for (const route of ['/plan', '/progress', '/library']) {
+      const view = render(
+        <MemoryRouter initialEntries={[route]}>
+          <AuthProvider>
+            <Sidebar
+              open={false}
+              onToggle={vi.fn()}
+              onClose={vi.fn()}
+              conversations={mockConversations}
+              selectedId={null}
+              loading={false}
+              error={null}
+              searchQuery=""
+              onSearchQueryChange={vi.fn()}
+              onSelectConversation={vi.fn()}
+              onNewChat={vi.fn()}
+              onRename={vi.fn()}
+              onDelete={vi.fn()}
+            />
+          </AuthProvider>
+        </MemoryRouter>,
+      )
+      const rail = view.container.querySelector('.sidebar') as HTMLElement
+      expect(rail.textContent).toBe('')
+      view.unmount()
+    }
+  })
 })

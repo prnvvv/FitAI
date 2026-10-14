@@ -79,7 +79,10 @@ export interface Document {
   content_type: string
   size_bytes: number
   status: string
+  error_message?: string | null
   created_at: string
+  completed_at?: string | null
+  failed_at?: string | null
 }
 
 export interface Memory {
@@ -191,4 +194,92 @@ export interface Measurement {
   measured_at: string
   notes: string | null
   created_at: string
+}
+
+export interface Exercise {
+  id: string
+  slug: string
+  name: string
+  primary_muscle_group: string | null
+  equipment: string | null
+  movement_type: string | null
+  unit_mode: string
+  is_custom: boolean
+}
+
+export interface PlannedExercise {
+  id: string
+  position: number
+  exercise_name: string
+  target_sets: number | null
+  target_reps: number | null
+  target_weight: number | null
+  target_weight_unit: string | null
+  duration_seconds: number | null
+  distance_meters: number | null
+  notes: string | null
+}
+
+export interface PlannedSession {
+  id: string
+  planned_date: string
+  title: string | null
+  day_type: string
+  status: string
+  completed_session_id: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+  exercises: PlannedExercise[]
+}
+
+export interface DaySummary {
+  date: string
+  planned_count: number
+  completed_count: number
+  day_type: string
+  has_meals: boolean
+}
+
+export interface Template {
+  key: string
+  name: string
+  days: Record<string, unknown>[]
+}
+
+export interface BmiPoint {
+  measured_at: string
+  value: number
+  unit: string
+  source: string
+  weight_kg: number
+  height_cm: number
+}
+
+export interface PersonalRecord {
+  exercise_name: string
+  weight: number
+  weight_unit: string | null
+  achieved_on: string
+}
+
+export interface WeeklySessions {
+  week_of: string
+  sessions: number
+}
+
+export interface DerivedMetrics {
+  window: Record<string, string>
+  sessions_completed: number
+  active_days: number
+  sessions_per_week: number
+  weekly_sessions: WeeklySessions[]
+  total_volume_kg: number
+  personal_records: PersonalRecord[]
+  current_streak_days: number
+  longest_streak_days: number
+  planned_sessions: number
+  planned_completed: number
+  planned_completion_rate: number | null
+  source: string
 }

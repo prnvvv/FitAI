@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError } from './api'
+import { api, ApiError, validationIssues } from './api'
 import type { Page, WorkoutSession } from '../types'
 
 vi.mock('./supabase', () => ({
@@ -11,11 +11,44 @@ vi.mock('./supabase', () => ({
 }))
 
 describe('ApiError', () => {
-  it('stores status and body', () => {
+  it('stores status and body and shows human copy', () => {
     const err = new ApiError(404, 'Not found')
     expect(err.status).toBe(404)
     expect(err.body).toBe('Not found')
-    expect(err.message).toContain('404')
+    expect(err.message).toBe("We couldn't find that.")
+  })
+
+  it('never leaks raw JSON to the user', () => {
+    const body = JSON.stringify({ error: { code: 'INTERNAL_ERROR', message: 'boom' } })
+    const err = new ApiError(500, body)
+    expect(err.message).not.toContain('{')
+    expect(err.message).toBe('Something went wrong on our side. Please try again.')
+  })
+
+  it('maps each failure class to a distinct message', () => {
+    expect(new ApiError(401, '').message).toMatch(/session has expired/)
+    expect(new ApiError(403, '').message).toMatch(/don't have access/)
+    expect(new ApiError(422, JSON.stringify({ detail: [{ loc: ['body', 'value'], msg: 'too small' }] })).message).toBe(
+      'too small',
+    )
+    expect(new ApiError(413, '').message).toMatch(/too large/)
+    expect(new ApiError(415, '').message).toMatch(/not supported/)
+  })
+
+  it('extracts field-level validation issues', () => {
+    const err = new ApiError(
+      422,
+      JSON.stringify({
+        detail: [
+          { loc: ['body', 'value'], msg: 'weight must be between 20 and 500 kg.' },
+          { loc: ['body', 'unit'], msg: 'wrong unit' },
+        ],
+      }),
+    )
+    expect(validationIssues(err)).toEqual([
+      { field: 'value', message: 'weight must be between 20 and 500 kg.' },
+      { field: 'unit', message: 'wrong unit' },
+    ])
   })
 })
 
