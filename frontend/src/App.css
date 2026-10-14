@@ -1247,12 +1247,14 @@
 
 .profile__location {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .profile__location input {
   flex: 1;
+  min-width: 200px;
 }
 
 .profile__location-btn {
@@ -1261,11 +1263,13 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--divider);
   background-color: var(--bg-composer);
   color: var(--text-secondary);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
 }
 
 .profile__location-btn:hover {
@@ -1280,9 +1284,10 @@
 
 .profile__hint {
   display: block;
-  margin-top: 4px;
-  font-size: 0.75rem;
+  margin-top: var(--space-1);
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
+  width: 100%;
 }
 
 /* Welcome screen */
@@ -1897,7 +1902,8 @@
 .profile__form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--space-5);
+  max-width: 640px;
 }
 
 .profile__avatar {
@@ -1909,20 +1915,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .profile__row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .profile__field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   color: var(--text-secondary);
 }
 
@@ -1931,12 +1937,13 @@
 .profile__field textarea {
   padding: 10px 12px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
-  background-color: var(--bg-composer);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-input);
   color: var(--text-primary);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-lg);
   outline: none;
   font-family: inherit;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .profile__field textarea {
@@ -1948,33 +1955,35 @@
 .profile__field select:focus,
 .profile__field textarea:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--focus-ring);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .profile__alert {
   padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
 }
 
 .profile__alert--error {
   background-color: var(--error-bg);
   color: var(--error);
+  border: 1px solid var(--error-border);
 }
 
 .profile__alert--success {
-  background-color: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
+  background-color: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success-border);
 }
 
 .profile__dirty {
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   color: var(--text-secondary);
 }
 
 .profile__actions {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .profile__save {
@@ -1984,14 +1993,15 @@
   gap: 8px;
   padding: 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background-color: var(--accent);
   color: white;
-  font-size: 0.9375rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   cursor: pointer;
   align-self: flex-start;
   min-width: 160px;
+  transition: background var(--transition-fast);
 }
 
 .profile__save:hover:not(:disabled) {
@@ -2010,12 +2020,13 @@
   gap: 8px;
   padding: 12px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background-color: transparent;
   color: var(--text-primary);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   cursor: pointer;
+  transition: background var(--transition-fast);
 }
 
 .profile__cancel:hover:not(:disabled) {
@@ -2171,10 +2182,6 @@
 
   .profile__row {
     grid-template-columns: 1fr;
-  }
-
-  .progress__stats {
-    grid-template-columns: 1fr 1fr;
   }
 
   .message__bubble {
