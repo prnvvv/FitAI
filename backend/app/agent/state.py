@@ -16,6 +16,7 @@ __all__ = ["AgentState", "SafetyResult"]
 class AgentState(TypedDict, total=False):
     user_message: str
     user_id: str  # authenticated ID, set by caller only
+    conversation_id: str  # conversation the turn belongs to, set by caller only
     conversation_context: list[dict[str, str]]  # [{"role","content"}, ...]
     retrieved_memory: dict[str, MemoryEntry]
     retrieved_profile: dict[str, object] | None  # pinned core memory from user profile

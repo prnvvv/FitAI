@@ -17,11 +17,14 @@ from app.models.enums import (
     MemoryKey,
     MemoryStatus,
     MessageRole,
+    PendingActionStatus,
+    PendingActionType,
     PendingUpdateStatus,
     WeightUnit,
 )
 from app.models.measurement import Measurement
 from app.models.memory import Memory, MemoryHistory
+from app.models.pending_action import PendingChatAction
 from app.models.pending_update import PendingMemoryUpdate
 from app.models.profile import Profile
 from app.models.user import User
@@ -44,6 +47,9 @@ __all__ = [
     "MemoryStatus",
     "Message",
     "MessageRole",
+    "PendingActionStatus",
+    "PendingActionType",
+    "PendingChatAction",
     "PendingMemoryUpdate",
     "PendingUpdateStatus",
     "Profile",

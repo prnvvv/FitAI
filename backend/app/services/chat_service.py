@@ -9,17 +9,27 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.agent import AgentDeps, MemoryReader, ProfileReader, build_graph, run_turn
+from app.agent import (
+    ActionProposal,
+    ActionWriter,
+    AgentDeps,
+    MemoryReader,
+    ProfileReader,
+    build_graph,
+    run_turn,
+)
 from app.agent.multi import run_multi_turn
 from app.core.config import settings
 from app.llm.client import GroqClient
 from app.memory.change_detector import DetectedChange, MemoryEntry
 from app.memory.confirmation import Decision, MemoryWriter
 from app.memory.history import HistoryRecord
+from app.models.conversation import Message
 from app.models.enums import MemoryKey, MessageRole
 from app.models.user import User
 from app.rag.retriever import Retriever
 from app.rag.vector_store import VectorStore
+from app.services.chat_action_service import ChatActionService
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
 from app.services.profile_service import ProfileService
@@ -151,6 +161,28 @@ class _MemoryWriterAdapter(MemoryWriter):
         return True
 
 
+class _ActionWriterAdapter(ActionWriter):
+    """Adapt ChatActionService to the agent's ActionWriter protocol."""
+
+    def __init__(self, db: Session, user_id: UUID, conversation_id: UUID) -> None:
+        self._service = ChatActionService(db)
+        self._user_id = user_id
+        self._conversation_id = conversation_id
+
+    def create(self, user_id: str, proposal: ActionProposal) -> str | None:
+        try:
+            action = self._service.propose(
+                self._user_id,
+                self._conversation_id,
+                proposal.action_type,
+                proposal.payload,
+                proposal.summary,
+            )
+            return str(action.id)
+        except Exception:
+            return None
+
+
 def _title_from_message(message: str) -> str:
     return message.strip().split("\n")[0][:50] or "New chat"
 
@@ -190,16 +222,21 @@ class ChatService:
             retriever=retriever,
             tools={"web_search": web_search, "nearby_gyms": nearby_gyms},
             db_session=self._db,
+            action_writer=_ActionWriterAdapter(self._db, user_id, conversation_id),
         )
 
         messages = self._conversations.list_recent_messages(user_id, conversation_id, limit=20)
         context = [{"role": msg.role.value, "content": msg.content} for msg in messages]
 
         if settings.agent_multi_agent:
-            turn = run_multi_turn(graph_deps, str(user_id), message, context)
+            turn = run_multi_turn(
+                graph_deps, str(user_id), message, context, conversation_id=str(conversation_id)
+            )
         else:
             graph = build_graph(graph_deps)
-            turn = run_turn(graph, str(user_id), message, context)
+            turn = run_turn(
+                graph, str(user_id), message, context, conversation_id=str(conversation_id)
+            )
         response = turn["response"]
 
         metadata = {
@@ -219,6 +256,20 @@ class ChatService:
             "actions": metadata["actions"],
             "tool_events": metadata["tool_events"],
         }
+
+    def confirm_action(self, user: User, action_id: UUID) -> Message:
+        """Execute a pending chat action and append the assistant's reply."""
+        conversation_id, content, metadata = ChatActionService(self._db).confirm(user.id, action_id)
+        return self._conversations.add_message(
+            user.id, conversation_id, MessageRole.ASSISTANT, content, metadata=metadata or None
+        )
+
+    def reject_action(self, user: User, action_id: UUID) -> Message:
+        """Decline a pending chat action and append the assistant's reply."""
+        conversation_id, content, metadata = ChatActionService(self._db).reject(user.id, action_id)
+        return self._conversations.add_message(
+            user.id, conversation_id, MessageRole.ASSISTANT, content, metadata=metadata or None
+        )
 
     @staticmethod
     def _build_llm() -> GroqClient:

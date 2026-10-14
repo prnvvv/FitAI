@@ -353,6 +353,7 @@ def run_multi_turn(
     user_id: str,
     message: str,
     context: list[dict[str, str]] | None = None,
+    conversation_id: str | None = None,
 ) -> dict[str, Any]:
     """Run one turn through the multi-agent orchestrator.
 
@@ -366,6 +367,7 @@ def run_multi_turn(
         out: dict[str, Any] = graph.invoke(
             {
                 "user_id": user_id,
+                "conversation_id": conversation_id or "",
                 "user_message": message,
                 "conversation_context": context or [],
                 "tool_results": [],
@@ -380,10 +382,10 @@ def run_multi_turn(
         )
     except Exception as exc:
         log.warning("multi-agent graph failed, falling back to single agent: %s", exc)
-        return run_turn(build_graph(deps), user_id, message, context)
+        return run_turn(build_graph(deps), user_id, message, context, conversation_id)
 
     if out.get("route") == "personal":
-        return run_turn(build_graph(deps), user_id, message, context)
+        return run_turn(build_graph(deps), user_id, message, context, conversation_id)
 
     tool_results = list(out.get("tool_results", []))
     tool_results.append({"tool": "multi_agent", "route": out.get("route")})

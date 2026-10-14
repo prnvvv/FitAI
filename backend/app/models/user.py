@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from app.models.document import Document
     from app.models.measurement import Measurement
     from app.models.memory import Memory, MemoryHistory
+    from app.models.pending_action import PendingChatAction
     from app.models.pending_update import PendingMemoryUpdate
     from app.models.profile import Profile
     from app.models.workout import WorkoutSession
@@ -57,6 +58,11 @@ class User(Base, TimestampMixin):
         passive_deletes=True,
     )
     pending_updates: Mapped[list[PendingMemoryUpdate]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    pending_actions: Mapped[list[PendingChatAction]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
         passive_deletes=True,

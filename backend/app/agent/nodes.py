@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol
 
+from app.agent.proposals import ActionProposal, build_action_proposals
 from app.core.config import settings
 from app.llm.prompts import RESPONSE_GENERATION
 from app.memory.change_detector import MemoryEntry, detect_changes
@@ -62,6 +63,12 @@ class Tool(Protocol):
     def __call__(self, *args: Any, **kwargs: Any) -> dict[str, Any]: ...
 
 
+class ActionWriter(Protocol):
+    """Persists a confirmable action proposal. Returns its id once committed."""
+
+    def create(self, user_id: str, proposal: ActionProposal) -> str | None: ...
+
+
 @dataclass
 class AgentDeps:
     llm: TextCompleter
@@ -73,6 +80,7 @@ class AgentDeps:
     db_session: object | None = None
     policy: ConfirmationPolicy = dc_field(default_factory=ConfirmationPolicy)
     clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
+    action_writer: ActionWriter | None = None
 
 
 # ---- heuristics (cheap routing; no LLM call) --------------------------------
@@ -141,6 +149,70 @@ def safe_response(state: AgentState) -> dict[str, Any]:
 def _blocked(state: AgentState) -> bool:
     s = state.get("safety")
     return s is None or s.blocked  # fail closed: no safety result => no tools
+
+
+# ---- confirmable action proposals ---------------------------------------------
+_ACTION_TITLES: dict[str, str] = {
+    "log_workout": "Add to calendar",
+    "use_measurements": "Use saved height/weight",
+}
+
+
+def _confirmation_text(actions: list[dict[str, Any]]) -> str:
+    lines = ["Just confirm and I'll take care of it:"]
+    lines.extend(f"- {a.get('summary') or a.get('description', '')}" for a in actions)
+    return "\n".join(lines)
+
+
+def propose_actions_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
+    """Detect confirmable actions and propose them instead of answering directly.
+
+    When at least one action is proposed the graph stops here so the user can
+    confirm or dismiss it before anything is executed.
+    """
+    if _blocked(state) or not state.get("user_id") or deps.action_writer is None:
+        return {}
+    memory, errs = _load_memory(state, deps)
+    profile = _load_profile(state, deps)
+    proposals = build_action_proposals(
+        state.get("user_message", ""), memory or {}, profile, deps.llm, deps.clock()
+    )
+    if not proposals:
+        return {"errors": errs} if errs else {}
+
+    actions: list[dict[str, Any]] = []
+    tool_results: list[dict[str, Any]] = []
+    for proposal in proposals:
+        action_id = deps.action_writer.create(state["user_id"], proposal)
+        if not action_id:
+            continue
+        actions.append(
+            {
+                "type": proposal.action_type.value,
+                "proposal_id": action_id,
+                "summary": proposal.summary,
+                "title": _ACTION_TITLES.get(proposal.action_type.value, "Confirm action"),
+                "description": proposal.summary,
+            }
+        )
+        tool_results.append(
+            {
+                "tool": "action_proposal",
+                "type": proposal.action_type.value,
+                "action_id": action_id,
+            }
+        )
+
+    if not actions:
+        return {"errors": errs} if errs else {}
+    out: dict[str, Any] = {
+        "response": _confirmation_text(actions),
+        "actions": actions,
+        "tool_results": tool_results,
+    }
+    if errs:
+        out["errors"] = errs
+    return out
 
 
 # ---- memory pipeline ------------------------------------------------------------

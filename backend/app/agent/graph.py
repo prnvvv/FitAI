@@ -1,6 +1,7 @@
 """LangGraph workflow.
 
 safety_check -> blocked: safe_response -> END   (no tool/memory node is reachable)
+             -> propose_actions: when a confirmable action is detected -> END
              -> personal statement: extract_facts -> detect_changes -> apply_updates
              -> question: retrieve_context -> generate_response
              -> otherwise: generate_response
@@ -30,6 +31,7 @@ from .nodes import (  # noqa: E402
     generate_response,
     looks_like_question,
     looks_personal,
+    propose_actions_node,
     retrieve_context_node,
     safe_response,
     safety_check,
@@ -41,6 +43,12 @@ def route_after_safety(state: AgentState) -> str:
     s = state.get("safety")
     if s is None or s.blocked:
         return "safe_response"
+    return "propose_actions"
+
+
+def route_after_proposals(state: AgentState) -> str:
+    if state.get("actions"):
+        return "end"
     msg = state.get("user_message", "")
     if looks_personal(msg):
         return "extract_facts"
@@ -79,6 +87,7 @@ def build_graph(deps: AgentDeps) -> Any:
     g = StateGraph(AgentState)
     g.add_node("safety_check", safety_check)
     g.add_node("safe_response", safe_response)
+    g.add_node("propose_actions", _bind(propose_actions_node, deps))
     g.add_node("extract_facts", _bind(extract_facts_node, deps))
     g.add_node("detect_changes", _bind(detect_changes_node, deps))
     g.add_node("apply_updates", _bind(apply_updates_node, deps))
@@ -89,7 +98,17 @@ def build_graph(deps: AgentDeps) -> Any:
     g.add_conditional_edges(
         "safety_check",
         route_after_safety,
-        ["safe_response", "extract_facts", "retrieve_context", "generate_response"],
+        ["safe_response", "propose_actions"],
+    )
+    g.add_conditional_edges(
+        "propose_actions",
+        route_after_proposals,
+        {
+            "end": END,
+            "extract_facts": "extract_facts",
+            "retrieve_context": "retrieve_context",
+            "generate_response": "generate_response",
+        },
     )
     g.add_conditional_edges(
         "extract_facts",
@@ -111,12 +130,17 @@ def build_graph(deps: AgentDeps) -> Any:
 
 
 def run_turn(
-    graph: Any, user_id: str, message: str, context: list[dict[str, str]] | None = None
+    graph: Any,
+    user_id: str,
+    message: str,
+    context: list[dict[str, str]] | None = None,
+    conversation_id: str | None = None,
 ) -> dict[str, Any]:
     """Run one turn. `user_id` must come from authentication, never from the message."""
     out: dict[str, Any] = graph.invoke(
         {
             "user_id": user_id,
+            "conversation_id": conversation_id or "",
             "user_message": message,
             "conversation_context": context or [],
             "tool_results": [],

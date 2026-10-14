@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.schemas.conversation import MessageOut
+
 
 class ChatRequest(BaseModel):
     """Payload for sending a message to FitAI."""
@@ -44,3 +46,9 @@ class ChatResponse(BaseModel):
     sources: list[Source] = Field(default_factory=list)
     actions: list[Action] = Field(default_factory=list)
     tool_events: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ChatActionResolution(BaseModel):
+    """The assistant message produced after confirming or rejecting an action."""
+
+    message: MessageOut

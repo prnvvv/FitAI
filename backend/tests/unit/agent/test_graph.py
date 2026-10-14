@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from app.agent.graph import (
     route_after_detect,
     route_after_extract,
+    route_after_proposals,
     route_after_safety,
     route_after_updates,
 )
@@ -34,19 +35,29 @@ def test_route_after_safety_blocked() -> None:
     assert route_after_safety(state) == "safe_response"
 
 
-def test_route_after_safety_personal() -> None:
+def test_route_after_safety_proposes_actions() -> None:
     state: AgentState = {"safety": SafetyResult(), "user_message": "I weigh 70 kg"}
-    assert route_after_safety(state) == "extract_facts"
+    assert route_after_safety(state) == "propose_actions"
 
 
-def test_route_after_safety_question() -> None:
-    state: AgentState = {"safety": SafetyResult(), "user_message": "How much protein?"}
-    assert route_after_safety(state) == "retrieve_context"
+def test_route_after_proposals_with_action_ends() -> None:
+    state: AgentState = {"user_message": "I weigh 70 kg", "actions": [{"type": "log_workout"}]}
+    assert route_after_proposals(state) == "end"
 
 
-def test_route_after_safety_otherwise() -> None:
-    state: AgentState = {"safety": SafetyResult(), "user_message": "Hello"}
-    assert route_after_safety(state) == "generate_response"
+def test_route_after_proposals_personal() -> None:
+    state: AgentState = {"user_message": "I weigh 70 kg"}
+    assert route_after_proposals(state) == "extract_facts"
+
+
+def test_route_after_proposals_question() -> None:
+    state: AgentState = {"user_message": "How much protein?"}
+    assert route_after_proposals(state) == "retrieve_context"
+
+
+def test_route_after_proposals_otherwise() -> None:
+    state: AgentState = {"user_message": "Hello"}
+    assert route_after_proposals(state) == "generate_response"
 
 
 def test_route_after_extract_with_facts() -> None:

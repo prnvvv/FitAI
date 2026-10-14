@@ -82,6 +82,22 @@ class PendingUpdateStatus(str, enum.Enum):
     EXPIRED = "expired"
 
 
+class PendingActionType(str, enum.Enum):
+    """Kinds of user-confirmable action proposed during a chat turn."""
+
+    LOG_WORKOUT = "log_workout"
+    USE_MEASUREMENTS = "use_measurements"
+
+
+class PendingActionStatus(str, enum.Enum):
+    """Lifecycle state of a pending chat action."""
+
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+
+
 class DocumentStatus(str, enum.Enum):
     """Processing state of an uploaded document.
 

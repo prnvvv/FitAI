@@ -202,7 +202,9 @@ def test_run_multi_turn_falls_back_to_single_agent_for_personal(deps, monkeypatc
 
     monkeypatch.setattr("app.agent.multi.graph.build_multi_graph", fake_graph)
     monkeypatch.setattr("app.agent.graph.build_graph", lambda _deps: MagicMock())
-    monkeypatch.setattr("app.agent.graph.run_turn", lambda _g, _uid, _msg, _ctx: single_result)
+    monkeypatch.setattr(
+        "app.agent.graph.run_turn", lambda _g, _uid, _msg, _ctx, _cid=None: single_result
+    )
 
     result = run_multi_turn(deps, "u1", "I weigh 80 kg")
     assert result["response"] == "got it"
