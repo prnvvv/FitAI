@@ -12,6 +12,7 @@ interface MessageListProps {
   messages: Message[]
   loading?: boolean
   activity?: ActivityEvent[]
+  onReply?: (message: Message) => void
 }
 
 function activityLabel(activity: ActivityEvent[]): string {
@@ -22,7 +23,7 @@ function activityLabel(activity: ActivityEvent[]): string {
   return 'Thinking…'
 }
 
-export function MessageList({ messages, loading, activity = [] }: MessageListProps) {
+export function MessageList({ messages, loading, activity = [], onReply }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [autoScroll, setAutoScroll] = useState(true)
@@ -50,7 +51,7 @@ export function MessageList({ messages, loading, activity = [] }: MessageListPro
     <div ref={containerRef} className="message-list" aria-live="polite" aria-atomic="false">
       <div className="message-list__inner">
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble key={message.id} message={message} onReply={onReply} />
         ))}
         {loading && (
           <div className="message message--assistant">

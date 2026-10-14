@@ -1,4 +1,5 @@
 import type {
+  ChatActionResolution,
   ChatRequest,
   ChatResponse,
   Conversation,
@@ -151,6 +152,10 @@ export const api = {
       body: JSON.stringify(payload),
       timeoutMs: CHAT_TIMEOUT_MS,
     }),
+  confirmChatAction: (id: string) =>
+    fetchApi<ChatActionResolution>(`/chat/actions/${id}/confirm`, { method: 'POST' }),
+  rejectChatAction: (id: string) =>
+    fetchApi<ChatActionResolution>(`/chat/actions/${id}/reject`, { method: 'POST' }),
 
   // Documents
   listDocuments: (limit = 50, offset = 0) =>

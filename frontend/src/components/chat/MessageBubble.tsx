@@ -1,15 +1,35 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Check, Copy, Database, Sparkles, Wrench, X, AlertCircle, ExternalLink } from 'lucide-react'
+import {
+  Check,
+  Copy,
+  Database,
+  Sparkles,
+  Wrench,
+  X,
+  AlertCircle,
+  Calendar,
+  ExternalLink,
+  Ruler,
+} from 'lucide-react'
 import { api } from '../../services/api'
 import type { ActionItem, Message, Source, ToolEvent } from '../../types'
 
+const CONFIRMABLE_ACTION_TYPES = new Set([
+  'memory_confirm',
+  'log_workout',
+  'use_measurements',
+])
+
+const CHAT_ACTION_TYPES = new Set(['log_workout', 'use_measurements'])
+
 interface MessageBubbleProps {
   message: Message
+  onReply?: (message: Message) => void
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onReply }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false)
   const [resolvedActions, setResolvedActions] = useState<Set<string>>(new Set())
   const [actionError, setActionError] = useState<string | null>(null)
@@ -29,9 +49,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     if (!action.proposal_id) return
     setActionError(null)
     try {
-      await api.confirmMemoryUpdate(action.proposal_id)
+      if (CHAT_ACTION_TYPES.has(action.type)) {
+        const result = await api.confirmChatAction(action.proposal_id)
+        onReply?.(result.message)
+      } else {
+        await api.confirmMemoryUpdate(action.proposal_id)
+      }
       setResolvedActions((prev) => new Set(prev).add(action.proposal_id!))
-    } catch (err) {
+    } catch {
       setActionError('Could not confirm. Please try again.')
     }
   }
@@ -40,11 +65,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     if (!action.proposal_id) return
     setActionError(null)
     try {
-      await api.rejectMemoryUpdate(action.proposal_id)
+      if (CHAT_ACTION_TYPES.has(action.type)) {
+        const result = await api.rejectChatAction(action.proposal_id)
+        onReply?.(result.message)
+      } else {
+        await api.rejectMemoryUpdate(action.proposal_id)
+      }
       setResolvedActions((prev) => new Set(prev).add(action.proposal_id!))
-    } catch (err) {
+    } catch {
       setActionError('Could not dismiss. Please try again.')
     }
+  }
+
+  const actionIcon = (action: ActionItem) => {
+    if (action.type === 'log_workout') return <Calendar size={14} />
+    if (action.type === 'use_measurements') return <Ruler size={14} />
+    return <AlertCircle size={14} />
   }
 
   // Transform inline [1], [2] markers into markdown links that our custom
@@ -172,13 +208,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {!isUser && actions.length > 0 && (
         <div className="message__actions-row">
           {actions.map((action) => {
-            if (action.type !== 'memory_confirm' || !action.proposal_id) return null
+            if (!action.proposal_id || !CONFIRMABLE_ACTION_TYPES.has(action.type)) return null
             if (resolvedActions.has(action.proposal_id)) return null
             return (
               <div key={action.proposal_id} className="message__action-card">
-                <div className="message__action-card-icon">
-                  <AlertCircle size={14} />
-                </div>
+                <div className="message__action-card-icon">{actionIcon(action)}</div>
                 <div className="message__action-card-body">
                   <div className="message__action-card-title">{action.title}</div>
                   <div className="message__action-card-desc">{action.description}</div>

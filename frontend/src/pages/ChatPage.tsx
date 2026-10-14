@@ -120,6 +120,10 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
     [conversationId, navigate, onConversationCreated, streaming],
   )
 
+  const handleReply = useCallback((message: Message) => {
+    setMessages((prev) => [...prev, message])
+  }, [])
+
   const hasMessages = messages.length > 0
 
   return (
@@ -127,7 +131,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
       {!hasMessages && !loading && !error ? (
         <WelcomeScreen onSuggestion={(text) => handleSend(text, [])} />
       ) : (
-        <MessageList messages={messages} loading={streaming} />
+        <MessageList messages={messages} loading={streaming} onReply={handleReply} />
       )}
       {error && (
         <div className="chat-page__error" role="alert">

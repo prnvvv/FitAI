@@ -57,6 +57,10 @@ export interface ChatResponse {
   tool_events?: ToolEvent[]
 }
 
+export interface ChatActionResolution {
+  message: Message
+}
+
 export interface ToolEvent {
   tool: string
   status?: string
