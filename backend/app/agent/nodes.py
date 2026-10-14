@@ -55,6 +55,14 @@ class Retriever(Protocol):
     def search(self, query: str, user_id: str, k: int = 4) -> list[str]: ...
 
 
+class FitnessReader(Protocol):
+    """Read-only view of the user's real workout plans, completed sessions and
+    progress measurements. Returns a bounded, JSON-serialisable summary built
+    from authoritative persisted records (never fabricated)."""
+
+    def get_fitness_context(self, user_id: str) -> dict[str, Any]: ...
+
+
 class Tool(Protocol):
     """A callable research tool returning a JSON-serialisable result dict."""
 
@@ -68,6 +76,7 @@ class AgentDeps:
     memory_writer: MemoryWriter
     profile_reader: ProfileReader | None = None
     retriever: Retriever | None = None
+    fitness_reader: FitnessReader | None = None
     tools: Mapping[str, Tool] = dc_field(default_factory=dict)
     db_session: object | None = None
     policy: ConfirmationPolicy = dc_field(default_factory=ConfirmationPolicy)
@@ -125,6 +134,24 @@ def _select_tools(msg: str) -> list[str]:
         # explicitly gym-location questions.
         selected.append("web_search")
     return selected
+
+
+# Prompt the agent to pull the user's OWN persisted training/progress records
+# (authoritative DB rows) when the question is about that data. Kept separate
+# from activity_log (a short event feed) and from web search.
+_FITNESS_CONTEXT_INTENT = re.compile(
+    r"\b(workouts?|training|exercises?|sets?|reps?|volume|personal records?|\bPRs?\b|"
+    r"progress|towards|weight|lost|gained|losing|gaining|trend|measurements?|waist|"
+    r"body ?fat|bmi|consistency|streak|plan)\b|"
+    r"\bhow (am i|have i been|have i been doing|'?m i doing|'?s my (progress|training))\b|"
+    r"\bmy (week|training|progress|fitness|gains|plan)\b",
+    re.I,
+)
+
+
+def wants_fitness_context(msg: str) -> bool:
+    """True when the question should be grounded in the user's own records."""
+    return bool(_FITNESS_CONTEXT_INTENT.search(msg))
 
 
 # ---- safety -------------------------------------------------------------------
@@ -223,6 +250,14 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         except Exception as exc:
             errs.append(f"retriever: {type(exc).__name__}")
 
+    if wants_fitness_context(state["user_message"]) and deps.fitness_reader is not None:
+        try:
+            result = deps.fitness_reader.get_fitness_context(state["user_id"])
+            tool_results.append({"tool": "fitness_context", "result": result})
+        except Exception as exc:
+            log.warning("fitness context failed: %s", exc)
+            errs.append(f"fitness_context: {type(exc).__name__}")
+
     for tool_name in _select_tools(state["user_message"]):
         if tool_name == "activity_log":
             try:
@@ -302,6 +337,73 @@ def _build_sources(tool_results: list[dict[str, Any]]) -> list[dict[str, str]]:
     return unique
 
 
+def _format_fitness_context(result: dict[str, Any]) -> list[str]:
+    """Render the user's real training/progress summary into prompt lines."""
+    out: list[str] = []
+    totals = result.get("totals", {}) or {}
+    if totals:
+        sessions = totals.get("sessions_completed")
+        active_days = totals.get("active_days")
+        per_week = totals.get("sessions_per_week")
+        out.append(
+            f"- Completed sessions: {sessions} over {active_days} active days"
+            f" (~{per_week}/week)."
+        )
+        planned = totals.get("planned_sessions")
+        if planned:
+            done = totals.get("planned_completed")
+            rate = totals.get("planned_completion_rate")
+            pct = f"{round(rate * 100)}%" if isinstance(rate, int | float) else "n/a"
+            out.append(f"- Planned vs completed: {done}/{planned} ({pct}).")
+        if totals.get("current_streak_days"):
+            out.append(f"- Current training streak: {totals['current_streak_days']} day(s).")
+
+    weight = result.get("weight", {}) or {}
+    points = weight.get("points", 0) or 0
+    if points >= 2:
+        first, latest = weight["first"], weight["latest"]
+        out.append(
+            f"- Weight trend: {first['value']} kg ({first['date']}) -> "
+            f"{latest['value']} kg ({latest['date']}); change {weight['change']:+} kg "
+            f"across {points} recorded weigh-ins."
+        )
+    elif points == 1:
+        latest = weight["latest"]
+        out.append(
+            f"- Weight: one recorded entry, {latest['value']} kg on {latest['date']} "
+            "(a trend needs 2+ dated entries)."
+        )
+
+    records = result.get("personal_records", []) or []
+    if records:
+        pretty = ", ".join(
+            f"{r.get('exercise')} {r.get('weight')}{r.get('unit') or 'kg'} ({r.get('on')})"
+            for r in records[:8]
+        )
+        out.append(f"- Heaviest recorded lifts: {pretty}.")
+
+    recent = result.get("recent_sessions", []) or []
+    if recent:
+        out.append("- Most recent sessions:")
+        for s in recent[:8]:
+            exercises = ", ".join(s.get("exercises", [])[:6]) or "no exercises logged"
+            top = s.get("top") or {}
+            best = (
+                f"; best {top.get('exercise')} {top.get('weight')}"
+                f"{top.get('unit') or 'kg'}x{top.get('reps')}"
+                if top
+                else ""
+            )
+            out.append(
+                f"    {s.get('date')}: {s.get('name') or 'session'} - "
+                f"{s.get('sets')} sets ({exercises}){best}"
+            )
+
+    if not out:
+        out.append("- No logged training or progress records for this period.")
+    return out
+
+
 def _format_tool_context(tool_results: list[dict[str, Any]], sources: list[dict[str, str]]) -> str:
     lines: list[str] = []
     for r in tool_results:
@@ -319,6 +421,13 @@ def _format_tool_context(tool_results: list[dict[str, Any]], sources: list[dict[
                 lines.append("Recent activity:")
                 for event in result["events"][:15]:
                     lines.append(f"- {event.get('occurred_at', '')}: {event.get('type', '')}")
+        elif tool == "fitness_context":
+            result = r.get("result", {}) or {}
+            if result.get("error"):
+                lines.append(f"Training/progress data: {result['error']}")
+            else:
+                lines.append("Your training and progress records (authoritative log):")
+                lines.extend(_format_fitness_context(result))
 
     if sources:
         lines.append("Sources (cite using [1], [2], etc.):")

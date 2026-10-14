@@ -55,6 +55,38 @@ class MemoryService:
         """Return a page of the user's memory history."""
         return self._memory.list_history(user_id, limit=limit, offset=offset)
 
+    def record_history(
+        self,
+        user_id: UUID,
+        key: MemoryKey,
+        *,
+        change_type: MemoryChangeType,
+        previous_value: object | None,
+        new_value: object,
+        confidence: Decimal | None = None,
+        source: str | None = None,
+        effective_at: datetime | None = None,
+    ) -> None:
+        """Append a single immutable history row and commit.
+
+        Used for dated historical events that must be preserved without
+        changing the current memory value (e.g. "I weighed 80 kg last year").
+        The appended row is not linked to a current memory (``memory_id`` NULL),
+        so it survives even if that memory is later deleted.
+        """
+        self._memory.add_history(
+            user_id,
+            None,
+            key,
+            change_type,
+            previous_value=previous_value,
+            new_value=new_value,
+            confidence=confidence,
+            source=source,
+            effective_at=effective_at,
+        )
+        self._commit()
+
     def correct(self, memory_id: UUID, user_id: UUID, new_value: object) -> Memory:
         """Apply a direct user correction to an accepted memory.
 

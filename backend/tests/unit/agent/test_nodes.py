@@ -168,3 +168,117 @@ def test_generate_response_uses_tool_loop_when_available(
     assert result["response"] == "tool-loop answer"
     assert llm.tools_passed is not None
     assert any(t["function"]["name"] == "nearby_gyms" for t in llm.tools_passed)
+
+
+# ---- workout/progress context wiring -----------------------------------------
+
+
+class _FakeFitnessReader:
+    """Stub fitness reader that records calls and returns a fixed summary."""
+
+    def __init__(self, context: dict[str, Any] | None = None) -> None:
+        self.context = context or {}
+        self.calls: list[str] = []
+
+    def get_fitness_context(self, user_id: str) -> dict[str, Any]:
+        self.calls.append(user_id)
+        return self.context
+
+
+def _fitness_deps(
+    fake_memory_reader: Any, fake_memory_writer: Any, fitness_reader: Any
+) -> AgentDeps:
+    return AgentDeps(
+        llm=None,
+        memory_reader=fake_memory_reader,
+        memory_writer=fake_memory_writer,
+        fitness_reader=fitness_reader,
+        clock=lambda: datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+    )
+
+
+def test_retrieve_context_node_loads_fitness_context(
+    fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    reader = _FakeFitnessReader({"totals": {"sessions_completed": 4}, "weight": {"points": 3}})
+    state: AgentState = {
+        "user_message": "How has my training progress been lately?",
+        "user_id": "user-1",
+        "safety": SafetyResult(),
+    }
+    result = retrieve_context_node(
+        state, _fitness_deps(fake_memory_reader, fake_memory_writer, reader)
+    )
+    assert reader.calls == ["user-1"]
+    assert any(r.get("tool") == "fitness_context" for r in result["tool_results"])
+
+
+def test_retrieve_context_node_skips_fitness_when_not_relevant(
+    fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    reader = _FakeFitnessReader()
+    state: AgentState = {
+        "user_message": "How much protein do I need per meal?",
+        "user_id": "user-1",
+        "safety": SafetyResult(),
+    }
+    result = retrieve_context_node(
+        state, _fitness_deps(fake_memory_reader, fake_memory_writer, reader)
+    )
+    assert reader.calls == []
+    assert all(r.get("tool") != "fitness_context" for r in result.get("tool_results", []))
+
+
+def test_generate_response_includes_fitness_context(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    fake_llm.response = "Based on your log, you completed four sessions."
+    state: AgentState = {
+        "user_message": "How has my progress been?",
+        "conversation_context": [],
+        "tool_results": [
+            {
+                "tool": "fitness_context",
+                "result": {
+                    "window_days": 120,
+                    "totals": {
+                        "sessions_completed": 4,
+                        "active_days": 4,
+                        "sessions_per_week": 1.0,
+                        "current_streak_days": 2,
+                        "planned_sessions": 6,
+                        "planned_completed": 4,
+                        "planned_completion_rate": 0.67,
+                    },
+                    "weight": {
+                        "points": 3,
+                        "unit": "kg",
+                        "first": {"date": "2026-07-01", "value": 82.0},
+                        "latest": {"date": "2026-09-30", "value": 78.0},
+                        "change": -4.0,
+                    },
+                    "recent_sessions": [
+                        {
+                            "date": "2026-09-20",
+                            "name": "Push",
+                            "duration_min": 45,
+                            "sets": 9,
+                            "exercises": ["bench", "overhead press"],
+                            "top": {"exercise": "bench", "weight": 80, "unit": "kg", "reps": 5},
+                        }
+                    ],
+                    "personal_records": [
+                        {"exercise": "bench", "weight": 80, "unit": "kg", "on": "2026-09-20"}
+                    ],
+                },
+            }
+        ],
+        "errors": [],
+    }
+    deps = _deps(fake_llm, fake_memory_reader, fake_memory_writer)
+    result = generate_response(state, deps)
+    assert result["response"].startswith("Based on your log")
+    prompt = fake_llm.calls[-1][1]
+    assert "training and progress records" in prompt
+    assert "Weight trend" in prompt
+    assert "Most recent sessions" in prompt
