@@ -109,14 +109,49 @@ ruff format --check app tests
 mypy app
 ```
 
-## 7. Known decisions / open items
+## 7. Library index audit
+
+Reconcile the `documents` table against the ChromaDB index (read-only by
+default; exits non-zero when anything is not `OK`):
+
+```powershell
+python -m scripts.audit_library              # dry run, every user
+python -m scripts.audit_library --user <id>  # one user
+python -m scripts.audit_library --fix        # backup, re-index, drop orphans
+```
+
+Each document is classified `OK`, `OK_EMPTY` (Ready with no text on purpose),
+`MISSING`, `STUCK`, `FAILED` or `DUPLICATE`; vectors without a database row are
+reported as orphans, and a collection built with a different embedding model is
+reported as `WRONG_EMBEDDING`. For every Ready document the script also runs one
+real retrieval query built from the document's own first chunk and records
+whether the document comes back.
+
+`--fix` first copies the Chroma persist directory to a timestamped sibling,
+then re-runs ingestion for missing/stuck/failed documents through
+`DocumentService.retry` (same row, same stored file) and removes orphan vectors
+only after that backup exists. It never deletes database rows or stored files,
+never touches another user's data, and only reports duplicates.
+
+Image text extraction is configured through `VISION_PROVIDER_ORDER`
+(`groq,rapidocr` by default), `VISION_MODEL` (auto-detected when empty) and
+`OCR_MAX_SIDE_PX`. `rapidocr-onnxruntime` needs no API key, no Tesseract binary
+and no torch; Pillow does the EXIF/RGB/downscale preparation before any
+provider runs.
+
+## 8. Known decisions / open items
 
 - **JWT signing type** for the live Supabase project is unknown; symmetric
   verification works once `SUPABASE_JWT_SECRET` is set, and asymmetric works
   via JWKS without it. Confirm which the project uses.
 - **Document storage** target is unapproved; `local` is single-instance only
   and `supabase` is a placeholder until the owner approves a private bucket.
-- **Memory-key taxonomy and document status vocabulary** are provisional until
-  Person 2 confirms them (see `docs/api_contracts.md`).
+- **Memory-key taxonomy** is provisional until Person 2 confirms it (see
+  `docs/api_contracts.md`).
+- **Local OCR models** ship inside the `rapidocr-onnxruntime` wheel; a container
+  image must include that wheel for image ingestion to work without Groq vision.
+- `mypy app` currently crashes in this environment with an internal error
+  ("unresolved placeholder type None") on the unmodified tree, so type checking
+  is not a usable gate here until mypy or the dependency pins are updated.
 - Supabase Auth did not exist at build time; provisioning is designed around
   the `sub` claim and must be validated against the live project.

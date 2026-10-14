@@ -49,7 +49,9 @@ def _print_report(report: AuditReport) -> None:
         print("WRONG EMBEDDING   : collection was built with a different embedding model")
     print("")
 
-    header = f"{'DOCUMENT':<34} {'KIND':<6} {'STATUS':<11} {'FINDING':<10} {'VECS':>4} {'RETRIEVE':>8}"
+    header = (
+        f"{'DOCUMENT':<34} {'KIND':<6} {'STATUS':<11} {'FINDING':<10} {'VECS':>4} {'RETRIEVE':>8}"
+    )
     print(header)
     print("-" * len(header))
     for row in report.rows:
@@ -67,7 +69,10 @@ def _print_report(report: AuditReport) -> None:
 
     print("")
     counts = report.counts
-    print("counts            : " + (", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "none"))
+    print(
+        "counts            : "
+        + (", ".join(f"{k}={v}" for k, v in sorted(counts.items())) or "none")
+    )
     if report.orphans:
         print("orphan vectors    :")
         for orphan in report.orphans:

@@ -118,14 +118,30 @@ not touched until confirmation. `Documented exact per-key value shapes are
 | POST   | `/documents`             | Upload (multipart `file`); 201 with status `pending`.      |
 | GET    | `/documents`             | List metadata, newest first.                               |
 | GET    | `/documents/{id}`        | Get metadata.                                              |
-| DELETE | `/documents/{id}`        | Delete metadata + stored file (204).                       |
+| POST   | `/documents/{id}/retry`  | Re-run ingestion on the same row and stored file.          |
+| DELETE | `/documents/{id}`        | Delete metadata + stored file + vectors (204).             |
 
-Upload validation: PDF/TXT/DOCX by extension or content type; `MAX_UPLOAD_SIZE_MB`
-enforced while streaming; empty files rejected.
+Upload validation: PDF/TXT/MD/DOCX/PNG/JPG/JPEG/WEBP by extension **and**
+magic bytes; `MAX_UPLOAD_SIZE_MB` enforced while streaming; empty files
+rejected. Identical bytes uploaded twice return the existing item with 200 and
+`X-Duplicate: true`.
 
-Status vocabulary (provisional): `pending` → `processing` → `indexed`, or
-`failed`. `DocumentService.mark_status(user_id, document_id, status,
-error_message=...)` is the shared transition entry point for Person 2.
+Status vocabulary: `pending` → `processing` → `indexed`, or `failed`.
+`DocumentService.mark_status(user_id, document_id, status, error_message=...,
+note=...)` is the shared transition entry point for Person 2. `DocumentOut`
+carries `failure_reason` (never a traceback) and `note`, which is set when a
+file was read but held no indexable text (for example a photo of a wall); such a
+document is `indexed` with zero chunks, not a failure.
+
+At startup, rows left `pending`/`processing` longer than 30 minutes become
+`failed` with a retry hint (`reconcile_stuck_documents`). Retry re-runs
+ingestion on the same row; it never creates a second row.
+
+Images are read through the provider chain in `VISION_PROVIDER_ORDER`
+(`groq` vision first, then local `rapidocr`). The Groq key is read from
+application settings, so a `.env` file is honoured. An oversized file, an
+unreadable file or an image with no text is reported with a short, human
+reason; the full cause is logged server-side with `exc_info`.
 
 Storage backend default is `unconfigured` (uploads fail with 503) until the
 owner approves a target; `local` and `supabase` (not yet implemented) exist.

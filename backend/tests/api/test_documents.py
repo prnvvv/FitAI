@@ -147,3 +147,29 @@ def test_upload_with_spaces_and_uppercase_extension_is_accepted(
     )
     assert response.status_code == 201
     assert response.json()["filename"].endswith(".JPEG")
+
+
+def test_document_response_exposes_the_empty_text_note(db_session, tmp_path, monkeypatch) -> None:
+    """A Ready-but-empty image reports its note instead of failing."""
+    from app.models.enums import DocumentStatus
+    from app.schemas.document import DocumentOut
+
+    monkeypatch.setattr("app.services.document_storage.settings.document_storage_backend", "local")
+    monkeypatch.setattr("app.services.document_storage.settings.upload_dir", str(tmp_path))
+    storage = LocalDocumentStorage(str(tmp_path))
+    service = DocumentService(db_session, storage=storage)
+    document, _dup = service.create(
+        uuid.uuid4(), "wall.png", "image/png", b"\x89PNG\r\n\x1a\n", trigger_ingestion=False
+    )
+    service.mark_status(
+        document.user_id,
+        document.id,
+        DocumentStatus.INDEXED,
+        note="No readable text found",
+    )
+
+    body = DocumentOut.from_document(service.get(document.user_id, document.id)).model_dump()
+
+    assert body["status"] == "indexed"
+    assert body["failure_reason"] is None
+    assert body["note"] == "No readable text found"

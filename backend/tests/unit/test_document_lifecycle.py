@@ -14,9 +14,10 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
 
 
 class _FakeResult:
-    def __init__(self, status: str, error: str | None = None) -> None:
+    def __init__(self, status: str, error: str | None = None, note: str | None = None) -> None:
         self.status = status
         self.error = error
+        self.note = note
 
 
 class _FakeIngestion:
@@ -211,3 +212,65 @@ class _RaisingIngestion:
 
     def ingest_user_document_bytes(self, *_args: object, **_kwargs: object):
         raise self._error(self._message)
+
+
+def test_image_without_readable_text_is_ready_with_a_note(db_session, tmp_path) -> None:
+    """A photo with no text is a valid, Ready result - not a failure."""
+    ingestion = _FakeIngestion([_FakeResult("indexed", note="No readable text found")])
+    document, _dup = _service(db_session, tmp_path, ingestion).create(
+        uuid.uuid4(), "wall.png", "image/png", PNG
+    )
+
+    assert document.status == DocumentStatus.INDEXED
+    assert document.error_message is None
+    assert (document.ingestion_metadata or {}).get("note") == "No readable text found"
+
+
+def test_a_new_note_replaces_the_previous_one(db_session, tmp_path) -> None:
+    user_id = uuid.uuid4()
+    ingestion = _FakeIngestion(
+        [_FakeResult("indexed", note="No readable text found"), _FakeResult("indexed")]
+    )
+    service = _service(db_session, tmp_path, ingestion)
+    document, _dup = service.create(user_id, "wall.png", "image/png", PNG)
+
+    retried = service.retry(user_id, document.id)
+
+    assert retried.status == DocumentStatus.INDEXED
+    assert not (retried.ingestion_metadata or {}).get("note")
+
+
+def test_stuck_documents_are_failed_by_the_startup_reconciliation(db_session) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    from app.repositories.document_repository import DocumentRepository
+    from app.services.document_service import STUCK_REASON, reconcile_stuck_documents
+
+    now = datetime.now(timezone.utc)
+    old = DocumentRepository(db_session).create(
+        uuid.uuid4(),
+        "old.png",
+        "image/png",
+        10,
+        status=DocumentStatus.PROCESSING,
+    )
+    old.created_at = now - timedelta(hours=3)
+    fresh = DocumentRepository(db_session).create(
+        uuid.uuid4(),
+        "fresh.png",
+        "image/png",
+        10,
+        status=DocumentStatus.PENDING,
+    )
+    db_session.commit()
+
+    failed = reconcile_stuck_documents(db_session, timeout_minutes=30, now=now)
+
+    assert failed == [old.id]
+    db_session.refresh(old)
+    db_session.refresh(fresh)
+    assert old.status == DocumentStatus.FAILED
+    assert old.error_message == STUCK_REASON
+    assert fresh.status == DocumentStatus.PENDING
+    # Nothing is deleted: the row can still be reprocessed with Retry.
+    assert len(DocumentRepository(db_session).list_all()) == 2
