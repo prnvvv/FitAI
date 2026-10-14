@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.extraction.backfill import BackfillService
