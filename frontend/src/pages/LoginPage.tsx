@@ -1,7 +1,8 @@
 import { Dumbbell, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { ThemeToggle } from '../components/layout/ThemeToggle'
 
 export function LoginPage() {
   const { user, loading, signIn, signUp } = useAuth()
@@ -21,7 +22,7 @@ export function LoginPage() {
   }
 
   if (user) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/chat" replace />
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -44,6 +45,13 @@ export function LoginPage() {
 
   return (
     <div className="login-page">
+      <div className="login-page__top-bar">
+        <Link to="/" className="login-page__back">
+          <Dumbbell size={20} />
+          <span>FitAI</span>
+        </Link>
+        <ThemeToggle ariaLabel="Toggle theme" />
+      </div>
       <div className="login-page__card">
         <div className="login-page__brand">
           <div className="login-page__logo">
