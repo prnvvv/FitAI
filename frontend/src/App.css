@@ -2936,7 +2936,7 @@
 .plan__views {
   display: inline-flex;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -2947,7 +2947,7 @@
   border-right: 1px solid var(--divider);
   background-color: var(--bg-composer);
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   cursor: pointer;
 }
 
