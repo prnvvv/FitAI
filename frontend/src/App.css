@@ -3783,7 +3783,7 @@
   padding: 8px 12px;
   border-right: 1px solid var(--divider);
   color: var(--text-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-sm);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -3815,10 +3815,11 @@
   width: 32px;
   height: 32px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .plan__menu-trigger:hover {
@@ -3832,7 +3833,7 @@
   top: calc(100% + 4px);
   min-width: 220px;
   padding: 4px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background-color: var(--bg-popover);
   border: 1px solid var(--popover-border);
   box-shadow: var(--shadow-popover);
@@ -3845,7 +3846,7 @@
   width: 100%;
   padding: 8px 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--text-primary);
   font-size: 0.875rem;
