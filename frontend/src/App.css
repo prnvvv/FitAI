@@ -4105,7 +4105,7 @@
 }
 
 .plan__session-type {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   text-transform: capitalize;
   white-space: nowrap;
@@ -4126,7 +4126,7 @@
 }
 
 .plan__session-summary {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -4141,8 +4141,8 @@
 
 .plan__exercise-card {
   border: 1px solid var(--divider);
-  border-radius: 10px;
-  background-color: var(--bg-main);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
   padding: 10px;
   margin-bottom: 8px;
 }
