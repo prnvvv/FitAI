@@ -113,6 +113,11 @@ export class NetworkError extends Error {
   }
 }
 
+/** True for a request cancelled by an AbortController (not a real failure). */
+export function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException ? err.name === 'AbortError' : (err as Error)?.name === 'AbortError'
+}
+
 export interface ValidationIssue {
   field: string
   message: string
@@ -190,6 +195,50 @@ export function toMessage(err: unknown, fallback = 'Something went wrong. Please
   if (err instanceof ApiError || err instanceof NetworkError) return err.message
   if (err instanceof Error && err.message) return err.message
   return fallback
+}
+
+/* --------------------------------------------------------------------------
+ * Response normalizers
+ *
+ * A render must never crash on an unexpected payload. These helpers turn null,
+ * a missing envelope or a partially filled object into a safe, empty value.
+ * ----------------------------------------------------------------------- */
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/** Accept either a bare array or a Page envelope and return the array. */
+export function normalizePlannedSessions(page: unknown): PlannedSession[] {
+  const source = isRecord(page) && Array.isArray(page.items) ? page.items : page
+  if (!Array.isArray(source)) return []
+  return source.filter(
+    (item): item is PlannedSession =>
+      isRecord(item) && typeof item.id === 'string' && typeof item.planned_date === 'string',
+  ).map((item) => ({ ...item, exercises: Array.isArray(item.exercises) ? item.exercises : [] }))
+}
+
+export function normalizeDaySummaries(payload: unknown): DaySummary[] {
+  if (!Array.isArray(payload)) return []
+  return payload.filter(
+    (item): item is DaySummary => isRecord(item) && typeof item.date === 'string',
+  ).map((item) => ({
+    date: item.date,
+    planned_count: Number(item.planned_count ?? 0),
+    completed_count: Number(item.completed_count ?? 0),
+    day_type: typeof item.day_type === 'string' ? item.day_type : 'none',
+    has_meals: Boolean(item.has_meals),
+  }))
+}
+
+export function normalizeWorkoutSessions(payload: unknown): WorkoutSession[] {
+  if (!Array.isArray(payload)) return []
+  return payload
+    .filter(
+      (item): item is WorkoutSession =>
+        isRecord(item) && typeof item.id === 'string' && typeof item.performed_at === 'string',
+    )
+    .map((item) => ({ ...item, sets: Array.isArray(item.sets) ? item.sets : [] }))
 }
 
 export const api = {
@@ -304,16 +353,20 @@ export const api = {
     }),
 
   // Workouts
-  listWorkouts: (limit = 50, offset = 0) =>
-    fetchApi<Page<WorkoutSession>>(`/workouts?limit=${limit}&offset=${offset}`),
-  listAllWorkouts: async () => {
+  listWorkouts: (limit = 50, offset = 0, signal?: AbortSignal) =>
+    fetchApi<Page<WorkoutSession>>(
+      `/workouts?limit=${limit}&offset=${offset}`,
+      signal ? { signal } : {},
+    ),
+  listAllWorkouts: async (signal?: AbortSignal) => {
     const items: WorkoutSession[] = []
     let offset = 0
     const pageSize = 100
     while (true) {
-      const page = await api.listWorkouts(pageSize, offset)
-      items.push(...page.items)
-      if (items.length >= page.total || page.items.length === 0) break
+      const page = await api.listWorkouts(pageSize, offset, signal)
+      const batch = normalizeWorkoutSessions(page?.items)
+      items.push(...batch)
+      if (batch.length === 0 || items.length >= (page?.total ?? 0)) break
       offset += pageSize
     }
     return items
@@ -341,8 +394,8 @@ export const api = {
 
   // Exercise library
   // The backend caps page size at 100; page rather than requesting more.
-  listExercises: (limit = 100, offset = 0) =>
-    fetchApi<Page<Exercise>>(`/exercises?limit=${limit}&offset=${offset}`),
+  listExercises: (limit = 100, offset = 0, signal?: AbortSignal) =>
+    fetchApi<Page<Exercise>>(`/exercises?limit=${limit}&offset=${offset}`, signal ? { signal } : {}),
   searchExercises: (search: string, limit = 20, offset = 0) =>
     fetchApi<Page<Exercise>>(
       `/exercises?search=${encodeURIComponent(search)}&limit=${limit}&offset=${offset}`,
@@ -355,28 +408,49 @@ export const api = {
     unit_mode?: string
   }) =>
     fetchApi<Exercise>('/exercises', { method: 'POST', body: JSON.stringify(payload) }),
-  listAllExercises: async () => {
+  listAllExercises: async (signal?: AbortSignal) => {
     const items: Exercise[] = []
     let offset = 0
     const pageSize = 100
     while (true) {
-      const page = await api.listExercises(pageSize, offset)
-      items.push(...page.items)
-      if (items.length >= page.total || page.items.length === 0) break
+      const page = await api.listExercises(pageSize, offset, signal)
+      const batch = Array.isArray(page?.items) ? (page.items as Exercise[]) : []
+      items.push(...batch)
+      if (batch.length === 0 || items.length >= (page?.total ?? 0)) break
       offset += pageSize
     }
     return items
   },
 
   // Plans
-  getPlanSummary: (from: string, to: string) =>
+  getPlanSummary: (from: string, to: string, signal?: AbortSignal) =>
     fetchApi<DaySummary[]>(
       `/plan/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      signal ? { signal } : {},
     ),
-  getPlanWeek: (start: string, end: string) =>
-    fetchApi<PlannedSession[]>(
+  /** Raw page from `/plan/sessions`. The backend answers with a Page envelope. */
+  getPlanWeek: (start: string, end: string, signal?: AbortSignal) =>
+    fetchApi<Page<PlannedSession>>(
       `/plan/sessions?from=${encodeURIComponent(start)}&to=${encodeURIComponent(end)}&limit=100`,
+      signal ? { signal } : {},
     ),
+  /** Every planned session in a range, paging through the Page envelope. */
+  getAllPlannedSessions: async (
+    start: string,
+    end: string,
+    signal?: AbortSignal,
+  ): Promise<PlannedSession[]> => {
+    const items: PlannedSession[] = []
+    let offset = 0
+    const pageSize = 100
+    while (true) {
+      const page = await api.getPlanWeek(start, end, signal)
+      items.push(...normalizePlannedSessions(page))
+      if (items.length >= page.total || page.items.length === 0) break
+      offset += pageSize
+    }
+    return items
+  },
   createPlannedSession: (payload: {
     planned_date: string
     title?: string | null

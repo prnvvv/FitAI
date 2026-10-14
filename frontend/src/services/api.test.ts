@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError, validationIssues } from './api'
+import {
+  api,
+  ApiError,
+  isAbortError,
+  normalizeDaySummaries,
+  normalizePlannedSessions,
+  normalizeWorkoutSessions,
+  validationIssues,
+} from './api'
 import type { Page, WorkoutSession } from '../types'
 
 vi.mock('./supabase', () => ({
@@ -100,5 +108,57 @@ describe('listAllWorkouts', () => {
       expect.stringContaining('/workouts?limit=100&offset=100'),
       expect.any(Object),
     )
+  })
+})
+
+describe('plan response normalization', () => {
+  it('unwraps the Page envelope returned by /plan/sessions', async () => {
+    const page = {
+      items: [
+        {
+          id: 'ps-1',
+          planned_date: '2026-10-14',
+          title: 'Push',
+          day_type: 'workout',
+          status: 'planned',
+          completed_session_id: null,
+          notes: null,
+          created_at: '',
+          updated_at: '',
+          exercises: [],
+        },
+      ],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify(page), { status: 200 }),
+    )
+
+    const sessions = await api.getAllPlannedSessions('2026-10-12', '2026-10-18')
+
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0].planned_date).toBe('2026-10-14')
+  })
+
+  it('returns an empty list for a null or malformed envelope', () => {
+    expect(normalizePlannedSessions(null)).toEqual([])
+    expect(normalizePlannedSessions({ items: null })).toEqual([])
+    expect(normalizePlannedSessions([{ id: 1 }])).toEqual([])
+    expect(normalizePlannedSessions({ items: [{ id: 'a', planned_date: '2026-01-01' }] })).toEqual([
+      { id: 'a', planned_date: '2026-01-01', exercises: [] },
+    ])
+    expect(normalizeDaySummaries(null)).toEqual([])
+    expect(normalizeDaySummaries([{ date: '2026-10-14' }])).toEqual([
+      { date: '2026-10-14', planned_count: 0, completed_count: 0, day_type: 'none', has_meals: false },
+    ])
+    expect(normalizeWorkoutSessions(undefined)).toEqual([])
+  })
+
+  it('recognises an aborted request', () => {
+    const abort = new DOMException('aborted', 'AbortError')
+    expect(isAbortError(abort)).toBe(true)
+    expect(isAbortError(new Error('boom'))).toBe(false)
   })
 })

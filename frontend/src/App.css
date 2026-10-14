@@ -10,6 +10,9 @@
 .app-shell__content {
   flex: 1;
   min-width: 0;
+  /* min-height: 0 keeps the flex chain scrollable instead of letting the
+     content's own height win over `overflow-y: auto`. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -21,6 +24,7 @@
   /* The single scroll container for every page: full width, right-edge scrollbar. */
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -2636,6 +2640,59 @@
 
 .sidebar--closed .sidebar__account {
   justify-content: center;
+}
+
+/* Plan uses the full width of the main area; the generic page column is narrow. */
+.page--plan {
+  max-width: 1180px;
+}
+
+/* Loading placeholder for the day panel. */
+.plan__skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.plan__skeleton-line {
+  height: 44px;
+  border-radius: var(--radius-sm, 8px);
+  background: linear-gradient(90deg, var(--bg-composer) 25%, var(--divider) 50%, var(--bg-composer) 75%);
+  background-size: 200% 100%;
+  animation: plan-skeleton 1.4s ease-in-out infinite;
+}
+
+@keyframes plan-skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Render-crash fallback shown by PageErrorBoundary. */
+.page__crash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page__crash-card {
+  max-width: 480px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.page__crash-title {
+  font-size: 1.25rem;
+}
+
+.page__crash-copy {
+  color: var(--text-muted);
 }
 
 /* Plan month/year layout */

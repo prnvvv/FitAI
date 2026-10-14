@@ -13,12 +13,21 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { ExerciseCombobox } from '../components/plan/ExerciseCombobox'
-import { api, toMessage } from '../services/api'
+import {
+  api,
+  isAbortError,
+  normalizeDaySummaries,
+  normalizePlannedSessions,
+  normalizeWorkoutSessions,
+  toMessage,
+} from '../services/api'
 import type { DaySummary, Exercise, PlannedSession, Template, WorkoutSession } from '../types'
 import {
   addDays,
   addMonths,
+  dateFromKey,
   formatDayLabel,
   formatMonthTitle,
   formatWeekTitle,
@@ -53,16 +62,19 @@ function emptyLoggedSet(): LoggedSet {
 }
 
 /** Visible range for the current view; one request covers every view. */
-function visibleRange(view: View, anchor: Date): { from: string; to: string } {
+export function visibleRange(view: View, anchor: Date): { from: string; to: string } {
   if (view === 'week') {
     const days = weekDays(anchor)
     return { from: toDateKey(days[0]), to: toDateKey(days[6]) }
   }
   if (view === 'month') {
     const cells = monthGrid(anchor)
-    return { from: cells[0].key, to: cells[cells.length - 1].key }
+    return { from: cells[0].key, to: toDateKey(cells[cells.length - 1].date) }
   }
-  return { from: toDateKey(new Date(anchor.getFullYear(), 0, 1)), to: toDateKey(new Date(anchor.getFullYear(), 11, 31)) }
+  return {
+    from: toDateKey(new Date(anchor.getFullYear(), 0, 1)),
+    to: toDateKey(new Date(anchor.getFullYear(), 11, 31)),
+  }
 }
 
 function shift(view: View, anchor: Date, direction: -1 | 1): Date {
@@ -77,8 +89,10 @@ function periodTitle(view: View, anchor: Date): string {
   return String(anchor.getFullYear())
 }
 
+/** Local YYYY-MM-DD key for an ISO instant, or '' when it cannot be parsed. */
 function localDayKey(iso: string): string {
   const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
   return toDateKey(new Date(date.getFullYear(), date.getMonth(), date.getDate()))
 }
 
@@ -124,13 +138,14 @@ export function PlanPage() {
     const map: Record<string, WorkoutSession[]> = {}
     for (const session of workouts) {
       const key = localDayKey(session.performed_at)
+      if (!key) continue
       map[key] = [...(map[key] ?? []), session]
     }
     return map
   }, [workouts])
 
   const recentExercises = useMemo(() => {
-    const names = workouts.flatMap((session) => session.sets.map((set) => set.exercise_name))
+    const names = workouts.flatMap((session) => (session.sets ?? []).map((set) => set.exercise_name))
     const seen = new Set<string>()
     const result: Exercise[] = []
     for (const name of names) {
@@ -142,52 +157,82 @@ export function PlanPage() {
     return result.slice(0, 5)
   }, [library, workouts])
 
-  const loadRange = useCallback(async (nextView: View, nextAnchor: Date) => {
-    const { from, to } = visibleRange(nextView, nextAnchor)
-    try {
+  // Only the newest load may write state: switching views quickly must not let
+  // a slow, stale response overwrite a fresh one.
+  const requestId = useRef(0)
+  const controller = useRef<AbortController | null>(null)
+
+  const loadRange = useCallback(
+    async (nextView: View, nextAnchor: Date, signal: AbortSignal) => {
+      const { from, to } = visibleRange(nextView, nextAnchor)
       const [days, sessions] = await Promise.all([
-        api.getPlanSummary(from, to),
-        api.getPlanWeek(from, to),
+        api.getPlanSummary(from, to, signal),
+        api.getAllPlannedSessions(from, to, signal),
       ])
-      setSummary(days)
-      setPlanned(sessions)
-    } catch (err) {
-      setError(toMessage(err, 'The plan could not be loaded.'))
-    }
+      return { summary: normalizeDaySummaries(days), planned: sessions }
+    },
+    [],
+  )
+
+  const loadWorkouts = useCallback(async (signal: AbortSignal) => {
+    return api.listAllWorkouts(signal)
   }, [])
 
-  const loadWorkouts = useCallback(async () => {
+  const reload = useCallback(async () => {
+    controller.current?.abort()
+    const next = new AbortController()
+    controller.current = next
+    const id = requestId.current + 1
+    requestId.current = id
+    setLoading(true)
     try {
-      setWorkouts(await api.listAllWorkouts())
+      const [range, sessions] = await Promise.all([
+        loadRange(view, anchor, next.signal),
+        loadWorkouts(next.signal),
+      ])
+      if (requestId.current !== id) return
+      setSummary(range.summary)
+      setPlanned(normalizePlannedSessions(range.planned))
+      setWorkouts(normalizeWorkoutSessions(sessions))
+      setError(null)
     } catch (err) {
-      setError(toMessage(err, 'Your logged sessions could not be loaded.'))
+      if (isAbortError(err) || requestId.current !== id) return
+      setError(toMessage(err, 'The plan could not be loaded.'))
+    } finally {
+      if (requestId.current === id) setLoading(false)
     }
-  }, [])
+  }, [anchor, loadRange, loadWorkouts, view])
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
+    void reload()
+    return () => controller.current?.abort()
+  }, [reload])
+
+  // Reference data (exercise library, templates) is loaded once on mount: it
+  // does not depend on the visible range, and re-fetching it per navigation
+  // would be a request storm.
+  useEffect(() => {
+    const ignore = { current: false }
     void (async () => {
-      await Promise.all([loadRange(view, anchor), loadWorkouts()])
       try {
         const [exercises, templateList] = await Promise.all([
           api.listAllExercises(),
           api.getPlanTemplates(),
         ])
-        if (!cancelled) {
-          setLibrary(exercises)
-          setTemplates(templateList)
-        }
+        if (ignore.current) return
+        setLibrary(Array.isArray(exercises) ? exercises : [])
+        setTemplates(Array.isArray(templateList) ? templateList : [])
       } catch {
         // The exercise picker falls back to free text; templates are optional.
+        if (ignore.current) return
+        setLibrary([])
+        setTemplates([])
       }
-      if (!cancelled) setLoading(false)
     })()
     return () => {
-      cancelled = true
+      ignore.current = true
     }
-  }, [anchor, loadRange, loadWorkouts, view])
+  }, [])
 
   useEffect(() => {
     setTemplateDate(selected)
@@ -212,18 +257,28 @@ export function PlanPage() {
     setSelected(key)
   }
 
-  const handleGridKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  /** The focused day as a Date, falling back to today when it is unusable. */
+  const focusedDate = () => dateFromKey(focused) ?? new Date()
+
+  const handleGridKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const deltas: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }
-    if (event.key in deltas) {
+    const delta = deltas[event.key]
+    if (delta !== undefined) {
       event.preventDefault()
-      moveFocus(toDateKey(addDays(new Date(`${focused}T00:00:00`), deltas[event.key])))
+      const current = dateFromKey(focused)
+      if (current) moveFocus(toDateKey(addDays(current, delta)))
       return
     }
     if (event.key === 'PageUp' || event.key === 'PageDown') {
       event.preventDefault()
       const direction = event.key === 'PageUp' ? -1 : 1
-      const next = view === 'year' ? new Date(anchor.getFullYear() + direction, 0, 1) : shift(view, anchor, direction)
+      const next =
+        view === 'year' ? new Date(anchor.getFullYear() + direction, 0, 1) : shift(view, anchor, direction)
       setAnchor(next)
+      // Keep the focused cell inside the newly shown grid so the roving
+      // tabindex always has exactly one tabbable cell.
+      const key = view === 'year' ? toDateKey(next) : toDateKey(shift(view, focusedDate(), direction))
+      setFocused(key)
       return
     }
     if (event.key === 'Enter') {
@@ -260,8 +315,7 @@ export function PlanPage() {
       })
       setLoggedName('')
       setLoggedSets([emptyLoggedSet()])
-      await loadWorkouts()
-      await loadRange(view, anchor)
+      await reload()
     } catch (err) {
       setLogError(toMessage(err, 'That session could not be saved.'))
     } finally {
@@ -282,7 +336,7 @@ export function PlanPage() {
               name: snapshot.name,
               performed_at: snapshot.performed_at,
               notes: snapshot.notes,
-              sets: snapshot.sets.map((set) => ({
+              sets: (snapshot.sets ?? []).map((set) => ({
                 exercise_name: set.exercise_name,
                 reps: set.reps,
                 weight: set.weight,
@@ -291,10 +345,10 @@ export function PlanPage() {
                 distance_meters: set.distance_meters,
               })),
             })
-            .then(loadWorkouts)
+            .then(() => reload())
         },
       })
-      await loadRange(view, anchor)
+      await reload()
     } catch (err) {
       setError(toMessage(err, 'That session could not be deleted.'))
     }
@@ -310,19 +364,39 @@ export function PlanPage() {
         notes: planNotes.trim() || null,
         exercises: [],
       })
-      await loadRange(view, anchor)
+      await reload()
     } catch (err) {
       setError(toMessage(err, 'The session could not be planned.'))
     }
   }
 
+  /**
+   * Editable fields write through local drafts.
+   *
+   * The value used to come straight from the server row while the save was only
+   * debounced, so a re-render reverted what the user had just typed. The draft
+   * is the source of truth while typing; the server row wins again after the
+   * save completes.
+   */
+  const [drafts, setDrafts] = useState<Record<string, { title?: string; notes?: string }>>({})
+  const draftFor = (session: PlannedSession) => drafts[session.id]
+  const setDraft = (sessionId: string, patch: { title?: string; notes?: string }) => {
+    setDrafts((prev) => ({ ...prev, [sessionId]: { ...prev[sessionId], ...patch } }))
+  }
+
   const scheduleAutosave = (session: PlannedSession, patch: Partial<PlannedSession>) => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(async () => {
+      saveTimer.current = null
       try {
         await api.updatePlannedSession(session.id, patch)
         setSavedAt(Date.now())
-        await loadRange(view, anchor)
+        setDrafts((prev) => {
+          const next = { ...prev }
+          delete next[session.id]
+          return next
+        })
+        await reload()
       } catch (err) {
         setError(toMessage(err, 'Your changes could not be saved.'))
       }
@@ -332,8 +406,7 @@ export function PlanPage() {
   const completeSession = async (session: PlannedSession) => {
     try {
       await api.completePlannedSession(session.id)
-      await loadRange(view, anchor)
-      await loadWorkouts()
+      await reload()
     } catch (err) {
       setError(toMessage(err, 'That session could not be completed.'))
     }
@@ -342,8 +415,8 @@ export function PlanPage() {
   const deletePlanned = async (session: PlannedSession) => {
     try {
       await api.deletePlannedSession(session.id)
-      setUndo({ message: 'Planned session removed.', restore: () => void loadRange(view, anchor) })
-      await loadRange(view, anchor)
+      setUndo({ message: 'Planned session removed.', restore: () => void reload() })
+      await reload()
     } catch (err) {
       setError(toMessage(err, 'That session could not be removed.'))
     }
@@ -355,7 +428,7 @@ export function PlanPage() {
     try {
       await api.applyPlanTemplate(templateKey, templateDate)
       setTemplateKey('')
-      await loadRange(view, anchor)
+      await reload()
     } catch (err) {
       setError(toMessage(err, 'That template could not be applied.'))
     } finally {
@@ -380,7 +453,7 @@ export function PlanPage() {
         notes: null,
         exercises: [],
       })
-      await loadRange(view, anchor)
+      await reload()
     } catch (err) {
       setError(toMessage(err, 'That day could not be updated.'))
     } finally {
@@ -466,8 +539,7 @@ export function PlanPage() {
             className="page__alert-action"
             onClick={() => {
               setError(null)
-              void loadRange(view, anchor)
-              void loadWorkouts()
+              void reload()
             }}
           >
             Retry
@@ -571,7 +643,7 @@ export function PlanPage() {
                             key={cell.key}
                             type="button"
                             className={`plan__year-day ${cell.key === selected ? 'plan__year-day--selected' : ''}`}
-                            style={{ '--heat': heatLevel(completed) } as React.CSSProperties}
+                            style={{ '--heat': heatLevel(completed) } as CSSProperties}
                             title={`${formatDayLabel(cell.key)}: ${completed} completed`}
                             aria-label={`${formatDayLabel(cell.key)}, ${completed} completed`}
                             onClick={() => {
@@ -603,8 +675,20 @@ export function PlanPage() {
           </h2>
 
           {loading ? (
-            <div className="page__loading">
-              <Loader2 className="page__spinner" size={24} />
+            <PlanSkeleton view={view} />
+          ) : error && summary.length === 0 ? (
+            <div className="page__alert page__alert--error" role="alert">
+              {error}
+              <button
+                type="button"
+                className="page__alert-action"
+                onClick={() => {
+                  setError(null)
+                  void reload()
+                }}
+              >
+                Retry
+              </button>
             </div>
           ) : (
             <>
@@ -659,10 +743,11 @@ export function PlanPage() {
                         <input
                           className="plan__session-title-input"
                           aria-label="Session title"
-                          value={session.title ?? ''}
-                          onChange={(event) =>
+                          value={draftFor(session)?.title ?? session.title ?? ''}
+                          onChange={(event) => {
+                            setDraft(session.id, { title: event.target.value })
                             scheduleAutosave(session, { title: event.target.value || null })
-                          }
+                          }}
                         />
                         {session.status === 'completed' && (
                           <span className="plan__badge plan__badge--done">Done</span>
@@ -718,8 +803,11 @@ export function PlanPage() {
                         className="plan__input plan__input--textarea"
                         aria-label="Session notes"
                         placeholder="Notes"
-                        value={session.notes ?? ''}
-                        onChange={(event) => scheduleAutosave(session, { notes: event.target.value })}
+                        value={draftFor(session)?.notes ?? session.notes ?? ''}
+                        onChange={(event) => {
+                          setDraft(session.id, { notes: event.target.value })
+                          scheduleAutosave(session, { notes: event.target.value })
+                        }}
                       />
                       <div className="plan__session-actions">
                         {session.status !== 'completed' && (
@@ -939,7 +1027,19 @@ export function PlanPage() {
   )
 }
 
-/** Shade a year-heatmap day by the number of sessions completed. */
+/** Placeholder shown while a view is loading, so the panel never collapses. */
+function PlanSkeleton({ view }: { view: View }) {
+  return (
+    <div className="plan__skeleton" role="status" aria-busy="true" aria-live="polite">
+      <span className="visually-hidden">Loading your {view} plan…</span>
+      <div className="plan__skeleton-line" />
+      <div className="plan__skeleton-line" />
+      <div className="plan__skeleton-line" />
+      <div className="plan__skeleton-line" />
+    </div>
+  )
+}
+
 /** "No plan" unless the user explicitly planned this day. */
 export function dayTypeLabel(day: DaySummary | undefined): string {
   const type = day?.day_type ?? 'none'
@@ -947,6 +1047,7 @@ export function dayTypeLabel(day: DaySummary | undefined): string {
   return type.replace('_', ' ')
 }
 
+/** Shade a year-heatmap day by the number of sessions completed. */
 function heatLevel(completed: number): number {
   if (completed <= 0) return 0
   if (completed === 1) return 1

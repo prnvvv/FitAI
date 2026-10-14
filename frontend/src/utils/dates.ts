@@ -7,9 +7,32 @@ export function toDateKey(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
-export function fromDateKey(key: string): Date {
+/** True for a well-formed YYYY-MM-DD key that names a real local date. */
+export function isDateKey(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  return toDateKey(date) === value
+}
+
+/**
+ * Local Date for a YYYY-MM-DD key, or null when the key is not a real date.
+ *
+ * Building the date from local parts (never `new Date("YYYY-MM-DD")`, which is
+ * parsed as UTC and shifts the day) keeps a day key on the same local day in
+ * every timezone, including IST (UTC+05:30).
+ */
+export function dateFromKey(key: string): Date | null {
+  if (!isDateKey(key)) return null
   const [year, month, day] = key.split('-').map(Number)
-  return new Date(year, (month ?? 1) - 1, day ?? 1)
+  const date = new Date(year, month - 1, day)
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+export function fromDateKey(key: string): Date {
+  return dateFromKey(key) ?? new Date()
 }
 
 export function addDays(date: Date, days: number): Date {

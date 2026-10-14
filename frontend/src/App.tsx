@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import './App.css'
 import { AppShell } from './components/layout/AppShell'
+import { PageErrorBoundary } from './components/layout/PageErrorBoundary'
 import { useAuth } from './context/AuthContext'
 import { useConversations } from './hooks/useConversations'
 import { ChatPage } from './pages/ChatPage'
@@ -115,11 +116,32 @@ function AuthenticatedApp() {
           path="chat/:conversationId"
           element={<ChatPage onConversationCreated={handleConversationCreated} />}
         />
-        <Route path="library" element={<LibraryPage />} />
+        <Route
+          path="library"
+          element={
+            <PageErrorBoundary name="Library">
+              <LibraryPage />
+            </PageErrorBoundary>
+          }
+        />
         <Route path="memory" element={<MemoryPage />} />
         <Route path="profile" element={<ProfilePage />} />
-        <Route path="plan" element={<PlanPage />} />
-        <Route path="progress" element={<ProgressPage />} />
+        <Route
+          path="plan"
+          element={
+            <PageErrorBoundary name="Plan">
+              <PlanPage />
+            </PageErrorBoundary>
+          }
+        />
+        <Route
+          path="progress"
+          element={
+            <PageErrorBoundary name="Progress">
+              <ProgressPage />
+            </PageErrorBoundary>
+          }
+        />
         <Route path="settings" element={<ProfilePage />} />
         <Route path="workouts" element={<Navigate to="/plan" replace />} />
         <Route path="documents" element={<Navigate to="/library" replace />} />

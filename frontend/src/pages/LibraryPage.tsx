@@ -244,6 +244,9 @@ export function LibraryPage() {
                 {doc.status === 'failed' && doc.failure_reason && (
                   <p className="library__reason">{doc.failure_reason}</p>
                 )}
+                {doc.status === 'indexed' && doc.note && (
+                  <p className="library__reason">{doc.note}</p>
+                )}
               </div>
               <span className={statusClass(doc.status)}>{formatStatus(doc.status)}</span>
               <button

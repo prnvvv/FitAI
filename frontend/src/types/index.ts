@@ -81,6 +81,8 @@ export interface Document {
   status: string
   /** Short human-readable failure reason from the backend (never a traceback). */
   failure_reason?: string | null
+  /** Note for a file that was read but held no indexable text. */
+  note?: string | null
   created_at: string
   completed_at?: string | null
   failed_at?: string | null

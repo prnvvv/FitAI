@@ -1,62 +1,99 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PageErrorBoundary } from '../components/layout/PageErrorBoundary'
+import { toDateKey } from '../utils/dates'
 
-const summary = (from: string, to: string) =>
-  Array.from({ length: 2 }, (_, index) => ({
-    date: index === 0 ? from : to,
-    planned_count: index === 0 ? 1 : 0,
-    completed_count: index === 0 ? 1 : 0,
-    day_type: index === 0 ? 'workout' : 'rest',
-    has_meals: false,
-  }))
+const daySummary = (date: string, overrides: Record<string, unknown> = {}) => ({
+  date,
+  planned_count: 0,
+  completed_count: 0,
+  day_type: 'none',
+  has_meals: false,
+  ...overrides,
+})
 
+const rangeSummary = (from: string, to: string) => [daySummary(from), daySummary(to)]
+
+const plannedSession = (id: string, date: string, overrides: Record<string, unknown> = {}) => ({
+  id,
+  planned_date: date,
+  title: `Session ${id}`,
+  day_type: 'workout',
+  status: 'planned',
+  completed_session_id: null,
+  notes: null,
+  created_at: '',
+  updated_at: '',
+  exercises: [],
+  ...overrides,
+})
+
+const workoutSession = (id: string, performedAt: string, name: string | null, exercise = 'slknlc') => ({
+  id,
+  name,
+  performed_at: performedAt,
+  duration_minutes: null,
+  notes: null,
+  created_at: '',
+  sets: [
+    {
+      id: `${id}-s1`,
+      position: 0,
+      exercise_name: exercise,
+      reps: 3,
+      weight: null,
+      weight_unit: null,
+      duration_seconds: null,
+      distance_meters: null,
+      notes: null,
+    },
+  ],
+})
+
+/** The default fake: an empty library, empty plan, one logged session today. */
 function mockApi(overrides: Record<string, unknown> = {}) {
   const calls: string[] = []
+  const today = new Date()
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(
+    today.getDate(),
+  ).padStart(2, '0')}`
   const base: Record<string, unknown> = {
     getPlanSummary: vi.fn(async (from: string, to: string) => {
       calls.push(`summary:${from}:${to}`)
-      return summary(from, to)
+      return rangeSummary(from, to)
     }),
-    getPlanWeek: vi.fn(async () => [] as unknown[]),
-    listAllWorkouts: vi.fn(async () => [
-      {
-        id: 'ws-1',
-        name: 'hjkfb',
-        performed_at: new Date().toISOString(),
-        duration_minutes: null,
-        notes: null,
-        created_at: '',
-        sets: [
-          {
-            id: 's1',
-            position: 0,
-            exercise_name: 'slknlc',
-            reps: 3,
-            weight: null,
-            weight_unit: null,
-            duration_seconds: null,
-            distance_meters: null,
-            notes: null,
-          },
-        ],
-      },
-    ]),
+    getAllPlannedSessions: vi.fn(async () => [] as unknown[]),
+    listAllWorkouts: vi.fn(async () => [workoutSession('ws-1', new Date().toISOString(), 'hjkfb')]),
     listAllExercises: vi.fn(async () => [] as unknown[]),
-    getPlanTemplates: vi.fn(async () => [
-      { key: 'upper_lower', name: 'Upper Lower', days: [] },
-    ]),
+    getPlanTemplates: vi.fn(async () => [{ key: 'upper_lower', name: 'Upper Lower', days: [] }]),
     createWorkout: vi.fn(async () => ({ id: 'new' })),
     deleteWorkout: vi.fn(async () => undefined),
-    createPlannedSession: vi.fn(async () => ({ id: 'ps-1' })),
+    createPlannedSession: vi.fn(async () => plannedSession('ps-1', todayKey)),
     updatePlannedSession: vi.fn(async () => ({ id: 'ps-1' })),
     completePlannedSession: vi.fn(async () => ({ id: 'ps-1' })),
     deletePlannedSession: vi.fn(async () => undefined),
     applyPlanTemplate: vi.fn(async () => [] as unknown[]),
-    retryDocument: vi.fn(),
     ...overrides,
   }
-  return { api: base as never, calls, spies: base }
+  return { api: base as never, calls, spies: base, todayKey }
+}
+
+async function renderPlan(overrides: Record<string, unknown> = {}) {
+  const mocked = mockApi(overrides)
+  vi.doMock('../services/api', async () => {
+    const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
+    return { ...actual, api: mocked.api }
+  })
+  const module = await import('./PlanPage')
+  const user = userEvent.setup()
+  render(
+    <PageErrorBoundary name="Plan">
+      <module.PlanPage />
+    </PageErrorBoundary>,
+  )
+  await waitFor(() => expect(screen.getByRole('tab', { name: 'Month' })).toBeInTheDocument())
+  return { ...mocked, user }
 }
 
 describe('PlanPage', () => {
@@ -67,19 +104,6 @@ describe('PlanPage', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
-
-  async function renderPlan(overrides: Record<string, unknown> = {}) {
-    const mocked = mockApi(overrides)
-    vi.doMock('../services/api', async () => {
-      const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
-      return { ...actual, api: mocked.api }
-    })
-    const module = await import('./PlanPage')
-    const user = userEvent.setup()
-    render(<module.PlanPage />)
-    await waitFor(() => expect(screen.getByRole('tab', { name: 'Month' })).toBeInTheDocument())
-    return { ...mocked, user }
-  }
 
   it('switches between week, month and year views', async () => {
     const { user } = await renderPlan()
@@ -95,6 +119,24 @@ describe('PlanPage', () => {
     expect(screen.getByText(/active days/)).toBeInTheDocument()
   })
 
+  it('renders week, month and year with empty data', async () => {
+    const { user } = await renderPlan({
+      listAllWorkouts: vi.fn(async () => [] as unknown[]),
+      getPlanSummary: vi.fn(async () => [] as unknown[]),
+      getAllPlannedSessions: vi.fn(async () => [] as unknown[]),
+    })
+
+    expect(screen.getByText('No plan')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Plan session/ })).toBeInTheDocument()
+    expect(screen.getByText('Nothing logged for this day yet.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Week' }))
+    expect(screen.getByRole('group', { name: 'Week' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Year' }))
+    expect(screen.getByText(/active days/)).toBeInTheDocument()
+  })
+
   it('requests the summary once per view change', async () => {
     const { spies, user } = await renderPlan()
     const before = (spies.getPlanSummary as ReturnType<typeof vi.fn>).mock.calls.length
@@ -105,10 +147,19 @@ describe('PlanPage', () => {
     )
   })
 
+  it('renders planned sessions returned through the paged endpoint', async () => {
+    const todayKey = toDateKey(new Date())
+    await renderPlan({
+      getAllPlannedSessions: vi.fn(async () => [plannedSession('ps-9', todayKey)]),
+    })
+
+    expect(screen.getByDisplayValue('Session ps-9')).toBeInTheDocument()
+  })
+
   it('shows existing logged sessions for the selected day', async () => {
     await renderPlan()
     expect(screen.getByText('hjkfb')).toBeInTheDocument()
-    expect(screen.getByText('slknlc')).toBeInTheDocument()
+    expect(screen.getByText(/slknlc/)).toBeInTheDocument()
   })
 
   it('logs a session with an exercise chosen from the library', async () => {
@@ -139,6 +190,19 @@ describe('PlanPage', () => {
     expect(payload.sets[0].reps).toBe(1)
   })
 
+  it('keeps what the user types in a planned session title', async () => {
+    const todayKey = toDateKey(new Date())
+    const { user } = await renderPlan({
+      getAllPlannedSessions: vi.fn(async () => [plannedSession('ps-9', todayKey, { title: 'Push' })]),
+    })
+
+    const input = screen.getByDisplayValue('Push')
+    await user.clear(input)
+    await user.type(input, 'Push day')
+
+    expect((input as HTMLInputElement).value).toBe('Push day')
+  })
+
   it('supports keyboard navigation in the month grid', async () => {
     const { user } = await renderPlan()
     const focusedDay = document.querySelector('.plan__month-day[tabindex="0"]') as HTMLElement
@@ -154,19 +218,133 @@ describe('PlanPage', () => {
     })
   })
 
-  it('keeps errors dismissible and calm', async () => {
+  it('keeps exactly one tabbable cell after paging to another month', async () => {
+    const { user } = await renderPlan()
+    const grid = screen.getByRole('grid')
+    within(grid)
+
+    const focused = document.querySelector('.plan__month-day[tabindex="0"]') as HTMLElement
+    focused.focus()
+    await user.keyboard('{PageDown}')
+
+    await waitFor(() => {
+      const tabbable = document.querySelectorAll('.plan__month-day[tabindex="0"]')
+      expect(tabbable.length).toBe(1)
+    })
+  })
+
+  it('ignores a stale response when views are switched quickly', async () => {
+    let resolveSlow: (value: unknown) => void = () => {}
+    const slow = new Promise((resolve) => {
+      resolveSlow = resolve
+    })
+    let call = 0
     const { user } = await renderPlan({
-      getPlanSummary: vi.fn(async () => {
-        throw new Error('The plan could not be loaded.')
+      getPlanSummary: vi.fn(async (from: string, to: string) => {
+        call += 1
+        if (call === 1) {
+          await slow
+          return rangeSummary(from, to)
+        }
+        return [daySummary(to, { planned_count: 3, day_type: 'workout' })]
       }),
     })
 
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent(/could not be loaded/i)
-    await user.click(screen.getByLabelText('Dismiss'))
-    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    await user.click(screen.getByRole('tab', { name: 'Week' }))
+    await waitFor(() => expect(call).toBeGreaterThan(1))
+    resolveSlow(rangeSummary('2000-01-01', '2000-01-07'))
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Week' })).toHaveAttribute('aria-selected', 'true'))
+    expect(screen.queryByText(/2000/)).not.toBeInTheDocument()
   })
 
+  it('shows a loading skeleton before the first response arrives', async () => {
+    let resolve: (value: unknown) => void = () => {}
+    vi.doMock('../services/api', async () => {
+      const actual = await vi.importActual<typeof import('../services/api')>('../services/api')
+      return {
+        ...actual,
+        api: {
+          ...(mockApi().api as Record<string, unknown>),
+          getPlanSummary: vi.fn(
+            () =>
+              new Promise((r) => {
+                resolve = r
+              }),
+          ),
+          getAllPlannedSessions: vi.fn(() => new Promise((r) => setTimeout(() => r([]), 0))),
+          listAllWorkouts: vi.fn(() => new Promise((r) => setTimeout(() => r([]), 0))),
+        } as never,
+      }
+    })
+    const module = await import('./PlanPage')
+    render(<module.PlanPage />)
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/loading your month plan/i)
+
+    resolve(rangeSummary(toDateKey(new Date()), toDateKey(new Date())))
+  })
+
+  it('survives a malformed or empty plan response without crashing', async () => {
+    await renderPlan({
+      getPlanSummary: vi.fn(async () => null as unknown),
+      getAllPlannedSessions: vi.fn(async () => ({ items: null }) as unknown),
+      listAllWorkouts: vi.fn(async () => undefined as unknown),
+    })
+
+    expect(screen.queryByText(/couldn't be displayed/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('grid')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Month' })).toBeInTheDocument()
+  })
+
+  it('offers a retry when loading fails and recovers afterwards', async () => {
+    let failing = true
+    const { user } = await renderPlan({
+      getPlanSummary: vi.fn(async (from: string, to: string) => {
+        if (failing) throw new Error('The plan could not be loaded.')
+        return rangeSummary(from, to)
+      }),
+    })
+
+    const alert = await screen.findAllByRole('alert')
+    expect(alert[0]).toHaveTextContent(/could not be loaded/i)
+
+    failing = false
+    await user.click(within(alert[0]).getByRole('button', { name: 'Retry' }))
+
+    await waitFor(() => expect(screen.queryByText(/could not be loaded/i)).not.toBeInTheDocument())
+  })
+
+  it('shows a rest day only when the day was explicitly set to rest', async () => {
+    const todayKey = toDateKey(new Date())
+    await renderPlan({
+      getPlanSummary: vi.fn(async () => [
+        daySummary(todayKey, { planned_count: 1, day_type: 'rest' }),
+      ]),
+      getAllPlannedSessions: vi.fn(async () => [
+        plannedSession('ps-rest', todayKey, { title: 'Rest', day_type: 'rest' }),
+      ]),
+    })
+
+    expect(screen.getByText('rest')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark as rest day' })).not.toBeInTheDocument()
+  })
+
+  it('plans and logs a session and keeps it after a refresh', async () => {
+    let planned: unknown[] = []
+    const { user, spies } = await renderPlan({
+      getAllPlannedSessions: vi.fn(async () => planned),
+      createPlannedSession: vi.fn(async (payload: { planned_date: string }) => {
+        planned = [plannedSession('ps-new', payload.planned_date, { title: 'Leg day' })]
+        return planned[0]
+      }),
+    })
+
+    await user.click(screen.getByRole('button', { name: /Plan session/ }))
+    await waitFor(() => expect(spies.createPlannedSession).toHaveBeenCalled())
+
+    expect(screen.getByDisplayValue('Leg day')).toBeInTheDocument()
+  })
 })
 
 describe('PlanPage day labelling', () => {
@@ -195,5 +373,22 @@ describe('PlanPage day labelling', () => {
     expect(module.dayTypeLabel(days[1])).toBe('rest')
     expect(module.dayTypeLabel(days[2])).toBe('active recovery')
     expect(module.dayTypeLabel(undefined)).toBe('No plan')
+  })
+
+  it('covers week, month and year with plain local date ranges', async () => {
+    const module = await import('./PlanPage')
+    const anchor = new Date(2026, 9, 14) // 14 Oct 2026, a Wednesday, local
+
+    const week = module.visibleRange('week', anchor)
+    expect(week).toEqual({ from: '2026-10-12', to: '2026-10-18' }) // Monday-first
+
+    const month = module.visibleRange('month', anchor)
+    expect(month.from).toBe('2026-09-28') // six Monday-first rows
+    expect(month.to).toBe('2026-11-08')
+
+    expect(module.visibleRange('year', anchor)).toEqual({
+      from: '2026-01-01',
+      to: '2026-12-31',
+    })
   })
 })

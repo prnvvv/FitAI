@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   addDays,
   bmiCategory,
+  dateFromKey,
+  isDateKey,
   cmToFeetInches,
   formatMonthTitle,
   formatWeekTitle,
@@ -87,5 +89,43 @@ describe('unit conversion', () => {
     expect(parseHeightInput('68.9', 'in')).toBeCloseTo(175, 0)
     expect(parseHeightInput(`5' 9"`, 'ft_in')).toBeCloseTo(175.26, 1)
     expect(parseHeightInput('', 'cm')).toBeNull()
+  })
+})
+
+describe('local day keys (IST)', () => {
+  it('keeps a YYYY-MM-DD key on the same local day', () => {
+    const date = dateFromKey('2026-10-14')
+    expect(date).not.toBeNull()
+    expect(toDateKey(date as Date)).toBe('2026-10-14')
+    expect(date?.getDate()).toBe(14)
+    expect(date?.getHours()).toBe(0)
+  })
+
+  it('never parses a day key as UTC (which would shift the day)', () => {
+    // `new Date('2026-10-14')` is midnight UTC and lands on the 13th or 15th
+    // depending on the offset; the helper builds local parts instead.
+    expect(toDateKey(dateFromKey('2026-10-14') as Date)).toBe('2026-10-14')
+    expect(toDateKey(dateFromKey('2026-01-01') as Date)).toBe('2026-01-01')
+    expect(toDateKey(dateFromKey('2026-03-29') as Date)).toBe('2026-03-29')
+  })
+
+  it('rejects malformed or impossible keys', () => {
+    expect(isDateKey('2026-10-14')).toBe(true)
+    expect(isDateKey('2026-13-01')).toBe(false)
+    expect(isDateKey('2026-02-30')).toBe(false)
+    expect(isDateKey('14-10-2026')).toBe(false)
+    expect(isDateKey('')).toBe(false)
+    expect(isDateKey(undefined)).toBe(false)
+    expect(dateFromKey('nonsense')).toBeNull()
+  })
+
+  it('round-trips an instant logged at local midnight', () => {
+    const logged = new Date(2026, 9, 14, 0, 30)
+    expect(toDateKey(logged)).toBe('2026-10-14')
+  })
+
+  it('round-trips an instant logged at local 23:45', () => {
+    const logged = new Date(2026, 9, 14, 23, 45)
+    expect(toDateKey(logged)).toBe('2026-10-14')
   })
 })
