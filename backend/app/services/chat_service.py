@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -20,6 +21,8 @@ from app.agent import (
 )
 from app.agent.multi import run_multi_turn
 from app.core.config import settings
+from app.extraction.extractor import GroqActivityExtractor, RecordExtractor
+from app.extraction.persistence import persist_extraction
 from app.llm.client import GroqClient
 from app.memory.change_detector import DetectedChange, MemoryEntry
 from app.memory.confirmation import Decision, MemoryWriter
@@ -35,6 +38,8 @@ from app.services.progress_service import ProgressService
 from app.services.workout_service import WorkoutService
 from app.tools.nearby_gyms import nearby_gyms
 from app.tools.web_search import web_search
+
+log = logging.getLogger(__name__)
 
 
 class _ProfileReaderAdapter(ProfileReader):
@@ -317,6 +322,9 @@ class ChatService:
         self._db = db
         self._conversations = ConversationService(db)
         self._memory = MemoryService(db)
+        # Overridable extraction provider. Built lazily from settings so a missing
+        # extraction key leaves the default (None) and chat proceeds unchanged.
+        self._extractor: RecordExtractor | None = None
 
     def chat(self, user: User, message: str, conversation_id: UUID | None = None) -> dict[str, Any]:
         """Run a single turn and return the assistant response.
@@ -331,6 +339,12 @@ class ChatService:
 
         conversation_id = conversation.id
         self._conversations.add_message(user_id, conversation_id, MessageRole.USER, message)
+
+        # Dedicated structured extraction -> authoritative persistence. This runs
+        # BEFORE the assistant reply so a truthful confirmation can be appended,
+        # and only AFTER the database confirms each write. It must never break
+        # the chat response, so every failure is contained here.
+        extraction_events, confirmations = self._extract_and_persist(user_id, message)
 
         try:
             retriever = Retriever(VectorStore(persist_dir=settings.chromadb_persist_dir))
@@ -358,10 +372,15 @@ class ChatService:
             turn = run_turn(graph, str(user_id), message, context)
         response = turn["response"]
 
+        # Only append a confirmation AFTER the database writes succeeded. This is
+        # deterministic (not model-generated) so it can never claim a false save.
+        if confirmations:
+            response = (response.rstrip() + "\n\n" + "\n".join(confirmations)).strip()
+
         metadata = {
             "sources": turn.get("sources", []),
             "actions": turn.get("actions", []),
-            "tool_events": turn.get("tool_results", []),
+            "tool_events": extraction_events + list(turn.get("tool_results", [])),
         }
         self._conversations.add_message(
             user_id, conversation_id, MessageRole.ASSISTANT, response, metadata=metadata
@@ -380,3 +399,70 @@ class ChatService:
     def _build_llm() -> GroqClient:
         """Return a Groq-backed completer configured from project settings."""
         return GroqClient(api_key=settings.groq_api_key, model=settings.groq_model)
+
+    def _build_extractor(self) -> RecordExtractor | None:
+        """Return the dedicated extractor, or None when disabled/unconfigured."""
+        if not settings.extraction_enabled:
+            return None
+        try:
+            return GroqActivityExtractor(
+                api_key=settings.extraction_api_key or "",
+                model=settings.extraction_model,
+            )
+        except Exception:
+            log.warning("activity extractor could not be initialised", exc_info=True)
+            return None
+
+    def _extract_and_persist(self, user_id, message: str) -> tuple[list[dict], list[str]]:
+        """Extract structured records and persist them to the right services.
+
+        Returns (tool_events, confirmations). Containment is total: any failure
+        (extractor missing, provider error, or a per-record write error) results
+        in no events / no false confirmation, and the assistant response is
+        unaffected. Individual write failures are reported honestly, never as
+        success.
+        """
+        extractor = self._extractor or self._build_extractor()
+        if extractor is None:
+            return [], []
+        try:
+            result = extractor.extract(message)
+        except Exception:
+            log.warning("activity extraction raised", exc_info=True)
+            return [], []
+
+        outcomes = persist_extraction(self._db, user_id, result)
+        events: list[dict[str, Any]] = []
+        confirmations: list[str] = []
+        for outcome in outcomes:
+            if outcome.status in {"saved", "duplicate", "failed"}:
+                events.append(
+                    {
+                        "tool": f"extract_{outcome.kind}",
+                        "status": outcome.status,
+                        "summary": outcome.summary,
+                        "record_id": outcome.record_id,
+                    }
+                )
+            line = _confirmation_line(outcome)
+            if line:
+                confirmations.append(line)
+        return events, confirmations
+
+
+def _confirmation_line(outcome) -> str | None:
+    """Deterministic, truthful user-facing line for a persistence outcome."""
+    kind = outcome.kind.replace("_", " ")
+    if outcome.kind == "completed_workout":
+        if outcome.status == "saved":
+            return f"Workout recorded: {outcome.summary}."
+        if outcome.status == "duplicate":
+            return f"That workout ({outcome.summary}) is already recorded."
+        return f"I couldn't save the workout ({outcome.summary}); please try again in a moment."
+    if outcome.status == "saved":
+        return f"Saved {kind}: {outcome.summary}."
+    if outcome.status == "duplicate":
+        return f"That {kind} ({outcome.summary}) is already saved."
+    if outcome.status == "failed":
+        return f"I couldn't save the {kind} ({outcome.summary}); please try again."
+    return None
