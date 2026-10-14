@@ -2291,11 +2291,12 @@
   justify-content: center;
   padding: 8px 12px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background-color: var(--bg-composer);
   color: var(--text-primary);
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   cursor: pointer;
+  transition: background var(--transition-fast);
 }
 
 .plan__today-btn {
@@ -2321,11 +2322,12 @@
   gap: 6px;
   padding: 12px 8px;
   border: 1px solid var(--divider);
-  border-radius: 10px;
-  background-color: var(--bg-composer);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
   color: var(--text-secondary);
   cursor: pointer;
   position: relative;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
 
 .plan__day:hover {
@@ -2342,13 +2344,13 @@
 }
 
 .plan__day-weekday {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .plan__day-date {
-  font-size: 1.125rem;
+  font-size: var(--font-size-2xl);
   font-weight: 600;
 }
 
