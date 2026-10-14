@@ -270,3 +270,115 @@ input[type='number'] {
   background-color: var(--accent-soft);
   color: var(--accent);
 }
+
+.plan__cell-dot--in-progress {
+  background-color: var(--warning);
+}
+
+.plan__cell-dot--planned {
+  background-color: var(--accent);
+}
+
+/* Memory item styles */
+.memory__item {
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.memory__item:hover {
+  border-color: var(--divider-strong);
+  box-shadow: var(--shadow-sm);
+}
+.memory__key {
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.memory__value {
+  font-size: var(--font-size-xl);
+  color: var(--text-primary);
+  word-break: break-word;
+}
+.memory__meta {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+.memory__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.memory__approve {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.memory__approve:hover {
+  background-color: var(--success-bg);
+  color: var(--success);
+}
+.memory__edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.memory__edit-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+.memory__delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+.memory__delete:hover {
+  background-color: var(--error-bg);
+  color: var(--error);
+}
+.memory__item--pending {
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
+}
+.page__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 24px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.page__empty p {
+  margin: 16px 0 4px;
+  color: var(--text-secondary);
+}
+.page__empty span {
+  font-size: 0.875rem;
+}

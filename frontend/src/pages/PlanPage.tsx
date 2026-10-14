@@ -574,17 +574,30 @@ export function PlanPage() {
     return 'no plan'
   }
 
+  const cellBadgeColor = (key: string): string => {
+    const day = summaryByDate[key]
+    const plannedCount = day?.planned_count ?? 0
+    const completed = day?.completed_count ?? 0
+    const isRest = day?.day_type === 'rest'
+    if (plannedCount === 0 && !isRest && !day?.has_meals) return null
+    if (completed >= plannedCount && !isRest) return 'done'
+    if (plannedCount > 0 && completed > 0) return 'in-progress'
+    if (plannedCount > 0) return 'planned'
+    return null
+  }
+
   const cellBadges = (key: string) => {
     const day = summaryByDate[key]
     const plannedCount = day?.planned_count ?? 0
     const completed = day?.completed_count ?? 0
     const isRest = day?.day_type === 'rest'
     if (plannedCount === 0 && !isRest && !day?.has_meals) return null
+    const badgeColor = cellBadgeColor(key)
     return (
       <span className="plan__cell-badges">
         {plannedCount > 0 && (
           <span
-            className={`plan__cell-dot ${completed >= plannedCount ? 'plan__cell-dot--done' : ''}`}
+            className={`plan__cell-dot ${badgeColor === 'done' ? 'plan__cell-dot--done' : badgeColor === 'in-progress' ? 'plan__cell-dot--in-progress' : badgeColor === 'planned' ? 'plan__cell-dot--planned : ''}`}
             title={`${completed} of ${plannedCount} sessions completed`}
           />
         )}
