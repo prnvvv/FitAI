@@ -41,6 +41,14 @@ class DocumentRepository:
         )
         return self._db.scalar(statement)
 
+    def get_by_content_hash(self, user_id: UUID, content_hash: str) -> Document | None:
+        """Return this user's document with identical bytes, if there is one."""
+        statement = select(Document).where(
+            Document.user_id == user_id,
+            Document.content_hash == content_hash,
+        )
+        return self._db.scalar(statement)
+
     def create(
         self,
         user_id: UUID,
@@ -52,6 +60,7 @@ class DocumentRepository:
         storage_backend: str | None = None,
         storage_key: str | None = None,
         status: DocumentStatus = DocumentStatus.PENDING,
+        content_hash: str | None = None,
     ) -> Document:
         """Create and persist a document metadata row."""
         document = Document(
@@ -63,6 +72,7 @@ class DocumentRepository:
             storage_backend=storage_backend,
             storage_key=storage_key,
             status=status,
+            content_hash=content_hash,
         )
         self._db.add(document)
         self._db.flush()

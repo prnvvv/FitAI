@@ -26,7 +26,10 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """Authoritative record of an uploaded document and its ingestion state."""
 
     __tablename__ = "documents"
-    __table_args__ = (Index("ix_documents_user_status", "user_id", "status"),)
+    __table_args__ = (
+        Index("ix_documents_user_status", "user_id", "status"),
+        Index("ix_documents_user_content_hash", "user_id", "content_hash"),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -44,6 +47,8 @@ class Document(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         default=DocumentStatus.PENDING,
         server_default=DocumentStatus.PENDING.value,
     )
+    #: SHA-256 of the uploaded bytes, used to detect an identical re-upload.
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ingestion_metadata: Mapped[dict[str, object] | None] = mapped_column(
         "metadata",

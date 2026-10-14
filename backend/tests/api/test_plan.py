@@ -131,3 +131,18 @@ def test_planned_session_validation(client) -> None:
         "/api/v1/plan/sessions", json={"planned_date": "14/10/2026", "day_type": "workout"}
     )
     assert bad_date.status_code == 422
+
+
+def test_unplanned_days_are_distinct_from_rest_days(client) -> None:
+    """`none` means unplanned; `rest` is only returned when explicitly planned."""
+    empty = client.get("/api/v1/plan/summary?from=2026-10-13&to=2026-10-13").json()
+    assert empty[0]["day_type"] == "none"
+    assert empty[0]["planned_count"] == 0
+
+    client.post(
+        "/api/v1/plan/sessions",
+        json={"planned_date": "2026-10-13", "title": "Rest", "day_type": "rest", "exercises": []},
+    )
+    planned = client.get("/api/v1/plan/summary?from=2026-10-13&to=2026-10-13").json()
+    assert planned[0]["day_type"] == "rest"
+    assert planned[0]["planned_count"] == 1

@@ -31,6 +31,7 @@ Key variables (all owned by Person 1 unless marked Person 2):
 | `DOCUMENT_STORAGE_BACKEND`  | `unconfigured`         | `unconfigured`/`local`/`supabase` (supabase not implemented).|
 | `MAX_UPLOAD_SIZE_MB`        | `10`                   |                    |
 | `CORS_ORIGINS`              | localhost Vite/React   | Comma-separated.                                             |
+| `BACKEND_HOST` / `BACKEND_PORT` | `127.0.0.1` / `8000` | Single source of truth for the dev server address. The Vite proxy, `scripts/dev.ps1` and `scripts/run-all.sh` all read these from `backend/.env`. `HOST`/`PORT` are accepted as deprecated aliases. |
 | `GROQ_API_KEY` / ChromaDB   | —                      | Person 2.                                                    |
 
 `JWT_ALGORITHM`/`JWT_SECRET` (legacy names) are removed in favor of the
@@ -60,12 +61,32 @@ unique index `uq_memories_user_key_active` (one active memory per user/key).
 
 ## 4. Run the app
 
+The port lives in exactly one place: `BACKEND_HOST` / `BACKEND_PORT` in
+`backend/.env`. Change it there; the dev scripts and the Vite proxy follow.
+
 ```powershell
-uvicorn app.main:app --reload
+# starts backend + frontend, checks the port first, stops both on Ctrl+C
+powershell -ExecutionPolicy Bypass -File scripts\dev.ps1
 ```
 
-- OpenAPI: `http://localhost:8000/docs`
-- Liveness: `GET /health`; readiness: `GET /health/ready`
+On macOS/Linux (or Git Bash):
+
+```bash
+./scripts/run-all.sh
+```
+
+Backend only, using the configured address:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+If startup fails because the port is unavailable, the script prints how to find
+the owning process and how to change `BACKEND_PORT`; nothing is auto-moved.
+
+- OpenAPI: `http://127.0.0.1:8000/openapi.json` (docs at `/docs`)
+- Liveness: `GET /health`; readiness: `GET /health/ready` (both unauthenticated)
 
 ## 5. Tests (run only when authorized)
 

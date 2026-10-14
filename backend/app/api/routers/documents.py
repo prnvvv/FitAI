@@ -10,6 +10,8 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, File, UploadFile, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession, Pagination
 from app.core.config import settings
@@ -19,7 +21,7 @@ from app.models.enums import ActivityEventType
 from app.rag.pipeline import IngestionPipeline
 from app.rag.vector_store import VectorStore
 from app.schemas.common import Page
-from app.schemas.document import DocumentOut
+from app.schemas.document import DocumentOut, DocumentRename
 from app.services.activity_event_service import ActivityEventService
 from app.services.document_service import DocumentService
 
@@ -53,21 +55,39 @@ async def _read_upload_limited(file: UploadFile) -> bytes:
     return b"".join(chunks)
 
 
-@router.post("", response_model=DocumentOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=DocumentOut,
+    status_code=status.HTTP_201_CREATED,
+    responses={200: {"description": "The identical file is already in the library."}},
+)
 async def upload_document(
     current_user: CurrentUser,
     db: DbSession,
     file: UploadFile = File(...),
-) -> DocumentOut:
-    """Upload a document and record its metadata and initial status."""
+) -> JSONResponse:
+    """Upload a document and record its metadata and initial status.
+
+    Uploading identical bytes twice returns the existing item with 200 and an
+    ``X-Duplicate: true`` header instead of creating a second row.
+    """
     data = await _read_upload_limited(file)
     service = DocumentService(db, ingestion=_get_ingestion())
-    document = service.create(
+    document, is_duplicate = service.create(
         current_user.id,
         file.filename or "upload",
         file.content_type or "application/octet-stream",
         data,
     )
+    body = jsonable_encoder(DocumentOut.from_document(document))
+
+    if is_duplicate:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content=body,
+            headers={"X-Duplicate": "true"},
+        )
+
     ActivityEventService(db).record(
         current_user.id,
         ActivityEventType.DOCUMENT_ADDED,
@@ -75,7 +95,19 @@ async def upload_document(
         entity_id=str(document.id),
         payload={"filename": document.filename, "size_bytes": document.size_bytes},
     )
-    return DocumentOut.model_validate(document)
+    return JSONResponse(status_code=status.HTTP_201_CREATED, content=body)
+
+
+@router.patch("/{document_id}", response_model=DocumentOut)
+def rename_document(
+    document_id: UUID,
+    payload: DocumentRename,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> DocumentOut:
+    """Rename one of the user's documents."""
+    document = DocumentService(db).rename(current_user.id, document_id, payload.filename)
+    return DocumentOut.from_document(document)
 
 
 @router.get("", response_model=Page[DocumentOut])
@@ -104,7 +136,7 @@ def get_document(
 ) -> DocumentOut:
     """Return one of the authenticated user's documents."""
     document = DocumentService(db).get(current_user.id, document_id)
-    return DocumentOut.model_validate(document)
+    return DocumentOut.from_document(document)
 
 
 @router.post("/{document_id}/retry", response_model=DocumentOut)
@@ -115,7 +147,7 @@ def retry_document(
 ) -> DocumentOut:
     """Re-run ingestion for one of the user's documents."""
     document = DocumentService(db, ingestion=_get_ingestion()).retry(current_user.id, document_id)
-    return DocumentOut.model_validate(document)
+    return DocumentOut.from_document(document)
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)

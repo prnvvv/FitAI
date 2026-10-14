@@ -21,6 +21,18 @@ class BmiPointOut(BaseModel):
     height_cm: Decimal
 
 
+class MetricDefinitionOut(BaseModel):
+    """One trackable metric and the rules the UI needs to render its input."""
+
+    type: str
+    label: str
+    canonical_unit: str
+    units: list[str]
+    min: Decimal
+    max: Decimal
+    derived: bool = False
+
+
 class WeeklySessionsOut(BaseModel):
     """Sessions completed in one Monday-start week."""
 

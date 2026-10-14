@@ -22,7 +22,7 @@ try:
 except Exception:
     pass
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://localhost:3000"]
@@ -43,8 +43,17 @@ class Settings(BaseSettings):
     app_name: str = "FitAI Backend"
     environment: str = "development"
     debug: bool = False
-    host: str = "0.0.0.0"
-    port: int = 8000
+    #: Single source of truth for the local dev server bind address. Read by the
+    #: dev scripts, the Vite proxy and any local run command. ``HOST``/``PORT``
+    #: are accepted as deprecated aliases so older .env files keep working.
+    backend_host: str = Field(
+        default="127.0.0.1",
+        validation_alias=AliasChoices("BACKEND_HOST", "HOST"),
+    )
+    backend_port: int = Field(
+        default=8000,
+        validation_alias=AliasChoices("BACKEND_PORT", "PORT"),
+    )
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
     cors_origins: Annotated[list[str], NoDecode] = DEFAULT_CORS_ORIGINS

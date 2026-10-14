@@ -7,6 +7,7 @@ coordinated by Person 2.
 
 from __future__ import annotations
 
+import hashlib
 from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any
@@ -21,6 +22,7 @@ from app.core.errors import (
     NotFoundError,
     PayloadTooLargeError,
     UnsupportedMediaTypeError,
+    ValidationError,
 )
 from app.models.document import Document
 from app.models.enums import DocumentStatus
@@ -39,29 +41,32 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-#: Ingestion failures that are meaningful to a user, mapped to calm copy.
-_FAILURE_COPY: dict[str, str] = {
-    "unsupported file type": "That file type isn't supported. Use PDF, TXT, MD, DOCX, PNG, JPG or WEBP.",
-    "content does not match": "That file doesn't match its extension, so it can't be read.",
-    "file is empty": "That file is empty.",
-    "file too large": "That file is too large to process.",
+#: Ingestion failures that are meaningful to a user, mapped to calm copy. The
+#: stored reason is short and never contains a traceback, file content or secrets.
+FAILURE_COPY: dict[str, str] = {
+    "unsupported file type": "Unsupported file type.",
+    "content does not match": "Couldn't read this file.",
+    "file is empty": "This file is empty.",
+    "file too large": "File too large.",
     "no extractable text": "No readable text was found in that file.",
     "password-protected": "That PDF is password-protected.",
+    "image reading isn't available": "Image reading isn't available right now.",
+    "couldn't read this image": "Couldn't read this image.",
 }
+DEFAULT_FAILURE_REASON = "This file could not be processed."
 
 
-def _readable_failure(exc: BaseException) -> str:
-    """Turn an ingestion exception into a short, user-readable reason."""
+def readable_failure(exc: BaseException | str) -> str:
+    """Turn an ingestion failure into a short, user-readable reason."""
     from app.rag.loader import DocumentLoadError
 
-    message = str(exc).strip()
-    if isinstance(exc, DocumentLoadError):
+    message = exc if isinstance(exc, str) else str(exc).strip()
+    if isinstance(exc, DocumentLoadError) or message:
         lowered = message.lower()
-        for needle, copy in _FAILURE_COPY.items():
+        for needle, copy in FAILURE_COPY.items():
             if needle in lowered:
                 return copy
-        return message or "This file could not be processed."
-    return message or "This file could not be processed."
+    return DEFAULT_FAILURE_REASON
 
 
 class DocumentService:
@@ -96,9 +101,19 @@ class DocumentService:
         data: bytes,
         *,
         trigger_ingestion: bool = True,
-    ) -> Document:
-        """Validate and store an uploaded document, then record its metadata."""
+    ) -> tuple[Document, bool]:
+        """Validate and store an uploaded document, then record its metadata.
+
+        Returns ``(document, is_duplicate)``. When the same bytes are already in
+        this user's library the existing row is returned unchanged instead of
+        creating a second item.
+        """
         self._validate_upload(filename, content_type, len(data))
+
+        content_hash = hashlib.sha256(data).hexdigest()
+        existing = self._documents.get_by_content_hash(user_id, content_hash)
+        if existing is not None:
+            return existing, True
 
         document_id = uuid4()
         key = f"{user_id}/{document_id}"
@@ -114,6 +129,7 @@ class DocumentService:
                 storage_backend=self._storage.backend_name,
                 storage_key=key,
                 status=DocumentStatus.PENDING,
+                content_hash=content_hash,
             )
             self._db.commit()
         except SQLAlchemyError as exc:
@@ -126,6 +142,17 @@ class DocumentService:
         if trigger_ingestion:
             self._ingest(document, data)
 
+        return document, False
+
+    def rename(self, user_id: UUID, document_id: UUID, filename: str) -> Document:
+        """Rename one of the user's documents without touching the stored bytes."""
+        cleaned = filename.strip()
+        if not cleaned or len(cleaned) > 255:
+            raise ValidationError("The file name must be between 1 and 255 characters.")
+        document = self.get(user_id, document_id)
+        document.filename = cleaned
+        self._commit()
+        self._db.refresh(document)
         return document
 
     def retry(self, user_id: UUID, document_id: UUID) -> Document:
@@ -184,7 +211,7 @@ class DocumentService:
                     document.user_id,
                     document.id,
                     DocumentStatus.FAILED,
-                    error_message=_readable_failure(exc),
+                    error_message=readable_failure(exc),
                 )
             self._db.refresh(document)
             return document
@@ -196,7 +223,7 @@ class DocumentService:
                 document.user_id,
                 document.id,
                 DocumentStatus.FAILED,
-                error_message=result.error or "This file could not be processed.",
+                error_message=readable_failure(result.error or ""),
             )
         self._db.refresh(document)
         return document

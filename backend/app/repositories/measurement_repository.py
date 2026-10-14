@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -76,11 +77,25 @@ class MeasurementRepository:
         self._db.delete(measurement)
         self._db.flush()
 
-    def series(self, user_id: UUID, measurement_type: MeasurementType) -> list[Measurement]:
-        """Return all measurements of a type in chronological order."""
-        statement = (
-            select(Measurement)
-            .where(Measurement.user_id == user_id, Measurement.type == measurement_type)
-            .order_by(Measurement.measured_at)
-        )
+    def series(
+        self,
+        user_id: UUID,
+        measurement_type: MeasurementType,
+        *,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> list[Measurement]:
+        """Return measurements of a type in chronological order, optionally by date range.
+
+        The date window uses the same indexed comparison as the workout
+        repository so it stays sargable.
+        """
+        filters = [Measurement.user_id == user_id, Measurement.type == measurement_type]
+        if from_date:
+            filters.append(Measurement.measured_at >= datetime.combine(from_date, time.min))
+        if to_date:
+            filters.append(
+                Measurement.measured_at < datetime.combine(to_date + timedelta(days=1), time.min)
+            )
+        statement = select(Measurement).where(*filters).order_by(Measurement.measured_at)
         return list(self._db.scalars(statement))

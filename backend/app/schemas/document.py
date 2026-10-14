@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import DocumentStatus
 
@@ -21,8 +21,23 @@ class DocumentOut(BaseModel):
     size_bytes: int
     storage_backend: str | None = None
     status: DocumentStatus
-    error_message: str | None = None
+    #: Short, human-readable failure reason. Never a traceback or file content.
+    failure_reason: str | None = None
+    content_hash: str | None = None
     created_at: dt.datetime
     updated_at: dt.datetime
     completed_at: dt.datetime | None = None
     failed_at: dt.datetime | None = None
+
+    @classmethod
+    def from_document(cls, document: object) -> DocumentOut:
+        """Build the response, exposing ``error_message`` as ``failure_reason``."""
+        model = cls.model_validate(document)
+        model.failure_reason = getattr(document, "error_message", None)
+        return model
+
+
+class DocumentRename(BaseModel):
+    """Payload for renaming an uploaded document."""
+
+    filename: str = Field(min_length=1, max_length=255)

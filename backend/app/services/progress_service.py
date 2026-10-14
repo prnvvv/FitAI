@@ -28,10 +28,17 @@ class ProgressService:
         self._workouts = WorkoutRepository(db)
 
     def measurement_series(
-        self, user_id: UUID, measurement_type: MeasurementType
+        self,
+        user_id: UUID,
+        measurement_type: MeasurementType,
+        *,
+        from_date: date | None = None,
+        to_date: date | None = None,
     ) -> list[Measurement]:
-        """Return all measurements of a type in chronological order."""
-        return self._measurements.series(user_id, measurement_type)
+        """Return measurements of a type in chronological order, optionally by date range."""
+        return self._measurements.series(
+            user_id, measurement_type, from_date=from_date, to_date=to_date
+        )
 
     def weight_series(self, user_id: UUID) -> list[Measurement]:
         """Return the user's weight measurements in chronological order."""

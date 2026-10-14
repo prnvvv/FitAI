@@ -11,22 +11,6 @@ const summary = (from: string, to: string) =>
     has_meals: false,
   }))
 
-const emptyMetrics = {
-  window: { from: '2026-01-01', to: '2026-10-14' },
-  sessions_completed: 0,
-  active_days: 0,
-  sessions_per_week: 0,
-  weekly_sessions: [],
-  total_volume_kg: 0,
-  personal_records: [],
-  current_streak_days: 0,
-  longest_streak_days: 0,
-  planned_sessions: 0,
-  planned_completed: 0,
-  planned_completion_rate: null,
-  source: 'derived',
-}
-
 function mockApi(overrides: Record<string, unknown> = {}) {
   const calls: string[] = []
   const base: Record<string, unknown> = {
@@ -183,7 +167,33 @@ describe('PlanPage', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   })
 
-  it('exposes derived metrics endpoint constants only through the api client', () => {
-    expect(typeof emptyMetrics.source).toBe('string')
+})
+
+describe('PlanPage day labelling', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('labels an unplanned day "No plan" and an explicit rest day "rest"', async () => {
+    const module = await import('./PlanPage')
+    const days = [
+      { date: '2026-10-14', planned_count: 0, completed_count: 0, day_type: 'none', has_meals: false },
+      { date: '2026-10-15', planned_count: 1, completed_count: 0, day_type: 'rest', has_meals: false },
+      {
+        date: '2026-10-16',
+        planned_count: 1,
+        completed_count: 0,
+        day_type: 'active_recovery',
+        has_meals: false,
+      },
+    ]
+    expect(module.dayTypeLabel(days[0])).toBe('No plan')
+    expect(module.dayTypeLabel(days[1])).toBe('rest')
+    expect(module.dayTypeLabel(days[2])).toBe('active recovery')
+    expect(module.dayTypeLabel(undefined)).toBe('No plan')
   })
 })

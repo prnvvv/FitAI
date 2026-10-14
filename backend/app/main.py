@@ -7,6 +7,8 @@ developed; it should be registered in the marked section below.
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -150,46 +152,75 @@ def _register_startup_tasks(app: FastAPI) -> None:
 
 
 def _register_error_handlers(app: FastAPI) -> None:
+    def _request_id(request: Request) -> str:
+        """Return the caller's request id, or mint one so every error is traceable."""
+        existing = request.headers.get("X-Request-ID")
+        if existing:
+            return existing
+        return uuid.uuid4().hex[:16]
+
+    def _error_body(code: str, message: str, details: dict, request_id: str) -> dict:
+        return {
+            "error": {
+                "code": code,
+                "message": message,
+                "details": details,
+                "request_id": request_id,
+            }
+        }
+
     @app.exception_handler(AppError)
-    async def _handle_app_error(_request: Request, exc: AppError) -> JSONResponse:
+    async def _handle_app_error(request: Request, exc: AppError) -> JSONResponse:
+        request_id = _request_id(request)
+        if exc.status_code >= 500:
+            logger.error(
+                "application_error",
+                exc_info=True,
+                request_id=request_id,
+                path=request.url.path,
+                code=exc.code,
+            )
         return JSONResponse(
             status_code=exc.status_code,
-            content={
-                "error": {
-                    "code": exc.code,
-                    "message": exc.message,
-                    "details": jsonable_encoder(exc.details),
-                }
-            },
+            content=_error_body(exc.code, exc.message, jsonable_encoder(exc.details), request_id),
+            headers={"X-Request-ID": request_id},
         )
 
     @app.exception_handler(RequestValidationError)
     async def _handle_validation_error(
-        _request: Request, exc: RequestValidationError
+        request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        request_id = _request_id(request)
         return JSONResponse(
             status_code=422,
-            content={
-                "error": {
-                    "code": "VALIDATION_ERROR",
-                    "message": "The request data is invalid.",
-                    "details": {"errors": jsonable_encoder(exc.errors())},
-                }
-            },
+            content=_error_body(
+                "VALIDATION_ERROR",
+                "The request data is invalid.",
+                {"errors": jsonable_encoder(exc.errors())},
+                request_id,
+            ),
+            headers={"X-Request-ID": request_id},
         )
 
     @app.exception_handler(Exception)
-    async def _handle_unexpected_error(_request: Request, exc: Exception) -> JSONResponse:
-        logger.error("unhandled_exception", error=str(exc), error_type=type(exc).__name__)
+    async def _handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+        request_id = _request_id(request)
+        logger.error(
+            "unhandled_exception",
+            exc_info=True,
+            request_id=request_id,
+            path=request.url.path,
+            error_type=type(exc).__name__,
+        )
         return JSONResponse(
             status_code=500,
-            content={
-                "error": {
-                    "code": "INTERNAL_ERROR",
-                    "message": "An unexpected error occurred.",
-                    "details": {},
-                }
-            },
+            content=_error_body(
+                "INTERNAL_ERROR",
+                "An unexpected error occurred.",
+                {},
+                request_id,
+            ),
+            headers={"X-Request-ID": request_id},
         )
 
 

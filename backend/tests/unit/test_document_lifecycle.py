@@ -44,7 +44,7 @@ def _service(db_session, tmp_path, ingestion) -> DocumentService:
 
 def test_ingestion_progresses_queued_reading_ready(db_session, tmp_path) -> None:
     ingestion = _FakeIngestion([_FakeResult("indexed")])
-    document = _service(db_session, tmp_path, ingestion).create(
+    document, _dup = _service(db_session, tmp_path, ingestion).create(
         uuid.uuid4(), "plan.jpg", "image/jpeg", JPEG
     )
 
@@ -55,30 +55,30 @@ def test_ingestion_progresses_queued_reading_ready(db_session, tmp_path) -> None
 
 def test_ingestion_failure_stores_a_readable_reason(db_session, tmp_path) -> None:
     ingestion = _FakeIngestion([_FakeResult("failed", "no extractable text in image")])
-    document = _service(db_session, tmp_path, ingestion).create(
+    document, _dup = _service(db_session, tmp_path, ingestion).create(
         uuid.uuid4(), "plan.jpg", "image/jpeg", JPEG
     )
 
     assert document.status == DocumentStatus.FAILED
-    assert document.error_message == "no extractable text in image"
+    assert document.error_message == "No readable text was found in that file."
     assert document.failed_at is not None
 
 
 def test_ingestion_exception_is_turned_into_a_failure_status(db_session, tmp_path) -> None:
     ingestion = _FakeIngestion([RuntimeError("chroma unavailable")])
-    document = _service(db_session, tmp_path, ingestion).create(
+    document, _dup = _service(db_session, tmp_path, ingestion).create(
         uuid.uuid4(), "plan.png", "image/png", PNG
     )
 
     assert document.status == DocumentStatus.FAILED
-    assert "chroma unavailable" in (document.error_message or "")
+    assert document.error_message == "This file could not be processed."
 
 
 def test_retry_reprocesses_a_failed_document(db_session, tmp_path) -> None:
     user_id = uuid.uuid4()
     ingestion = _FakeIngestion([_FakeResult("failed", "vision model timed out")])
     service = _service(db_session, tmp_path, ingestion)
-    document = service.create(user_id, "photo.jpg", "image/jpeg", JPEG)
+    document, _dup = service.create(user_id, "photo.jpg", "image/jpeg", JPEG)
     assert document.status == DocumentStatus.FAILED
 
     ingestion.outcomes = [_FakeResult("indexed")]
@@ -94,7 +94,7 @@ def test_retry_reprocesses_a_failed_document(db_session, tmp_path) -> None:
 def test_retry_of_another_users_document_is_404(db_session, tmp_path) -> None:
     ingestion = _FakeIngestion([_FakeResult("indexed")])
     service = _service(db_session, tmp_path, ingestion)
-    document = service.create(uuid.uuid4(), "notes.txt", "text/plain", b"hello")
+    document, _dup = service.create(uuid.uuid4(), "notes.txt", "text/plain", b"hello")
 
     import pytest
 
@@ -107,7 +107,9 @@ def test_retry_of_another_users_document_is_404(db_session, tmp_path) -> None:
 def test_delete_removes_row_and_stored_file(db_session, tmp_path) -> None:
     user_id = uuid.uuid4()
     service = _service(db_session, tmp_path, _FakeIngestion([]))
-    document = service.create(user_id, "notes.txt", "text/plain", b"hello", trigger_ingestion=False)
+    document, _dup = service.create(
+        user_id, "notes.txt", "text/plain", b"hello", trigger_ingestion=False
+    )
 
     service.delete(user_id, document.id)
 
@@ -123,3 +125,89 @@ def test_upload_allowlist_comes_from_the_ingestion_registry(db_session, tmp_path
     assert "image/jpeg" in document_service.ALLOWED_CONTENT_TYPES
     assert "application/pdf" in document_service.ALLOWED_CONTENT_TYPES
     assert ".exe" not in document_service.ALLOWED_EXTENSIONS
+
+
+def test_identical_bytes_do_not_create_a_second_row(db_session, tmp_path) -> None:
+    user_id = uuid.uuid4()
+    service = _service(db_session, tmp_path, _FakeIngestion([_FakeResult("indexed")]))
+
+    first, first_duplicate = service.create(user_id, "codes.txt", "text/plain", b"same-bytes")
+    second, second_duplicate = service.create(
+        user_id, "codes copy.txt", "text/plain", b"same-bytes"
+    )
+
+    assert first_duplicate is False
+    assert second_duplicate is True
+    assert second.id == first.id
+    assert service.list_documents(user_id, limit=10, offset=0)[1] == 1
+    # The stored bytes of the original are untouched.
+    assert (tmp_path / first.storage_key).read_bytes() == b"same-bytes"
+
+
+def test_another_user_may_upload_the_same_bytes(db_session, tmp_path) -> None:
+    service = _service(db_session, tmp_path, _FakeIngestion([_FakeResult("indexed")]))
+    service.create(uuid.uuid4(), "shared.txt", "text/plain", b"shared")
+    second, is_duplicate = service.create(uuid.uuid4(), "shared.txt", "text/plain", b"shared")
+
+    assert is_duplicate is False
+    assert second.content_hash is not None
+
+
+def test_rename_updates_only_the_label(db_session, tmp_path) -> None:
+    user_id = uuid.uuid4()
+    service = _service(db_session, tmp_path, _FakeIngestion([]))
+    document, _dup = service.create(
+        user_id, "notes.txt", "text/plain", b"body", trigger_ingestion=False
+    )
+
+    renamed = service.rename(user_id, document.id, "  workout notes.txt  ")
+    assert renamed.filename == "workout notes.txt"
+    assert (tmp_path / document.storage_key).read_bytes() == b"body"
+
+    import pytest
+
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError):
+        service.rename(user_id, document.id, "   ")
+
+
+def test_failure_reasons_are_short_and_human_readable(db_session, tmp_path) -> None:
+    from app.services.document_service import DEFAULT_FAILURE_REASON, readable_failure
+
+    assert readable_failure("unsupported file type .exe") == "Unsupported file type."
+    assert (
+        readable_failure("Image reading isn't available right now.")
+        == "Image reading isn't available right now."
+    )
+    assert readable_failure("content does not match .jpg format") == "Couldn't read this file."
+    assert readable_failure(RuntimeError("boom")) == DEFAULT_FAILURE_REASON
+
+    # A reason never leaks a traceback, file content or secrets.
+    reason = readable_failure(
+        ValueError("sql: SELECT * FROM users WHERE token='secret'\nTraceback ...")
+    )
+    assert "Traceback" not in reason
+    assert "secret" not in reason
+    assert len(reason) < 120
+
+
+def test_image_without_a_vision_model_fails_with_a_specific_reason(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    ingestion = _RaisingIngestion(RuntimeError, "Image reading isn't available right now.")
+    document, _dup = _service(db_session, tmp_path, ingestion).create(
+        uuid.uuid4(), "WhatsApp Image 2026-10-14 at 12.40.14 PM.jpeg", "image/jpeg", JPEG
+    )
+
+    assert document.status == DocumentStatus.FAILED
+    assert document.error_message == "Image reading isn't available right now."
+
+
+class _RaisingIngestion:
+    def __init__(self, error: type[Exception], message: str) -> None:
+        self._error = error
+        self._message = message
+
+    def ingest_user_document_bytes(self, *_args: object, **_kwargs: object):
+        raise self._error(self._message)

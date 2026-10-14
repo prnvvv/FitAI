@@ -107,6 +107,7 @@ export function PlanPage() {
   const [templateKey, setTemplateKey] = useState('')
   const [templateDate, setTemplateDate] = useState(today)
   const [applyingTemplate, setApplyingTemplate] = useState(false)
+  const [markingRest, setMarkingRest] = useState(false)
 
   const [planTitle, setPlanTitle] = useState('')
   const [planDayType, setPlanDayType] = useState('workout')
@@ -369,6 +370,24 @@ export function PlanPage() {
     return { sessions, activeDays }
   }, [summary])
 
+  const markRestDay = async () => {
+    setMarkingRest(true)
+    try {
+      await api.createPlannedSession({
+        planned_date: selected,
+        title: 'Rest',
+        day_type: 'rest',
+        notes: null,
+        exercises: [],
+      })
+      await loadRange(view, anchor)
+    } catch (err) {
+      setError(toMessage(err, 'That day could not be updated.'))
+    } finally {
+      setMarkingRest(false)
+    }
+  }
+
   const cellBadges = (key: string) => {
     const day = summaryByDate[key]
     const plannedCount = day?.planned_count ?? 0
@@ -590,11 +609,17 @@ export function PlanPage() {
           ) : (
             <>
               <div className="plan__day-meta">
-                <span className="plan__badge plan__badge--type">
-                  {daySummary?.day_type === 'active_recovery'
-                    ? 'Active recovery'
-                    : (daySummary?.day_type ?? 'rest').replace('_', ' ')}
-                </span>
+                <span className="plan__badge plan__badge--type">{dayTypeLabel(daySummary)}</span>
+                {daySummary?.day_type === 'none' && (
+                  <button
+                    type="button"
+                    className="plan__text-btn"
+                    onClick={markRestDay}
+                    disabled={markingRest}
+                  >
+                    Mark as rest day
+                  </button>
+                )}
                 {savedAt && <span className="plan__saved">Saved</span>}
               </div>
 
@@ -915,6 +940,13 @@ export function PlanPage() {
 }
 
 /** Shade a year-heatmap day by the number of sessions completed. */
+/** "No plan" unless the user explicitly planned this day. */
+export function dayTypeLabel(day: DaySummary | undefined): string {
+  const type = day?.day_type ?? 'none'
+  if (type === 'none') return 'No plan'
+  return type.replace('_', ' ')
+}
+
 function heatLevel(completed: number): number {
   if (completed <= 0) return 0
   if (completed === 1) return 1

@@ -6,6 +6,7 @@ import type {
   DaySummary,
   DerivedMetrics,
   Document,
+  MetricDefinition,
   Exercise,
   Measurement,
   Memory,
@@ -20,6 +21,12 @@ import type {
 } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+
+/** An upload either creates a new item or returns the identical existing one. */
+export interface UploadResult {
+  document: Document
+  duplicate: boolean
+}
 
 import { supabase } from './supabase'
 
@@ -39,6 +46,7 @@ async function fetchApi<T>(
   path: string,
   options: RequestInit = {},
   retryCount = 0,
+  capture?: (response: Response) => void,
 ): Promise<T> {
   const token = await getToken()
   const headers = new Headers(options.headers)
@@ -66,6 +74,8 @@ async function fetchApi<T>(
       throw new ApiError(response.status, text)
     }
 
+    capture?.(response)
+
     if (response.status === 204) {
       return undefined as T
     }
@@ -75,7 +85,7 @@ async function fetchApi<T>(
     const isNetworkError = err instanceof TypeError
     if (isNetworkError && isGet && retryCount < MAX_RETRIES) {
       await sleep(RETRY_DELAY_MS * (retryCount + 1))
-      return fetchApi<T>(path, options, retryCount + 1)
+      return fetchApi<T>(path, options, retryCount + 1, capture)
     }
     if (isNetworkError) {
       throw new NetworkError('The backend is unreachable. Please check your connection and try again.')
@@ -160,6 +170,9 @@ export function errorMessage(status: number, body: string): string {
     return serverMessage ?? 'Please check the values you entered.'
   }
   if (status === 429) return 'Too many requests. Please wait a moment and try again.'
+  if (status === 503) {
+    return serverMessage ?? 'A required service is unavailable right now. Try again shortly.'
+  }
   if (status >= 500) {
     if (code === 'SERVICE_UNAVAILABLE') {
       return serverMessage ?? 'A required service is unavailable right now.'
@@ -214,18 +227,39 @@ export const api = {
   // Documents
   listDocuments: (limit = 50, offset = 0) =>
     fetchApi<Page<Document>>(`/documents?limit=${limit}&offset=${offset}`),
-  uploadDocument: (file: File) => {
+  /** Returns the existing item when the same bytes are already in the library. */
+  uploadDocument: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return fetchApi<Document>('/documents', {
-      method: 'POST',
-      body: formData,
-    })
+    let duplicate = false
+    const document = await fetchApi<Document>(
+      '/documents',
+      { method: 'POST', body: formData },
+      0,
+      (response) => {
+        duplicate = response.headers.get('X-Duplicate') === 'true'
+      },
+    )
+    return { document, duplicate } satisfies UploadResult
   },
   deleteDocument: (id: string) =>
     fetchApi<void>(`/documents/${id}`, { method: 'DELETE' }),
   retryDocument: (id: string) =>
     fetchApi<Document>(`/documents/${id}/retry`, { method: 'POST' }),
+  renameDocument: (id: string, filename: string) =>
+    fetchApi<Document>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify({ filename }) }),
+  metricDefinitions: () => fetchApi<MetricDefinition[]>('/progress/metrics'),
+  metricSeries: (type: string, from?: string, to?: string) => {
+    const params = new URLSearchParams({ type })
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    return fetchApi<Measurement[]>(`/progress/series?${params.toString()}`)
+  },
+  updateMeasurement: (id: string, patch: { value: number; notes?: string | null }) =>
+    fetchApi<Measurement>(`/progress/measurements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
 
   // Memory
   listMemory: (limit = 50, offset = 0) =>
@@ -306,7 +340,8 @@ export const api = {
   derivedMetrics: () => fetchApi<DerivedMetrics>('/progress/derived'),
 
   // Exercise library
-  listExercises: (limit = 200, offset = 0) =>
+  // The backend caps page size at 100; page rather than requesting more.
+  listExercises: (limit = 100, offset = 0) =>
     fetchApi<Page<Exercise>>(`/exercises?limit=${limit}&offset=${offset}`),
   searchExercises: (search: string, limit = 20, offset = 0) =>
     fetchApi<Page<Exercise>>(
@@ -323,7 +358,7 @@ export const api = {
   listAllExercises: async () => {
     const items: Exercise[] = []
     let offset = 0
-    const pageSize = 200
+    const pageSize = 100
     while (true) {
       const page = await api.listExercises(pageSize, offset)
       items.push(...page.items)

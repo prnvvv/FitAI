@@ -20,6 +20,7 @@ from app.models.profile import Profile
 from app.models.workout import WorkoutSession
 from app.repositories.measurement_repository import MeasurementRepository
 from app.repositories.workout_repository import WorkoutRepository
+from app.schemas.workout import MEASUREMENT_RANGES
 
 
 class WorkoutService:
@@ -121,6 +122,48 @@ class WorkoutService:
             notes=notes,
         )
         self._mirror_to_profile(user_id, measurement_type, normalized_value)
+        self._commit()
+        self._db.refresh(measurement)
+        return measurement
+
+    def update_measurement(
+        self,
+        user_id: UUID,
+        measurement_id: UUID,
+        *,
+        value: object,
+        notes: str | None = None,
+    ) -> Measurement:
+        """Correct a measurement in place, keeping its date and type.
+
+        Units are re-normalised so a corrected value can never store a
+        non-canonical height or weight.
+        """
+        from decimal import Decimal
+
+        from app.core.errors import ValidationError
+
+        measurement = self._measurements.get(user_id, measurement_id)
+        if measurement is None:
+            raise NotFoundError("Measurement not found.")
+
+        if measurement.type == MeasurementType.HEIGHT:
+            new_value, _ = self._normalize_height(value, measurement.unit)
+        elif measurement.type == MeasurementType.WEIGHT:
+            new_value, _ = self._normalize_weight(value, measurement.unit)
+        else:
+            new_value = value
+
+        bounds = MEASUREMENT_RANGES[measurement.type]
+        if not bounds[0] <= Decimal(str(new_value)) <= bounds[1]:
+            raise ValidationError(
+                f"{measurement.type.value.replace('_', ' ')} must be between "
+                f"{bounds[0]} and {bounds[1]} {measurement.unit}."
+            )
+
+        measurement.value = new_value
+        if notes is not None:
+            measurement.notes = notes
         self._commit()
         self._db.refresh(measurement)
         return measurement

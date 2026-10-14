@@ -1,4 +1,13 @@
-import { AlertCircle, FileText, Loader2, RefreshCw, Trash2, Upload, X } from 'lucide-react'
+import {
+  AlertCircle,
+  FileText,
+  Loader2,
+  Pencil,
+  RefreshCw,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react'
 import { useCallback, useEffect, useState, type ChangeEvent, type DragEvent } from 'react'
 import { api } from '../services/api'
 import { toMessage } from '../services/api'
@@ -9,6 +18,18 @@ function formatStatus(status: string): string {
   if (status === 'failed') return 'Failed'
   if (status === 'processing') return 'Reading'
   return 'Queued'
+}
+
+/** "Image · JPEG", "Document · DOCX" — a friendly type instead of a raw MIME string. */
+export function friendlyType(contentType: string, filename: string): string {
+  const ext = (filename.split('.').pop() ?? '').toUpperCase()
+  const shortExt = ext === 'JPEG' || ext === 'JPG' ? 'JPEG' : ext
+  if (contentType.startsWith('image/')) return `Image${shortExt ? ` · ${shortExt}` : ''}`
+  if (contentType === 'application/pdf') return 'Document · PDF'
+  if (contentType.includes('wordprocessingml')) return 'Document · DOCX'
+  if (contentType === 'text/markdown') return 'Document · Markdown'
+  if (contentType.startsWith('text/')) return `Document · TXT`
+  return shortExt ? `Document · ${shortExt}` : 'Document'
 }
 
 function statusClass(status: string): string {
@@ -28,6 +49,9 @@ export function LibraryPage() {
   const [uploading, setUploading] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -50,7 +74,8 @@ export function LibraryPage() {
     setUploading(true)
     setError(null)
     try {
-      await api.uploadDocument(file)
+      const { duplicate } = await api.uploadDocument(file)
+      setNotice(duplicate ? `Already in your library: ${file.name}` : null)
       await load()
     } catch (err) {
       setError(toMessage(err, `“${file.name}” could not be uploaded. Try again.`))
@@ -72,6 +97,24 @@ export function LibraryPage() {
     const file = e.dataTransfer.files?.[0]
     if (!file) return
     await handleUpload(file)
+  }
+
+  const startRename = (doc: Document) => {
+    setRenamingId(doc.id)
+    setRenameValue(doc.filename)
+  }
+
+  const submitRename = async (id: string) => {
+    setBusyId(id)
+    try {
+      const updated = await api.renameDocument(id, renameValue)
+      setDocuments((prev) => prev.map((doc) => (doc.id === id ? updated : doc)))
+      setRenamingId(null)
+    } catch (err) {
+      setError(toMessage(err, 'That item could not be renamed.'))
+    } finally {
+      setBusyId(null)
+    }
   }
 
   const handleRetry = async (id: string) => {
@@ -127,6 +170,15 @@ export function LibraryPage() {
         </div>
       )}
 
+      {notice && (
+        <div className="page__alert page__alert--info" role="status">
+          <span>{notice}</span>
+          <button type="button" className="page__alert-close" onClick={() => setNotice(null)} aria-label="Dismiss">
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
       <div
         className={`library__drop ${dragOver ? 'library__drop--active' : ''}`}
         onDragOver={(e) => {
@@ -159,16 +211,51 @@ export function LibraryPage() {
                 <FileText size={20} />
               </div>
               <div className="library__info">
-                <div className="library__name">{doc.filename}</div>
+                {renamingId === doc.id ? (
+                  <form
+                    className="library__rename"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void submitRename(doc.id)
+                    }}
+                  >
+                    <input
+                      className="library__rename-input"
+                      aria-label={`Rename ${doc.filename}`}
+                      value={renameValue}
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      autoFocus
+                    />
+                    <button type="submit" className="library__action">
+                      Save
+                    </button>
+                    <button type="button" className="plan__nav-btn" onClick={() => setRenamingId(null)} aria-label="Cancel rename">
+                      <X size={14} />
+                    </button>
+                  </form>
+                ) : (
+                  <div className="library__name">{doc.filename}</div>
+                )}
                 <div className="library__meta">
-                  {doc.content_type} · {(doc.size_bytes / 1024).toFixed(1)} KB ·{' '}
+                  {friendlyType(doc.content_type, doc.filename)} ·{' '}
+                  {(doc.size_bytes / 1024).toFixed(1)} KB ·{' '}
                   {new Date(doc.created_at).toLocaleDateString()}
                 </div>
-                {doc.status === 'failed' && doc.error_message && (
-                  <p className="library__reason">{doc.error_message}</p>
+                {doc.status === 'failed' && doc.failure_reason && (
+                  <p className="library__reason">{doc.failure_reason}</p>
                 )}
               </div>
               <span className={statusClass(doc.status)}>{formatStatus(doc.status)}</span>
+              <button
+                type="button"
+                className="library__icon-action"
+                onClick={() => startRename(doc)}
+                aria-label={`Rename ${doc.filename}`}
+                disabled={busyId === doc.id || renamingId === doc.id}
+                hidden={renamingId === doc.id}
+              >
+                <Pencil size={16} />
+              </button>
               {doc.status === 'failed' && (
                 <>
                   <button

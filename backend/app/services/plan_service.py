@@ -242,6 +242,8 @@ TEMPLATES: dict[str, list[dict[str, object]]] = {
 }
 
 MAX_SUMMARY_DAYS = 400
+#: day_type value used when nothing is planned for a day.
+NO_PLAN_DAY_TYPE = "none"
 
 
 def _utc_date(d: date) -> datetime:
@@ -327,7 +329,9 @@ class PlanService:
                     "date": current.isoformat(),
                     "planned_count": 0,
                     "completed_count": 0,
-                    "day_type": "rest",
+                    # "none" means nothing is planned that day; "rest" is only
+                    # returned when the user explicitly planned a rest day.
+                    "day_type": NO_PLAN_DAY_TYPE,
                     "has_meals": False,
                 }
             current += timedelta(days=1)

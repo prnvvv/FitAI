@@ -15,8 +15,18 @@ from app.api.deps import CurrentUser, DbSession, Pagination
 from app.core.errors import BadRequestError
 from app.models.enums import ActivityEventType, MeasurementType
 from app.schemas.common import Page
-from app.schemas.progress import BmiPointOut, DerivedMetricsOut, ExerciseMaxLoadOut
-from app.schemas.workout import MeasurementCreate, MeasurementOut
+from app.schemas.progress import (
+    BmiPointOut,
+    DerivedMetricsOut,
+    ExerciseMaxLoadOut,
+    MetricDefinitionOut,
+)
+from app.schemas.workout import (
+    MeasurementCreate,
+    MeasurementOut,
+    MeasurementUpdate,
+    metric_definitions,
+)
 from app.services.activity_event_service import ActivityEventService
 from app.services.progress_service import ProgressService
 from app.services.workout_service import WorkoutService
@@ -74,6 +84,58 @@ def list_measurements(
         limit=pagination.limit,
         offset=pagination.offset,
     )
+
+
+@router.get("/metrics", response_model=list[MetricDefinitionOut])
+def list_metric_definitions(
+    _current_user: CurrentUser,
+) -> list[MetricDefinitionOut]:
+    """Return every trackable metric with its unit rules and input bounds.
+
+    The list is static metadata, so it does not need the database, but it stays
+    behind auth so the API surface is uniform.
+    """
+    return [MetricDefinitionOut(**definition) for definition in metric_definitions()]
+
+
+@router.get("/series", response_model=list[MeasurementOut])
+def metric_series(
+    current_user: CurrentUser,
+    db: DbSession,
+    measurement_type: MeasurementType = Query(..., alias="type"),
+    from_date: dt.date | None = Query(default=None, alias="from"),
+    to_date: dt.date | None = Query(default=None, alias="to"),
+) -> list[MeasurementOut]:
+    """Return one metric's entries in a date range. Empty data is 200 with []."""
+    measurements = ProgressService(db).measurement_series(
+        current_user.id, measurement_type, from_date=from_date, to_date=to_date
+    )
+    return [MeasurementOut.model_validate(item) for item in measurements]
+
+
+@router.patch(
+    "/measurements/{measurement_id}",
+    response_model=MeasurementOut,
+)
+def update_measurement(
+    measurement_id: UUID,
+    payload: MeasurementUpdate,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> MeasurementOut:
+    """Correct one of the user's own measurements without creating a new row."""
+    measurement = WorkoutService(db).update_measurement(
+        current_user.id, measurement_id, value=payload.value, notes=payload.notes
+    )
+    ActivityEventService(db).record(
+        current_user.id,
+        ActivityEventType.METRIC_LOGGED,
+        entity_type="measurement",
+        entity_id=str(measurement.id),
+        occurred_at=measurement.measured_at,
+        payload={"type": measurement.type.value, "value": str(measurement.value), "edited": True},
+    )
+    return MeasurementOut.model_validate(measurement)
 
 
 @router.delete(

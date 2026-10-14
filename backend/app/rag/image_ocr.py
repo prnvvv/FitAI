@@ -1,8 +1,14 @@
-"""Extract text from images using a vision-capable Groq model."""
+"""Extract text from images using a vision-capable Groq model.
+
+The model is never hardcoded: it comes from ``GROQ_VISION_MODEL`` and, when that
+is unset, from the model list of the configured Groq account. An account without
+a vision-capable model gets an honest, specific failure instead of a generic one.
+"""
 
 from __future__ import annotations
 
 import base64
+import functools
 import logging
 import mimetypes
 import os
@@ -12,14 +18,55 @@ from groq import Groq
 
 log = logging.getLogger(__name__)
 
-# Prefer a vision-capable Groq model; fall back to the configured model if needed.
-VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "llama-3.2-11b-vision-preview")
-FALLBACK_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+#: Model id of a vision-capable model. Leave unset to auto-detect from the account.
+VISION_MODEL_ENV = "GROQ_VISION_MODEL"
+#: Fragments that identify a vision-capable model in the provider's model list.
+VISION_MODEL_MARKERS = ("vision", "llama-4", "scout", "pixtral", "gemma-3")
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 
 
 class ImageOcrError(Exception):
     """Image text extraction failed."""
+
+
+class VisionUnavailableError(ImageOcrError):
+    """The configured Groq account exposes no vision-capable model."""
+
+
+def _groq_client(api_key: str) -> Groq:
+    return Groq(api_key=api_key, timeout=60.0)
+
+
+def resolve_vision_model(api_key: str | None = None) -> str | None:
+    """Return an available vision-capable model id, or None when there is none.
+
+    ``GROQ_VISION_MODEL`` wins when set. Otherwise the account's model list is
+    inspected once per process; nothing is guessed from memory.
+    """
+    configured = os.getenv(VISION_MODEL_ENV, "").strip()
+    if configured:
+        return configured
+    return _detect_vision_model(api_key)
+
+
+@functools.lru_cache(maxsize=4)
+def _detect_vision_model(api_key: str | None) -> str | None:
+    key = api_key or os.getenv("GROQ_API_KEY")
+    if not key:
+        log.info("vision_model_unavailable reason=missing_api_key")
+        return None
+    try:
+        models = [model.id for model in _groq_client(key).models.list().data]
+    except Exception as exc:  # noqa: BLE001 - availability probe must never raise
+        log.warning("vision_model_probe_failed", exc_info=True, error_type=type(exc).__name__)
+        return None
+    for marker in VISION_MODEL_MARKERS:
+        for model_id in models:
+            if marker in model_id.lower():
+                log.info("vision_model_detected", model=model_id)
+                return model_id
+    log.info("vision_model_unavailable", available_models=len(models))
+    return None
 
 
 def _mime_type(filename: str) -> str:
@@ -74,61 +121,57 @@ def extract_text_from_image(data: bytes, filename: str, api_key: str | None = No
     """Return plain text extracted from an image, or raise ImageOcrError."""
     key = api_key or os.getenv("GROQ_API_KEY")
     if not key:
-        raise ImageOcrError("GROQ_API_KEY is not configured; image text extraction is unavailable.")
+        raise VisionUnavailableError("Image reading isn't available right now.")
+
+    model = resolve_vision_model(key)
+    if not model:
+        raise VisionUnavailableError("Image reading isn't available right now.")
 
     if not data:
-        raise ImageOcrError("image is empty")
+        raise ImageOcrError("Couldn't read this image.")
 
     resized = _resize_for_vision(data)
     mime = _mime_type(filename)
     b64 = base64.b64encode(resized).decode("utf-8")
     data_url = f"data:{mime};base64,{b64}"
 
-    client = Groq(api_key=key, timeout=60.0)
-    models_to_try = [VISION_MODEL]
-    if VISION_MODEL != FALLBACK_MODEL:
-        models_to_try.append(FALLBACK_MODEL)
+    try:
+        response = _groq_client(key).chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                "Extract all readable text from this image. "
+                                "If there is no text, briefly describe what the image shows. "
+                                "Output only the extracted text or description, nothing else."
+                            ),
+                        },
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                }
+            ],
+            temperature=0.0,
+            max_tokens=2048,
+        )
+    except Exception as exc:  # noqa: BLE001 - reported as a readable reason
+        log.warning("image_ocr_request_failed", model=model, exc_info=True)
+        raise ImageOcrError("Couldn't read this image.") from exc
 
-    last_error: Exception | None = None
-    for model in models_to_try:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": (
-                                    "Extract all readable text from this image. "
-                                    "If there is no text, briefly describe what the image shows. "
-                                    "Output only the extracted text or description, nothing else."
-                                ),
-                            },
-                            {"type": "image_url", "image_url": {"url": data_url}},
-                        ],
-                    }
-                ],
-                temperature=0.0,
-                max_tokens=2048,
-            )
-            content = response.choices[0].message.content
-            return (content or "").strip()
-        except Exception as exc:  # noqa: BLE001
-            last_error = exc
-            log.warning("image_ocr_model_failed", model=model, error=str(exc))
-            continue
-
-    raise ImageOcrError(f"Could not extract text from image: {last_error}")
+    content = response.choices[0].message.content
+    return (content or "").strip()
 
 
 def load_image_document(data: bytes, filename: str, api_key: str | None = None) -> str:
     """Return extracted text from an image, suitable for chunking.
 
-    Raises ImageOcrError when extraction fails or returns nothing usable.
+    Raises ``VisionUnavailableError`` when no vision-capable model is available
+    and ``ImageOcrError`` when extraction fails or returns nothing usable.
     """
     text = extract_text_from_image(data, filename, api_key=api_key)
     if not text:
-        raise ImageOcrError("no readable text found in image")
+        raise ImageOcrError("Couldn't read this image.")
     return text

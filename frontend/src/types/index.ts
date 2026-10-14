@@ -79,7 +79,8 @@ export interface Document {
   content_type: string
   size_bytes: number
   status: string
-  error_message?: string | null
+  /** Short human-readable failure reason from the backend (never a traceback). */
+  failure_reason?: string | null
   created_at: string
   completed_at?: string | null
   failed_at?: string | null
@@ -282,4 +283,14 @@ export interface DerivedMetrics {
   planned_completed: number
   planned_completion_rate: number | null
   source: string
+}
+
+export interface MetricDefinition {
+  type: string
+  label: string
+  canonical_unit: string
+  units: string[]
+  min: number
+  max: number
+  derived: boolean
 }

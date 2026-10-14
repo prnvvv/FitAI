@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 
 from app.core.security import AuthUser
@@ -41,7 +42,7 @@ def test_local_storage_create_and_delete(db_session, tmp_path) -> None:
     service = DocumentService(db_session, storage=storage)
     user_id = uuid.uuid4()
 
-    document = service.create(user_id, "plan.txt", "text/plain", b"hello world")
+    document, _dup = service.create(user_id, "plan.txt", "text/plain", b"hello world")
     assert document.status == "pending"
     assert document.storage_key == f"{user_id}/{document.id}"
     assert (tmp_path / document.storage_key).read_bytes() == b"hello world"
@@ -62,7 +63,7 @@ def test_mark_status_records_completion(db_session, tmp_path) -> None:
     storage = LocalDocumentStorage(str(tmp_path))
     service = DocumentService(db_session, storage=storage)
     user_id = uuid.uuid4()
-    document = service.create(user_id, "plan.txt", "text/plain", b"data")
+    document, _dup = service.create(user_id, "plan.txt", "text/plain", b"data")
 
     updated = service.mark_status(user_id, document.id, DocumentStatus.INDEXED)
     assert updated.status == "indexed"
@@ -77,8 +78,72 @@ def test_document_ownership_is_enforced(make_client, db_session, tmp_path) -> No
 
     storage = LocalDocumentStorage(str(tmp_path))
     service = DocumentService(db_session, storage=storage)
-    document = service.create(owner_user.id, "owner.txt", "text/plain", b"secret")
+    document, _dup = service.create(owner_user.id, "owner.txt", "text/plain", b"secret")
 
     assert other.get(f"/api/v1/documents/{document.id}").status_code == 404
     assert other.delete(f"/api/v1/documents/{document.id}").status_code == 404
     assert owner.get(f"/api/v1/documents/{document.id}").status_code == 200
+
+
+def test_upload_of_identical_bytes_returns_the_existing_item(client, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("app.services.document_storage.settings.upload_dir", str(tmp_path))
+    files = {"file": ("codes.txt", b"recovery-codes", "text/plain")}
+
+    first = client.post("/api/v1/documents", files=files)
+    assert first.status_code == 201
+    assert first.headers.get("X-Duplicate") is None
+
+    second = client.post("/api/v1/documents", files=files)
+    assert second.status_code == 200
+    assert second.headers.get("X-Duplicate") == "true"
+    assert second.json()["id"] == first.json()["id"]
+    assert client.get("/api/v1/documents").json()["total"] == 1
+
+
+def test_upload_response_exposes_failure_reason(client, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("app.services.document_storage.settings.upload_dir", str(tmp_path))
+    response = client.post(
+        "/api/v1/documents", files={"file": ("bad.exe", b"MZ", "application/octet-stream")}
+    )
+    assert response.status_code == 415
+    body = response.json()["error"]
+    assert "Traceback" not in json.dumps(body)
+
+
+def test_rename_document(client, monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("app.services.document_storage.settings.upload_dir", str(tmp_path))
+    created = client.post(
+        "/api/v1/documents", files={"file": ("notes.txt", b"hello", "text/plain")}
+    )
+    document_id = created.json()["id"]
+
+    renamed = client.patch(
+        f"/api/v1/documents/{document_id}", json={"filename": "Workout notes.txt"}
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["filename"] == "Workout notes.txt"
+
+    assert (
+        client.patch(f"/api/v1/documents/{document_id}", json={"filename": "  "}).status_code == 422
+    )
+    assert (
+        client.patch(f"/api/v1/documents/{uuid.uuid4()}", json={"filename": "x"}).status_code == 404
+    )
+
+
+def test_upload_with_spaces_and_uppercase_extension_is_accepted(
+    client, monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr("app.services.document_storage.settings.upload_dir", str(tmp_path))
+    response = client.post(
+        "/api/v1/documents",
+        files={
+            "file": (
+                "WhatsApp Image 2026-10-14 at 12.40.14 PM.JPEG",
+                b"\xff\xd8\xff\xe0",
+                "image/jpeg",
+            )
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["filename"].endswith(".JPEG")

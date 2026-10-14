@@ -51,6 +51,61 @@ MEASUREMENT_RANGES: dict[MeasurementType, tuple[Decimal, Decimal]] = {
 }
 
 
+class MeasurementUpdate(BaseModel):
+    """Correction payload for an existing measurement."""
+
+    value: Decimal = Field(gt=0)
+    notes: str | None = Field(default=None, max_length=500)
+
+
+def metric_definitions() -> list[dict[str, object]]:
+    """Static metadata for every trackable metric (label, units, bounds)."""
+    labels = {
+        MeasurementType.WEIGHT: "Weight",
+        MeasurementType.HEIGHT: "Height",
+        MeasurementType.BODY_FAT_PERCENT: "Body fat",
+        MeasurementType.CHEST: "Chest",
+        MeasurementType.WAIST: "Waist",
+        MeasurementType.HIPS: "Hips",
+        MeasurementType.ARM: "Upper arm",
+        MeasurementType.THIGH: "Thigh",
+        MeasurementType.NECK: "Neck",
+        MeasurementType.SLEEP_HOURS: "Sleep",
+        MeasurementType.WATER: "Water",
+        MeasurementType.STEPS: "Steps",
+        MeasurementType.RESTING_HEART_RATE: "Resting heart rate",
+        MeasurementType.MOOD: "Mood",
+        MeasurementType.ENERGY: "Energy",
+    }
+    definitions: list[dict[str, object]] = []
+    for measurement_type in MeasurementType:
+        low, high = MEASUREMENT_RANGES[measurement_type]
+        units = sorted(MEASUREMENT_UNITS[measurement_type])
+        definitions.append(
+            {
+                "type": measurement_type.value,
+                "label": labels[measurement_type],
+                "canonical_unit": units[0],
+                "units": units,
+                "min": low,
+                "max": high,
+                "derived": False,
+            }
+        )
+    definitions.append(
+        {
+            "type": "bmi",
+            "label": "BMI",
+            "canonical_unit": "bmi",
+            "units": ["bmi"],
+            "min": Decimal("0"),
+            "max": Decimal("100"),
+            "derived": True,
+        }
+    )
+    return definitions
+
+
 class WorkoutSetIn(BaseModel):
     """A single set supplied when creating a workout session."""
 
