@@ -3414,7 +3414,7 @@
   gap: 16px;
   margin-bottom: 12px;
   color: var(--text-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-sm);
 }
 
 .plan__year-totals strong {
@@ -3427,15 +3427,21 @@
   gap: 6px;
   padding: 10px;
   border: 1px solid var(--divider);
-  border-radius: 10px;
-  background-color: var(--bg-main);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.plan__year-month:hover {
+  border-color: var(--divider-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .plan__year-month-title {
   background: none;
   border: none;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   text-transform: uppercase;
   cursor: pointer;
@@ -3468,12 +3474,12 @@
 
 .plan__year-day[style*='--heat: 1'],
 .plan__year-swatch--1 {
-  background-color: rgba(47, 107, 255, 0.35);
+  background-color: rgba(59, 130, 246, 0.35);
 }
 
 .plan__year-day[style*='--heat: 2'],
 .plan__year-swatch--2 {
-  background-color: rgba(47, 107, 255, 0.6);
+  background-color: rgba(59, 130, 246, 0.6);
 }
 
 .plan__year-day[style*='--heat: 3'],
@@ -3486,7 +3492,7 @@
   align-items: center;
   gap: 6px;
   margin-top: 12px;
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   color: var(--text-muted);
 }
 
@@ -3516,13 +3522,13 @@
 }
 
 .plan__saved {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   color: var(--success);
 }
 
 .plan__hint {
   color: var(--text-muted);
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   margin: 0 0 8px;
 }
 
