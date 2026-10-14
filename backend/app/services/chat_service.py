@@ -336,6 +336,44 @@ class ChatService:
         Creates a new conversation if `conversation_id` is not provided.
         """
         user_id = user.id
+
+        # Layer A: deterministic pre-filter + scope classifier (run before any LLM,
+        # tool call, or persistence). If the message matches a guardrails rule,
+        # refuse immediately with a fixed safe reply so the LLM never sees the
+        # offending content. Blocked messages are stored with blocked=true in
+        # metadata, replaced by a neutral placeholder in future context, and
+        # never fed to memory extraction, activity log, or knowledge base.
+        safety = run_safety_rules(message)
+        if safety.blocked:
+            response = safety.response or "I can't help with that request."
+            # Create or get conversation for the blocked exchange
+            if conversation_id is None:
+                conversation = self._conversations.create(user_id, _title_from_message(message))
+            else:
+                conversation = self._conversations.get(user_id, conversation_id)
+
+            conversation_id = conversation.id
+            # Persist user message with blocked flag in metadata
+            self._conversations.add_message(
+                user_id,
+                conversation_id,
+                MessageRole.USER,
+                "[Blocked by safety filter]",
+                metadata={"blocked": True, "original_message": message, "category": safety.category},
+            )
+            # Persist assistant refusal response
+            self._conversations.add_message(
+                user_id, conversation_id, MessageRole.ASSISTANT, response
+            )
+            return {
+                "conversation_id": conversation_id,
+                "response": response,
+                "title": conversation.title,
+                "sources": [],
+                "actions": [],
+                "tool_events": [],
+            }
+
         if conversation_id is None:
             conversation = self._conversations.create(user_id, _title_from_message(message))
         else:
@@ -349,25 +387,6 @@ class ChatService:
         # and only AFTER the database confirms each write. It must never break
         # the chat response, so every failure is contained here.
         extraction_events, confirmations = self._extract_and_persist(user_id, message)
-
-        # Layer A: deterministic pre-filter + scope classifier (run before any LLM or
-        # tool call).  If the message matches a guardrails rule, refuse immediately
-        # with a fixed safe reply so the LLM never sees the offending content.
-        safety = run_safety_rules(message)
-        if safety.blocked:
-            response = safety.response or "I can't help with that request."
-            # Persist the user message and the blocked-response turn, then return.
-            self._conversations.add_message(
-                user_id, conversation_id, MessageRole.ASSISTANT, response
-            )
-            return {
-                "conversation_id": conversation_id,
-                "response": response,
-                "title": conversation.title,
-                "sources": [],
-                "actions": [],
-                "tool_events": extraction_events,
-            }
 
         try:
             retriever = Retriever(VectorStore(persist_dir=settings.chromadb_persist_dir))
