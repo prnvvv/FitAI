@@ -162,6 +162,7 @@ describe('PlanPage network baseline', () => {
   it('planning a session posts the exact body once', async () => {
     const { spies, user, todayKey } = await renderPlan()
 
+    await user.click(await screen.findByRole('tab', { name: 'Plan' }))
     await user.click(await screen.findByRole('button', { name: /Plan session/ }))
 
     await waitFor(() => expect(callsOf(spies, 'createPlannedSession').length).toBe(1))
@@ -177,7 +178,8 @@ describe('PlanPage network baseline', () => {
   it('marking a rest day posts the exact body once', async () => {
     const { spies, user, todayKey } = await renderPlan()
 
-    await user.click(await screen.findByRole('button', { name: 'Mark as rest day' }))
+    await user.click(await screen.findByRole('button', { name: 'Day options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Mark as rest day' }))
 
     await waitFor(() => expect(callsOf(spies, 'createPlannedSession').length).toBe(1))
     expect(callsOf(spies, 'createPlannedSession')[0][0]).toEqual({
@@ -200,7 +202,8 @@ describe('PlanPage network baseline', () => {
 
     expect(screen.queryByRole('button', { name: 'Mark as rest day' })).not.toBeInTheDocument()
     await screen.findByDisplayValue('Rest')
-    await user.click(screen.getByRole('button', { name: 'Delete planned session' }))
+    await user.click(await screen.findByRole('button', { name: 'Day options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Unmark rest day' }))
 
     await waitFor(() => expect(callsOf(spies, 'deletePlannedSession').length).toBe(1))
     expect(callsOf(spies, 'deletePlannedSession')[0]).toEqual(['ps-rest'])
@@ -229,13 +232,21 @@ describe('PlanPage network baseline', () => {
   })
 
   it('a double click on Log session sends exactly one request', async () => {
-    const { spies, user } = await renderPlan()
+    let resolveCreate: (value: unknown) => void = () => {}
+    const { spies, user } = await renderPlan({
+      createWorkout: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveCreate = resolve
+          }).then(() => ({ id: 'new' })),
+      ),
+    })
 
     await user.type(screen.getByLabelText('Exercise'), 'Squat')
-    const button = screen.getByRole('button', { name: 'Log session' })
-    await user.dblClick(button)
-
+    const pending = user.dblClick(screen.getByRole('button', { name: 'Log session' }))
     await waitFor(() => expect(callsOf(spies, 'createWorkout').length).toBe(1))
+    resolveCreate(undefined)
+    await pending
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(callsOf(spies, 'createWorkout').length).toBe(1)
   })
@@ -243,6 +254,8 @@ describe('PlanPage network baseline', () => {
   it('applying a template posts the key and start date once', async () => {
     const { spies, user, todayKey } = await renderPlan()
 
+    await user.click(await screen.findByRole('button', { name: 'Day options' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Start from a template…' }))
     const select = screen.getByLabelText('Template') as HTMLSelectElement
     await user.selectOptions(select, 'upper_lower')
     await user.click(screen.getByRole('button', { name: 'Apply' }))

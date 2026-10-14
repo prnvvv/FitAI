@@ -1,20 +1,8 @@
-import {
-  CalendarDays,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Dumbbell,
-  LayoutTemplate,
-  Loader2,
-  Minus,
-  Plus,
-  Trash2,
-  Undo2,
-  X,
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { ExerciseCombobox } from '../components/plan/ExerciseCombobox'
+import { DayPanel, emptyLoggedSet } from '../components/plan/DayPanel'
+import type { LoggedSet, PanelTab } from '../components/plan/DayPanel'
 import {
   api,
   isAbortError,
@@ -38,6 +26,7 @@ import {
   weekDays,
   yearMonths,
 } from '../utils/dates'
+import type { CalendarCell } from '../utils/dates'
 
 type View = 'week' | 'month' | 'year'
 
@@ -48,18 +37,6 @@ const VIEWS: { value: View; label: string }[] = [
 ]
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const DAY_TYPES = ['workout', 'rest', 'active_recovery']
-
-interface LoggedSet {
-  exercise_name: string
-  reps: number | ''
-  weight: number | ''
-  weight_unit: 'kg' | 'lb'
-}
-
-function emptyLoggedSet(): LoggedSet {
-  return { exercise_name: '', reps: '', weight: '', weight_unit: 'kg' }
-}
 
 /** Visible range for the current view; one request covers every view. */
 export function visibleRange(view: View, anchor: Date): { from: string; to: string } {
@@ -75,6 +52,21 @@ export function visibleRange(view: View, anchor: Date): { from: string; to: stri
     from: toDateKey(new Date(anchor.getFullYear(), 0, 1)),
     to: toDateKey(new Date(anchor.getFullYear(), 11, 31)),
   }
+}
+
+/**
+ * The 42 fetch cells grouped into weeks, keeping only weeks that contain an
+ * in-month day (4–6 rows). Render-only: `monthGrid` and `visibleRange` are
+ * untouched, so the summary/session request ranges stay byte-identical.
+ */
+export function monthWeeks(anchor: Date): CalendarCell[][] {
+  const cells = monthGrid(anchor)
+  const weeks: CalendarCell[][] = []
+  for (let index = 0; index < cells.length; index += 7) {
+    const week = cells.slice(index, index + 7)
+    if (week.some((cell) => cell.inMonth)) weeks.push(week)
+  }
+  return weeks
 }
 
 function shift(view: View, anchor: Date, direction: -1 | 1): Date {
@@ -94,6 +86,19 @@ function localDayKey(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return ''
   return toDateKey(new Date(date.getFullYear(), date.getMonth(), date.getDate()))
+}
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const list = window.matchMedia(query)
+    const update = () => setMatches(list.matches)
+    update()
+    list.addEventListener('change', update)
+    return () => list.removeEventListener('change', update)
+  }, [query])
+  return matches
 }
 
 export function PlanPage() {
@@ -126,7 +131,60 @@ export function PlanPage() {
   const [planTitle, setPlanTitle] = useState('')
   const [planDayType, setPlanDayType] = useState('workout')
   const [planNotes, setPlanNotes] = useState('')
+  const [planningSession, setPlanningSession] = useState(false)
   const saveTimer = useRef<number | null>(null)
+
+  // Re-entrant guards: disables cover the re-rendered case, refs cover two
+  // clicks that land before React flushes (and StrictMode double effects can
+  // never reach these — they only run from event handlers).
+  const planningRef = useRef(false)
+  const savingRef = useRef(false)
+  const applyingRef = useRef(false)
+  const restingRef = useRef(false)
+
+  // Day-panel tab: "Log" for today and past days, "Plan" for future days. A
+  // manual choice sticks when another day is selected.
+  const [panelTab, setPanelTab] = useState<PanelTab>('log')
+  const [tabTouched, setTabTouched] = useState(false)
+  const tab: PanelTab = tabTouched ? panelTab : selected > today ? 'plan' : 'log'
+  const handleTabChange = useCallback((next: PanelTab) => {
+    setPanelTab(next)
+    setTabTouched(true)
+  }, [])
+
+  // Responsive rendering only; network behavior never depends on these.
+  const phone = useMediaQuery('(max-width: 767px)')
+  const wide = useMediaQuery('(min-width: 1100px)')
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [yearDrawerOpen, setYearDrawerOpen] = useState(false)
+  const sheetCloseRef = useRef<HTMLButtonElement>(null)
+  const drawerCloseRef = useRef<HTMLButtonElement>(null)
+
+  // Bottom sheet: focus the close button, lock body scroll, restore on close.
+  useEffect(() => {
+    if (!phone || !sheetOpen) return
+    const previous = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    sheetCloseRef.current?.focus()
+    return () => {
+      document.body.style.overflow = previousOverflow
+      previous?.focus?.()
+    }
+  }, [phone, sheetOpen])
+
+  // Year drawer: same treatment on desktop.
+  useEffect(() => {
+    if (phone || view !== 'year' || !yearDrawerOpen) return
+    const previous = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    drawerCloseRef.current?.focus()
+    return () => {
+      document.body.style.overflow = previousOverflow
+      previous?.focus?.()
+    }
+  }, [phone, view, yearDrawerOpen])
 
   const summaryByDate = useMemo(() => {
     const map: Record<string, DaySummary> = {}
@@ -251,11 +309,19 @@ export function PlanPage() {
   )
   const selectedLogged = loggedByDate[selected] ?? []
   const daySummary = summaryByDate[selected]
+  const restSession = useMemo(
+    () => selectedPlanned.find((session) => session.day_type === 'rest'),
+    [selectedPlanned],
+  )
 
-  const moveFocus = (key: string) => {
-    setFocused(key)
-    setSelected(key)
-  }
+  const selectDay = useCallback(
+    (key: string) => {
+      setFocused(key)
+      setSelected(key)
+      if (phone) setSheetOpen(true)
+    },
+    [phone],
+  )
 
   /** The focused day as a Date, falling back to today when it is unusable. */
   const focusedDate = () => dateFromKey(focused) ?? new Date()
@@ -266,7 +332,13 @@ export function PlanPage() {
     if (delta !== undefined) {
       event.preventDefault()
       const current = dateFromKey(focused)
-      if (current) moveFocus(toDateKey(addDays(current, delta)))
+      if (current) selectDay(toDateKey(addDays(current, delta)))
+      return
+    }
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      const days = weekDays(focusedDate())
+      selectDay(toDateKey(event.key === 'Home' ? days[0] : days[6]))
       return
     }
     if (event.key === 'PageUp' || event.key === 'PageDown') {
@@ -281,9 +353,27 @@ export function PlanPage() {
       setFocused(key)
       return
     }
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       setSelected(focused)
+      if (phone) setSheetOpen(true)
+    }
+  }
+
+  const handleWeekKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const days = weekDays(anchor)
+    const keys = days.map((day) => toDateKey(day))
+    const base = keys.includes(focused) ? focused : keys.includes(selected) ? selected : keys[0]
+    const at = keys.indexOf(base)
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      const next = event.key === 'ArrowLeft' ? Math.max(0, at - 1) : Math.min(keys.length - 1, at + 1)
+      selectDay(keys[next])
+      return
+    }
+    if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault()
+      selectDay(event.key === 'Home' ? keys[0] : keys[keys.length - 1])
     }
   }
 
@@ -292,6 +382,8 @@ export function PlanPage() {
   }
 
   const handleLogSession = async () => {
+    if (savingRef.current) return
+    savingRef.current = true
     const sets = loggedSets
       .filter((set) => set.exercise_name.trim())
       .map((set) => ({
@@ -301,6 +393,7 @@ export function PlanPage() {
         weight_unit: set.weight === '' ? null : set.weight_unit,
       }))
     if (sets.length === 0) {
+      savingRef.current = false
       setLogError('Add at least one exercise.')
       return
     }
@@ -319,6 +412,7 @@ export function PlanPage() {
     } catch (err) {
       setLogError(toMessage(err, 'That session could not be saved.'))
     } finally {
+      savingRef.current = false
       setSavingSession(false)
     }
   }
@@ -355,6 +449,9 @@ export function PlanPage() {
   }
 
   const createPlan = async () => {
+    if (planningRef.current) return
+    planningRef.current = true
+    setPlanningSession(true)
     setError(null)
     try {
       await api.createPlannedSession({
@@ -367,6 +464,9 @@ export function PlanPage() {
       await reload()
     } catch (err) {
       setError(toMessage(err, 'The session could not be planned.'))
+    } finally {
+      planningRef.current = false
+      setPlanningSession(false)
     }
   }
 
@@ -423,7 +523,8 @@ export function PlanPage() {
   }
 
   const applyTemplate = async () => {
-    if (!templateKey) return
+    if (applyingRef.current || !templateKey) return
+    applyingRef.current = true
     setApplyingTemplate(true)
     try {
       await api.applyPlanTemplate(templateKey, templateDate)
@@ -432,6 +533,7 @@ export function PlanPage() {
     } catch (err) {
       setError(toMessage(err, 'That template could not be applied.'))
     } finally {
+      applyingRef.current = false
       setApplyingTemplate(false)
     }
   }
@@ -444,6 +546,8 @@ export function PlanPage() {
   }, [summary])
 
   const markRestDay = async () => {
+    if (restingRef.current) return
+    restingRef.current = true
     setMarkingRest(true)
     try {
       await api.createPlannedSession({
@@ -457,14 +561,25 @@ export function PlanPage() {
     } catch (err) {
       setError(toMessage(err, 'That day could not be updated.'))
     } finally {
+      restingRef.current = false
       setMarkingRest(false)
     }
+  }
+
+  const cellStatus = (key: string): string => {
+    const day = summaryByDate[key]
+    if (day?.day_type === 'rest') return 'rest'
+    if ((day?.completed_count ?? 0) > 0) return 'logged'
+    if ((day?.planned_count ?? 0) > 0) return 'planned'
+    return 'no plan'
   }
 
   const cellBadges = (key: string) => {
     const day = summaryByDate[key]
     const plannedCount = day?.planned_count ?? 0
     const completed = day?.completed_count ?? 0
+    const isRest = day?.day_type === 'rest'
+    if (plannedCount === 0 && !isRest && !day?.has_meals) return null
     return (
       <span className="plan__cell-badges">
         {plannedCount > 0 && (
@@ -473,27 +588,113 @@ export function PlanPage() {
             title={`${completed} of ${plannedCount} sessions completed`}
           />
         )}
+        {isRest && <span className="plan__cell-rest">Rest</span>}
         {day?.has_meals && <span className="plan__cell-meal" title="Nutrition logged" />}
       </span>
     )
   }
 
+  const weeks = useMemo(() => (view === 'month' ? monthWeeks(anchor) : []), [view, anchor])
+  const weekStripDays = useMemo(() => (view === 'week' ? weekDays(anchor) : []), [view, anchor])
+  const stripTabbable =
+    weekStripDays.map((day) => toDateKey(day)).find((key) => key === focused) ??
+    weekStripDays.map((day) => toDateKey(day)).find((key) => key === selected) ??
+    (weekStripDays.length > 0 ? toDateKey(weekStripDays[0]) : null)
+
+  const closeSheet = useCallback(() => setSheetOpen(false), [])
+  const closeDrawer = useCallback(() => setYearDrawerOpen(false), [])
+  const closeOverlays = useCallback(
+    (event: ReactKeyboardEvent<HTMLElement>) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        if (phone && sheetOpen) closeSheet()
+        else if (!phone && view === 'year' && yearDrawerOpen) closeDrawer()
+      }
+    },
+    [phone, sheetOpen, view, yearDrawerOpen, closeSheet, closeDrawer],
+  )
+
+  const dayPanel = (
+    <DayPanel
+      selected={selected}
+      today={today}
+      loading={loading}
+      error={error && summary.length === 0 ? error : null}
+      onRetry={() => {
+        setError(null)
+        void reload()
+      }}
+      loadingLabel={`Loading your ${view} plan…`}
+      statusText={dayTypeLabel(daySummary)}
+      showMarkRest={daySummary?.day_type === 'none'}
+      markingRest={markingRest}
+      onMarkRest={() => void markRestDay()}
+      restSession={restSession}
+      onUnmarkRest={(session) => void deletePlanned(session)}
+      savedAt={savedAt}
+      tab={tab}
+      onTabChange={handleTabChange}
+      split={view === 'week' && wide && !phone}
+      planTitle={planTitle}
+      onPlanTitle={setPlanTitle}
+      planDayType={planDayType}
+      onPlanDayType={setPlanDayType}
+      planning={planningSession}
+      onCreatePlan={() => void createPlan()}
+      planned={selectedPlanned}
+      draftFor={draftFor}
+      onDraft={setDraft}
+      onAutosave={scheduleAutosave}
+      onComplete={(session) => void completeSession(session)}
+      onDeletePlanned={(session) => void deletePlanned(session)}
+      logged={selectedLogged}
+      loggedName={loggedName}
+      onLoggedName={setLoggedName}
+      loggedSets={loggedSets}
+      setLoggedSets={setLoggedSets}
+      saving={savingSession}
+      logError={logError}
+      onLogSession={() => void handleLogSession()}
+      onDeleteWorkout={(session) => void handleDeleteWorkout(session)}
+      library={library}
+      recent={recentExercises}
+      onLibraryExercise={addLibraryExercise}
+      templates={templates}
+      templateKey={templateKey}
+      templateDate={templateDate}
+      applyingTemplate={applyingTemplate}
+      onTemplateKey={setTemplateKey}
+      onTemplateDate={setTemplateDate}
+      onApplyTemplate={() => void applyTemplate()}
+    />
+  )
+
   return (
     <div className="page page--plan">
-      <header className="page__header page__header--row">
-        <div>
-          <h1>Plan</h1>
-          <p>Schedule sessions, apply templates, and log what you did.</p>
+      <header className="page__header page__header--row plan__page-header">
+        <div className="plan__title-block">
+          <h1>{periodTitle(view, anchor)}</h1>
+          <p className="plan__subtitle">Plan sessions and log what you did</p>
         </div>
+        {view === 'year' && (
+          <div className="plan__year-totals">
+            <span>
+              <strong>{yearTotals.sessions}</strong> sessions
+            </span>
+            <span>
+              <strong>{yearTotals.activeDays}</strong> active days
+            </span>
+          </div>
+        )}
         <div className="plan__header-actions">
-          <div className="progress__range" role="tablist" aria-label="Calendar period">
+          <div className="plan__views" role="tablist" aria-label="Calendar period">
             {VIEWS.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 role="tab"
                 aria-selected={view === option.value}
-                className={view === option.value ? 'progress__range--active' : ''}
+                className={view === option.value ? 'plan__views--active' : ''}
                 onClick={() => setView(option.value)}
               >
                 {option.label}
@@ -531,7 +732,7 @@ export function PlanPage() {
         </div>
       </header>
 
-      {error && (
+      {error && summary.length > 0 && (
         <div className="page__alert page__alert--error" role="alert">
           {error}
           <button
@@ -550,30 +751,38 @@ export function PlanPage() {
         </div>
       )}
 
-      <div className="plan__layout">
+      <div className={`plan__content ${view === 'year' ? 'plan__content--year' : ''}`}>
         <section className="plan__calendar" aria-label={periodTitle(view, anchor)}>
-          <div className="plan__calendar-title">{periodTitle(view, anchor)}</div>
-
           {view === 'week' && (
-            <div className="plan__week" role="group" aria-label="Week">
-              {weekDays(anchor).map((day) => {
+            <div className="plan__week" role="group" aria-label="Week" onKeyDown={handleWeekKeyDown}>
+              {weekStripDays.map((day) => {
                 const key = toDateKey(day)
-                const count = summaryByDate[key]?.completed_count ?? 0
+                const info = summaryByDate[key]
+                const completed = info?.completed_count ?? 0
+                const plannedCount = info?.planned_count ?? 0
                 return (
                   <button
                     key={key}
                     type="button"
+                    tabIndex={key === stripTabbable ? 0 : -1}
                     className={`plan__day ${key === selected ? 'plan__day--selected' : ''} ${
                       key === today ? 'plan__day--today' : ''
                     }`}
-                    onClick={() => moveFocus(key)}
+                    onClick={() => selectDay(key)}
+                    onFocus={() => setFocused(key)}
                     aria-pressed={key === selected}
+                    aria-label={`${formatDayLabel(key)}, ${cellStatus(key)}`}
                   >
                     <span className="plan__day-weekday">
                       {day.toLocaleDateString(undefined, { weekday: 'short' })}
                     </span>
                     <span className="plan__day-date">{day.getDate()}</span>
-                    {count > 0 && <span className="plan__day-dot" aria-hidden />}
+                    <span className="plan__day-marks">
+                      {plannedCount > 0 && (
+                        <span className={`plan__day-mark ${completed >= plannedCount ? 'plan__day-mark--done' : ''}`} />
+                      )}
+                      {completed > 0 && plannedCount === 0 && <span className="plan__day-mark plan__day-mark--done" />}
+                    </span>
                   </button>
                 )
               })}
@@ -589,24 +798,40 @@ export function PlanPage() {
                   </div>
                 ))}
               </div>
-              <div className="plan__month-grid" role="grid" aria-label={formatMonthTitle(anchor)}>
-                {monthGrid(anchor).map((cell) => (
-                  <button
-                    key={cell.key}
-                    type="button"
-                    role="gridcell"
-                    tabIndex={cell.key === focused ? 0 : -1}
-                    className={`plan__month-day ${cell.inMonth ? '' : 'plan__month-day--blank'} ${
-                      cell.key === selected ? 'plan__month-day--selected' : ''
-                    } ${cell.key === today ? 'plan__month-day--today' : ''}`}
-                    onClick={() => moveFocus(cell.key)}
-                    onFocus={() => setFocused(cell.key)}
-                    aria-label={formatDayLabel(cell.key)}
-                    aria-pressed={cell.key === selected}
+              <div
+                className="plan__month-grid"
+                role="grid"
+                aria-label={formatMonthTitle(anchor)}
+                style={{ '--rows': weeks.length } as CSSProperties}
+              >
+                {weeks.map((week, index) => (
+                  <div
+                    key={week[0]?.key ?? `week-${index}`}
+                    role="row"
+                    className="plan__month-week"
+                    aria-label={`Week ${index + 1}`}
                   >
-                    <span className="plan__month-date">{cell.date.getDate()}</span>
-                    {cell.inMonth && cellBadges(cell.key)}
-                  </button>
+                    {week.map((cell) => (
+                      <button
+                        key={cell.key}
+                        type="button"
+                        role="gridcell"
+                        tabIndex={cell.key === focused ? 0 : -1}
+                        className={`plan__month-day ${cell.inMonth ? '' : 'plan__month-day--outside'} ${
+                          cell.key === selected ? 'plan__month-day--selected' : ''
+                        } ${cell.key === today ? 'plan__month-day--today' : ''}`}
+                        onClick={() => selectDay(cell.key)}
+                        onFocus={() => setFocused(cell.key)}
+                        aria-label={`${formatDayLabel(cell.key)}, ${cellStatus(cell.key)}`}
+                        aria-selected={cell.key === selected}
+                        aria-current={cell.key === today ? 'date' : undefined}
+                        aria-pressed={cell.key === selected}
+                      >
+                        <span className="plan__month-date">{cell.date.getDate()}</span>
+                        {cell.inMonth && cellBadges(cell.key)}
+                      </button>
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>
@@ -614,14 +839,6 @@ export function PlanPage() {
 
           {view === 'year' && (
             <div onKeyDown={handleGridKeyDown}>
-              <div className="plan__year-totals">
-                <span>
-                  <strong>{yearTotals.sessions}</strong> sessions
-                </span>
-                <span>
-                  <strong>{yearTotals.activeDays}</strong> active days
-                </span>
-              </div>
               <div className="plan__year-grid">
                 {year.map((entry) => (
                   <div key={entry.month} className="plan__year-month">
@@ -647,9 +864,10 @@ export function PlanPage() {
                             title={`${formatDayLabel(cell.key)}: ${completed} completed`}
                             aria-label={`${formatDayLabel(cell.key)}, ${completed} completed`}
                             onClick={() => {
-                              setAnchor(entry.anchor)
-                              setView('month')
-                              moveFocus(cell.key)
+                              setFocused(cell.key)
+                              setSelected(cell.key)
+                              if (phone) setSheetOpen(true)
+                              else setYearDrawerOpen(true)
                             }}
                           />
                         )
@@ -668,341 +886,55 @@ export function PlanPage() {
           )}
         </section>
 
-        <section className="plan__panel">
-          <h2 className="plan__panel-title">
-            <CalendarDays size={16} />
-            {formatDayLabel(selected)}
-          </h2>
-
-          {loading ? (
-            <PlanSkeleton view={view} />
-          ) : error && summary.length === 0 ? (
-            <div className="page__alert page__alert--error" role="alert">
-              {error}
-              <button
-                type="button"
-                className="page__alert-action"
-                onClick={() => {
-                  setError(null)
-                  void reload()
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="plan__day-meta">
-                <span className="plan__badge plan__badge--type">{dayTypeLabel(daySummary)}</span>
-                {daySummary?.day_type === 'none' && (
-                  <button
-                    type="button"
-                    className="plan__text-btn"
-                    onClick={markRestDay}
-                    disabled={markingRest}
-                  >
-                    Mark as rest day
-                  </button>
-                )}
-                {savedAt && <span className="plan__saved">Saved</span>}
-              </div>
-
-              <h3 className="plan__section-label">Planned</h3>
-              {selectedPlanned.length === 0 ? (
-                <div className="plan__inline-form">
-                  <input
-                    type="text"
-                    className="plan__input"
-                    placeholder="Session title (optional)"
-                    aria-label="Session title"
-                    value={planTitle}
-                    onChange={(event) => setPlanTitle(event.target.value)}
-                  />
-                  <select
-                    className="plan__input"
-                    aria-label="Day type"
-                    value={planDayType}
-                    onChange={(event) => setPlanDayType(event.target.value)}
-                  >
-                    {DAY_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {type.replace('_', ' ')}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" className="profile__save" onClick={createPlan}>
-                    <Plus size={16} />
-                    Plan session
-                  </button>
-                </div>
-              ) : (
-                <ul className="plan__session-list">
-                  {selectedPlanned.map((session) => (
-                    <li key={session.id} className="plan__session">
-                      <div className="plan__session-header">
-                        <input
-                          className="plan__session-title-input"
-                          aria-label="Session title"
-                          value={draftFor(session)?.title ?? session.title ?? ''}
-                          onChange={(event) => {
-                            setDraft(session.id, { title: event.target.value })
-                            scheduleAutosave(session, { title: event.target.value || null })
-                          }}
-                        />
-                        {session.status === 'completed' && (
-                          <span className="plan__badge plan__badge--done">Done</span>
-                        )}
-                      </div>
-                      <table className="plan__set-table">
-                        <caption className="visually-hidden">Exercises for {session.title ?? 'session'}</caption>
-                        <thead>
-                          <tr>
-                            <th scope="col">#</th>
-                            <th scope="col">Exercise</th>
-                            <th scope="col">Sets</th>
-                            <th scope="col">Reps</th>
-                            <th scope="col">Target</th>
-                            <th scope="col">Done</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {session.exercises.length === 0 && (
-                            <tr>
-                              <td colSpan={6} className="plan__set-detail">
-                                No exercises yet.
-                              </td>
-                            </tr>
-                          )}
-                          {session.exercises.map((exercise) => (
-                            <tr key={exercise.id}>
-                              <td>{exercise.position + 1}</td>
-                              <td>{exercise.exercise_name}</td>
-                              <td>{exercise.target_sets ?? '—'}</td>
-                              <td>{exercise.target_reps ?? '—'}</td>
-                              <td>
-                                {exercise.target_weight != null
-                                  ? `${exercise.target_weight} ${exercise.target_weight_unit ?? ''}`
-                                  : exercise.duration_seconds != null
-                                    ? `${exercise.duration_seconds}s`
-                                    : '—'}
-                              </td>
-                              <td>
-                                <input
-                                  type="checkbox"
-                                  aria-label={`${exercise.exercise_name} done`}
-                                  checked={session.status === 'completed'}
-                                  disabled={session.status === 'completed'}
-                                  onChange={() => void completeSession(session)}
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <textarea
-                        className="plan__input plan__input--textarea"
-                        aria-label="Session notes"
-                        placeholder="Notes"
-                        value={draftFor(session)?.notes ?? session.notes ?? ''}
-                        onChange={(event) => {
-                          setDraft(session.id, { notes: event.target.value })
-                          scheduleAutosave(session, { notes: event.target.value })
-                        }}
-                      />
-                      <div className="plan__session-actions">
-                        {session.status !== 'completed' && (
-                          <button
-                            type="button"
-                            className="plan__text-btn"
-                            onClick={() => void completeSession(session)}
-                          >
-                            <CheckCircle2 size={14} />
-                            Mark complete
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="plan__icon-btn"
-                          onClick={() => void deletePlanned(session)}
-                          aria-label="Delete planned session"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <h3 className="plan__section-label">
-                <Dumbbell size={14} />
-                Logged
-              </h3>
-              {selectedLogged.length === 0 ? (
-                <p className="plan__hint">Nothing logged for this day yet.</p>
-              ) : (
-                <ul className="plan__session-list">
-                  {selectedLogged.map((session) => (
-                    <li key={session.id} className="plan__session">
-                      <div className="plan__session-header">
-                        <span className="plan__session-name">{session.name ?? 'Session'}</span>
-                        <button
-                          type="button"
-                          className="plan__icon-btn"
-                          onClick={() => void handleDeleteWorkout(session)}
-                          aria-label={`Delete ${session.name ?? 'session'}`}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                      <div className="plan__session-sets">
-                        {session.sets.map((set) => (
-                          <div key={set.id} className="plan__set-row">
-                            <span className="plan__set-exercise">{set.exercise_name}</span>
-                            <span className="plan__set-detail">
-                              {set.reps ?? '—'} reps
-                              {set.weight != null ? ` @ ${set.weight} ${set.weight_unit ?? ''}` : ''}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <div className="plan__add">
-                <h3 className="plan__section-label">Log a session</h3>
-                <input
-                  type="text"
-                  className="plan__input"
-                  placeholder="Session name (optional)"
-                  aria-label="Logged session name"
-                  value={loggedName}
-                  onChange={(event) => setLoggedName(event.target.value)}
-                />
-                {loggedSets.map((set, index) => (
-                  <div key={index} className="plan__set-editor">
-                    <ExerciseCombobox
-                      value={set.exercise_name}
-                      library={library}
-                      recent={recentExercises}
-                      onLibraryChange={addLibraryExercise}
-                      onChange={(value) =>
-                        setLoggedSets((prev) =>
-                          prev.map((item, i) => (i === index ? { ...item, exercise_name: value } : item)),
-                        )
-                      }
-                    />
-                    <Stepper
-                      label="Reps"
-                      value={set.reps}
-                      onChange={(value) =>
-                        setLoggedSets((prev) =>
-                          prev.map((item, i) => (i === index ? { ...item, reps: value } : item)),
-                        )
-                      }
-                    />
-                    <Stepper
-                      label="Weight"
-                      value={set.weight}
-                      step={2.5}
-                      onChange={(value) =>
-                        setLoggedSets((prev) =>
-                          prev.map((item, i) => (i === index ? { ...item, weight: value } : item)),
-                        )
-                      }
-                    />
-                    <select
-                      className="plan__input plan__input--unit"
-                      aria-label="Weight unit"
-                      value={set.weight_unit}
-                      onChange={(event) =>
-                        setLoggedSets((prev) =>
-                          prev.map((item, i) =>
-                            i === index ? { ...item, weight_unit: event.target.value as 'kg' | 'lb' } : item,
-                          ),
-                        )
-                      }
-                    >
-                      <option value="kg">kg</option>
-                      <option value="lb">lb</option>
-                    </select>
-                    <button
-                      type="button"
-                      className="plan__icon-btn"
-                      onClick={() => setLoggedSets((prev) => prev.filter((_, i) => i !== index))}
-                      aria-label="Remove set"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-                {logError && (
-                  <p className="field__error" role="alert">
-                    {logError}
-                  </p>
-                )}
-                <div className="plan__add-actions">
-                  <button
-                    type="button"
-                    className="plan__text-btn"
-                    onClick={() => setLoggedSets((prev) => [...prev, emptyLoggedSet()])}
-                  >
-                    <Plus size={14} />
-                    Add exercise
-                  </button>
-                  <button
-                    type="button"
-                    className="profile__save"
-                    onClick={handleLogSession}
-                    disabled={savingSession}
-                  >
-                    {savingSession ? <Loader2 className="page__spinner" size={16} /> : 'Log session'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="plan__templates">
-                <h3 className="plan__section-label">
-                  <LayoutTemplate size={14} />
-                  Start from a template
-                </h3>
-                <div className="plan__template-row">
-                  <select
-                    className="plan__input"
-                    aria-label="Template"
-                    value={templateKey}
-                    onChange={(event) => setTemplateKey(event.target.value)}
-                  >
-                    <option value="">Choose a template</option>
-                    {templates.map((template) => (
-                      <option key={template.key} value={template.key}>
-                        {template.name.replace(/_/g, ' ')}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="date"
-                    className="plan__input"
-                    aria-label="Template start date"
-                    value={templateDate}
-                    onChange={(event) => setTemplateDate(event.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="profile__save"
-                    onClick={applyTemplate}
-                    disabled={applyingTemplate || !templateKey}
-                  >
-                    {applyingTemplate ? <Loader2 className="page__spinner" size={16} /> : 'Apply'}
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </section>
+        {!phone && view !== 'year' && (
+          <section className="plan__panel" aria-label="Day details">
+            {dayPanel}
+          </section>
+        )}
       </div>
+
+      {phone && sheetOpen && (
+        <>
+          <div className="plan__sheet-backdrop" onClick={closeSheet} aria-hidden />
+          <section
+            className="plan__sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Day details"
+            onKeyDown={closeOverlays}
+          >
+            <div className="plan__sheet-handle" aria-hidden />
+            <button
+              ref={sheetCloseRef}
+              type="button"
+              className="plan__sheet-close"
+              onClick={closeSheet}
+              aria-label="Close day panel"
+            >
+              <X size={18} />
+            </button>
+            <div className="plan__panel plan__panel--sheet">{dayPanel}</div>
+          </section>
+        </>
+      )}
+
+      {!phone && view === 'year' && yearDrawerOpen && (
+        <>
+          <div className="plan__drawer-backdrop" onClick={closeDrawer} aria-hidden />
+          <section className="plan__drawer" role="dialog" aria-modal="true" aria-label="Day details" onKeyDown={closeOverlays}>
+            <button
+              ref={drawerCloseRef}
+              type="button"
+              className="plan__sheet-close"
+              onClick={closeDrawer}
+              aria-label="Close day panel"
+            >
+              <X size={18} />
+            </button>
+            <div className="plan__panel plan__panel--drawer">{dayPanel}</div>
+          </section>
+        </>
+      )}
 
       {undo && (
         <div className="toast" role="status">
@@ -1027,19 +959,6 @@ export function PlanPage() {
   )
 }
 
-/** Placeholder shown while a view is loading, so the panel never collapses. */
-function PlanSkeleton({ view }: { view: View }) {
-  return (
-    <div className="plan__skeleton" role="status" aria-busy="true" aria-live="polite">
-      <span className="visually-hidden">Loading your {view} plan…</span>
-      <div className="plan__skeleton-line" />
-      <div className="plan__skeleton-line" />
-      <div className="plan__skeleton-line" />
-      <div className="plan__skeleton-line" />
-    </div>
-  )
-}
-
 /** "No plan" unless the user explicitly planned this day. */
 export function dayTypeLabel(day: DaySummary | undefined): string {
   const type = day?.day_type ?? 'none'
@@ -1053,44 +972,4 @@ function heatLevel(completed: number): number {
   if (completed === 1) return 1
   if (completed === 2) return 2
   return 3
-}
-
-function Stepper({
-  label,
-  value,
-  step = 1,
-  onChange,
-}: {
-  label: string
-  value: number | ''
-  step?: number
-  onChange: (value: number | '') => void
-}) {
-  const decrement = () => {
-    const current = value === '' ? 0 : Number(value)
-    onChange(Math.max(0, current - step))
-  }
-  const increment = () => onChange((value === '' ? 0 : Number(value)) + step)
-  return (
-    <div className="stepper">
-      <span className="stepper__label">{label}</span>
-      <button type="button" className="stepper__btn" onClick={decrement} aria-label={`Decrease ${label}`}>
-        <Minus size={14} />
-      </button>
-      <input
-        type="number"
-        className="stepper__input"
-        aria-label={label}
-        value={value}
-        min={0}
-        step={step}
-        onChange={(event) =>
-          onChange(event.target.value === '' ? '' : Number(event.target.value))
-        }
-      />
-      <button type="button" className="stepper__btn" onClick={increment} aria-label={`Increase ${label}`}>
-        <Plus size={14} />
-      </button>
-    </div>
-  )
 }

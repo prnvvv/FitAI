@@ -127,7 +127,9 @@ describe('PlanPage', () => {
     })
 
     expect(screen.getByText('No plan')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Plan' }))
     expect(screen.getByRole('button', { name: /Plan session/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Log' }))
     expect(screen.getByText('Nothing logged for this day yet.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Week' }))
@@ -149,17 +151,19 @@ describe('PlanPage', () => {
 
   it('renders planned sessions returned through the paged endpoint', async () => {
     const todayKey = toDateKey(new Date())
-    await renderPlan({
+    const { user } = await renderPlan({
       getAllPlannedSessions: vi.fn(async () => [plannedSession('ps-9', todayKey)]),
     })
 
+    await user.click(screen.getByRole('tab', { name: 'Plan' }))
     expect(screen.getByDisplayValue('Session ps-9')).toBeInTheDocument()
   })
 
   it('shows existing logged sessions for the selected day', async () => {
     await renderPlan()
     expect(screen.getByText('hjkfb')).toBeInTheDocument()
-    expect(screen.getByText(/slknlc/)).toBeInTheDocument()
+    // Exercise appears in the collapsed-row summary and in the set detail.
+    expect(screen.getAllByText(/slknlc/)).toHaveLength(2)
   })
 
   it('logs a session with an exercise chosen from the library', async () => {
@@ -196,6 +200,7 @@ describe('PlanPage', () => {
       getAllPlannedSessions: vi.fn(async () => [plannedSession('ps-9', todayKey, { title: 'Push' })]),
     })
 
+    await user.click(screen.getByRole('tab', { name: 'Plan' }))
     const input = screen.getByDisplayValue('Push')
     await user.clear(input)
     await user.type(input, 'Push day')
@@ -317,7 +322,7 @@ describe('PlanPage', () => {
 
   it('shows a rest day only when the day was explicitly set to rest', async () => {
     const todayKey = toDateKey(new Date())
-    await renderPlan({
+    const { user } = await renderPlan({
       getPlanSummary: vi.fn(async () => [
         daySummary(todayKey, { planned_count: 1, day_type: 'rest' }),
       ]),
@@ -326,8 +331,10 @@ describe('PlanPage', () => {
       ]),
     })
 
-    expect(screen.getByText('rest')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Mark as rest day' })).not.toBeInTheDocument()
+    expect(document.querySelector('.plan__badge--type')).toHaveTextContent('rest')
+    await user.click(screen.getByRole('button', { name: 'Day options' }))
+    expect(screen.queryByRole('menuitem', { name: 'Mark as rest day' })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Unmark rest day' })).toBeInTheDocument()
   })
 
   it('plans and logs a session and keeps it after a refresh', async () => {
@@ -340,10 +347,159 @@ describe('PlanPage', () => {
       }),
     })
 
+    await user.click(screen.getByRole('tab', { name: 'Plan' }))
     await user.click(screen.getByRole('button', { name: /Plan session/ }))
     await waitFor(() => expect(spies.createPlannedSession).toHaveBeenCalled())
 
     expect(screen.getByDisplayValue('Leg day')).toBeInTheDocument()
+  })
+})
+
+describe('PlanPage redesign', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('renders only as many week rows as the month needs', async () => {
+    const module = await import('./PlanPage')
+    expect(module.monthWeeks(new Date(2021, 1, 1))).toHaveLength(4)
+    expect(module.monthWeeks(new Date(2026, 9, 1))).toHaveLength(5)
+    expect(module.monthWeeks(new Date(2026, 7, 1))).toHaveLength(6)
+  })
+
+  it('renders one grid row per needed week for the current month', async () => {
+    const module = await import('./PlanPage')
+    await renderPlan()
+    const grid = screen.getByRole('grid')
+    expect(within(grid).getAllByRole('row')).toHaveLength(
+      module.monthWeeks(new Date()).length,
+    )
+  })
+
+  it('styles outside-month cells like in-month cells', async () => {
+    await renderPlan()
+    const cells = Array.from(document.querySelectorAll('.plan__month-day'))
+    expect(cells.length).toBeGreaterThan(0)
+    expect(document.querySelectorAll('.plan__month-day--blank').length).toBe(0)
+    const outside = Array.from(document.querySelectorAll('.plan__month-day--outside'))
+    expect(outside.length).toBeGreaterThan(0)
+    for (const cell of outside) {
+      expect(cell.tagName).toBe('BUTTON')
+    }
+  })
+
+  it('moves to the week edges with Home and End and selects with Space', async () => {
+    const { startOfWeek, addDays } = await import('../utils/dates')
+    const { user } = await renderPlan()
+    const focused = document.querySelector('.plan__month-day[tabindex="0"]') as HTMLElement
+    focused.focus()
+
+    const monday = startOfWeek(new Date())
+    await user.keyboard('{End}')
+    await waitFor(() => {
+      const selected = document.querySelector('.plan__month-day--selected .plan__month-date')
+      expect(selected?.textContent).toBe(String(addDays(monday, 6).getDate()))
+    })
+
+    await user.keyboard('{Home}')
+    await waitFor(() => {
+      const selected = document.querySelector('.plan__month-day--selected .plan__month-date')
+      expect(selected?.textContent).toBe(String(monday.getDate()))
+    })
+
+    const current = document.querySelector('.plan__month-day[tabindex="0"]') as HTMLElement
+    const label = current.getAttribute('aria-label')
+    current.focus()
+    await user.keyboard(' ')
+    await waitFor(() => {
+      expect(
+        document.querySelector('.plan__month-day--selected')?.getAttribute('aria-label'),
+      ).toBe(label)
+    })
+  })
+
+  it('defaults to Log for today and Plan for future days', async () => {
+    const { user } = await renderPlan()
+    expect(screen.getByRole('tab', { name: 'Log' })).toHaveAttribute('aria-selected', 'true')
+
+    const cells = within(screen.getByRole('grid')).getAllByRole('gridcell')
+    await user.click(cells[cells.length - 1])
+    expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('keeps typed form text across tab switches', async () => {
+    const { user } = await renderPlan()
+    const nameInput = screen.getByLabelText('Logged session name')
+    await user.type(nameInput, 'Evening lift')
+
+    await user.click(screen.getByRole('tab', { name: 'Plan' }))
+    const titleInput = screen.getByLabelText('Session title')
+    await user.type(titleInput, 'Push day')
+
+    await user.click(screen.getByRole('tab', { name: 'Log' }))
+    expect((screen.getByLabelText('Logged session name') as HTMLInputElement).value).toBe(
+      'Evening lift',
+    )
+    await user.click(screen.getByRole('tab', { name: 'Plan' }))
+    expect((screen.getByLabelText('Session title') as HTMLInputElement).value).toBe('Push day')
+  })
+
+  it('opens the template popover from the day menu', async () => {
+    const { user } = await renderPlan()
+    await user.click(screen.getByRole('button', { name: 'Day options' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Start from a template…' }))
+
+    expect(screen.getByRole('dialog', { name: 'Start from a template' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Template')).toBeInTheDocument()
+    expect(screen.getByLabelText('Template start date')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument()
+  })
+
+  it('sends one request for a double-clicked Plan session', async () => {
+    const todayKey = toDateKey(new Date())
+    let resolveCreate: (value: unknown) => void = () => {}
+    const { spies, user } = await renderPlan({
+      createPlannedSession: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveCreate = resolve
+          }).then(() => plannedSession('ps-1', todayKey)),
+      ),
+    })
+    await user.click(screen.getByRole('tab', { name: 'Plan' }))
+    const pending = user.dblClick(screen.getByRole('button', { name: /Plan session/ }))
+    await waitFor(() =>
+      expect((spies.createPlannedSession as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1),
+    )
+    resolveCreate(undefined)
+    await pending
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect((spies.createPlannedSession as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1)
+  })
+
+  it('opens the day drawer from the year view and closes it with Escape', async () => {
+    const { user } = await renderPlan()
+    await user.click(screen.getByRole('tab', { name: 'Year' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(document.querySelector('.plan__year-day') as HTMLElement)
+    expect(screen.getByRole('dialog', { name: 'Day details' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('opens the month view from a year month title', async () => {
+    const { user } = await renderPlan()
+    await user.click(screen.getByRole('tab', { name: 'Year' }))
+    await user.click(document.querySelector('.plan__year-month-title') as HTMLElement)
+
+    expect(screen.getByRole('tab', { name: 'Month' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('grid')).toBeInTheDocument()
   })
 })
 

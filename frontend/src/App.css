@@ -2644,7 +2644,14 @@
 
 /* Plan uses the full width of the main area; the generic page column is narrow. */
 .page--plan {
-  max-width: 1180px;
+  max-width: 1280px;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 24px 24px 16px;
+  flex: 1 1 auto;
 }
 
 /* Loading placeholder for the day panel. */
@@ -2695,15 +2702,27 @@
   color: var(--text-muted);
 }
 
-/* Plan month/year layout */
-.plan__layout {
+/* Plan month/year layout: calendar fills, panel is fixed width. The content
+   row takes the remaining viewport height; only the panel body may scroll. */
+.plan__content {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   gap: 24px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.plan__content--year {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 @media (max-width: 1023px) {
-  .plan__layout {
+  .page--plan {
+    height: auto;
+    overflow: visible;
+  }
+
+  .plan__content {
     grid-template-columns: 1fr;
   }
 }
@@ -2713,13 +2732,65 @@
   border-radius: 12px;
   background-color: var(--bg-composer);
   padding: 16px;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.plan__calendar-title {
-  font-weight: 600;
-  font-size: 1rem;
-  margin-bottom: 12px;
+.plan__page-header {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.plan__title-block {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.plan__title-block h1 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plan__subtitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plan__views {
+  display: inline-flex;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.plan__views button {
+  padding: 8px 14px;
+  border: none;
+  border-right: 1px solid var(--divider);
+  background-color: var(--bg-composer);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.plan__views button:last-child {
+  border-right: none;
+}
+
+.plan__views button:hover {
+  background-color: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.plan__views--active {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
 }
 
 .plan__weekdays {
@@ -2739,69 +2810,108 @@
 
 .plan__month-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows, 6), minmax(44px, 1fr));
+  gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(var(--rows, 6) * 96px + (var(--rows, 6) - 1) * 4px);
+  margin-block: auto;
+  container-type: inline-size;
+}
+
+.plan__month-week {
+  display: contents;
 }
 
 .plan__month-day {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  aspect-ratio: 1;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 2px;
+  min-height: 44px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   background-color: var(--bg-main);
   color: var(--text-secondary);
   cursor: pointer;
   position: relative;
-  padding: 4px;
+  padding: 6px 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 .plan__month-day:hover {
   background-color: var(--bg-hover);
+  border-color: var(--divider);
 }
 
-.plan__month-day--blank {
-  background-color: transparent;
-  cursor: default;
+.plan__month-day:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.plan__month-day--outside {
+  color: var(--text-muted);
 }
 
 .plan__month-day--selected {
   border-color: var(--accent);
+  background-color: rgba(47, 107, 255, 0.08);
   color: var(--text-primary);
 }
 
 .plan__month-day--today .plan__month-date {
-  color: var(--accent);
+  background-color: var(--accent);
+  color: #fff;
   font-weight: 700;
 }
 
 .plan__month-date {
-  font-size: 0.9375rem;
+  font-size: 14px;
+  line-height: 20px;
+  min-width: 20px;
+  text-align: center;
+  border-radius: 999px;
 }
 
 .plan__cell-badges {
   display: flex;
-  gap: 3px;
+  gap: 4px;
   align-items: center;
-  height: 5px;
+  margin-top: auto;
+  min-height: 8px;
 }
 
-.plan__cell-dot,
-.plan__cell-meal {
-  width: 5px;
-  height: 5px;
+.plan__cell-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background-color: var(--accent);
+  border: 1.5px solid var(--accent);
+  background-color: transparent;
 }
 
 .plan__cell-dot--done {
   background-color: var(--success);
+  border-color: var(--success);
+}
+
+.plan__cell-rest {
+  font-size: 0.625rem;
+  line-height: 1;
+  color: var(--text-secondary);
+}
+
+@container (max-width: 560px) {
+  .plan__cell-rest {
+    display: none;
+  }
 }
 
 .plan__cell-meal {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   background-color: #f59e0b;
 }
 
@@ -3569,6 +3679,11 @@
   outline: none;
 }
 
+.plan__menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .plan__popover {
   position: absolute;
   top: 52px;
@@ -3628,6 +3743,409 @@
 .plan__input--select option {
   background-color: var(--bg-popover);
   color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------------ */
+/* Plan redesign: viewport-fit shell, panel, tabs, sheet, drawer       */
+/* ------------------------------------------------------------------ */
+
+.plan__section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan__section-label svg {
+  flex-shrink: 0;
+}
+
+.plan__week {
+  margin: 0;
+}
+
+.plan__day {
+  min-height: 72px;
+  padding: 8px 4px;
+}
+
+.plan__day-marks {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  min-height: 6px;
+}
+
+.plan__day-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+}
+
+.plan__day-mark--done {
+  background-color: var(--success);
+  border-color: var(--success);
+}
+
+.plan__panel {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.daypanel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.daypanel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.daypanel__date {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daypanel__today-chip {
+  background-color: rgba(47, 107, 255, 0.15);
+  color: var(--accent-hover);
+}
+
+.daypanel__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+
+.daypanel__toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.plan__tabs {
+  display: inline-flex;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.plan__tabs button {
+  padding: 8px 18px;
+  border: none;
+  border-right: 1px solid var(--divider);
+  background-color: var(--bg-composer);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.plan__tabs button:last-child {
+  border-right: none;
+}
+
+.plan__tabs button:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.plan__tabs--active {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600;
+}
+
+.daypanel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 2px;
+}
+
+.daypanel__footer {
+  flex-shrink: 0;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--divider);
+}
+
+.daypanel__log-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.daypanel__cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.daypanel__plan-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.daypanel__plan-row .plan__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.daypanel__plan-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.plan__session--slim {
+  padding: 10px 12px;
+}
+
+.plan__session-type {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.plan__session-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.plan__session-summary {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plan__session-detail {
+  margin-top: 8px;
+  border-top: 1px solid var(--divider);
+  padding-top: 8px;
+}
+
+.plan__exercise-card {
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background-color: var(--bg-main);
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.plan__exercise-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* Clearly visible steppers with full-contrast text. */
+.stepper {
+  min-height: 38px;
+  padding: 2px 4px;
+}
+
+.stepper__input {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.stepper__btn {
+  width: 32px;
+  height: 32px;
+  color: var(--text-primary);
+}
+
+@media (hover: none) {
+  .stepper {
+    min-height: 44px;
+  }
+
+  .stepper__btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* Year view fills the content row; the panel becomes an overlay drawer. */
+.plan__content--year .plan__calendar {
+  min-height: 0;
+}
+
+.plan__year-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.plan__year-month {
+  min-height: 0;
+}
+
+.plan__year-days {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-auto-rows: 1fr;
+}
+
+.plan__year-day {
+  aspect-ratio: auto;
+  min-height: 10px;
+  height: 100%;
+}
+
+.plan__drawer-backdrop,
+.plan__sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 70;
+}
+
+.plan__drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 100%);
+  z-index: 71;
+  background-color: var(--bg-sidebar);
+  border-left: 1px solid var(--divider);
+  padding: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.plan__drawer .plan__panel {
+  flex: 1 1 auto;
+  border: none;
+  background: none;
+  padding: 0;
+}
+
+.plan__sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 85dvh;
+  max-height: 85dvh;
+  z-index: 71;
+  background-color: var(--bg-sidebar);
+  border-top: 1px solid var(--divider);
+  border-radius: 16px 16px 0 0;
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.plan__sheet-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--divider);
+  margin: 0 auto 8px;
+  flex-shrink: 0;
+}
+
+.plan__sheet-close {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.plan__drawer > .plan__sheet-close {
+  align-self: flex-end;
+  margin-bottom: 8px;
+}
+
+.plan__sheet-close:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.plan__panel--sheet,
+.plan__panel--drawer {
+  border: none;
+  background: none;
+  padding: 0;
+  flex: 1 1 auto;
+}
+
+@media (max-width: 1023px) {
+  .plan__exercise-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 767px) {
+  .page--plan {
+    padding: 16px 16px 24px;
+  }
+
+  .plan__content {
+    gap: 16px;
+  }
+
+  .plan__calendar {
+    padding: 12px;
+  }
+
+  .plan__month-day {
+    min-height: 44px;
+    padding: 4px 6px;
+  }
+
+  .plan__header-actions {
+    flex-wrap: wrap;
+  }
 }
 
 .toast {
