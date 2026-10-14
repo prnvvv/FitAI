@@ -335,6 +335,39 @@ class ChatService:
 
         Creates a new conversation if `conversation_id` is not provided.
         """
+        # Early guardrails check - fail closed before any processing
+        if settings.guardrails_enabled and settings.guardrails_mode != "disabled":
+            safety_result = run_safety_rules(message)
+            if safety_result.blocked:
+                # Log the blocked request
+                log.info(
+                    "guardrails_blocked user_id=%s category=%s mode=%s",
+                    str(user.id),
+                    safety_result.category,
+                    settings.guardrails_mode,
+                )
+                # In monitor mode, log but allow through; in enforce mode, block
+                if settings.guardrails_mode == "enforce":
+                    # Create conversation if needed for logging
+                    if conversation_id is None:
+                        conversation = self._conversations.create(user.id, _title_from_message(message))
+                    else:
+                        conversation = self._conversations.get(user.id, conversation_id)
+                    self._conversations.add_message(user.id, conversation.id, MessageRole.USER, message)
+                    self._conversations.add_message(
+                        user.id, conversation.id, MessageRole.ASSISTANT, safety_result.response
+                    )
+                    return {
+                        "conversation_id": conversation.id,
+                        "response": safety_result.response,
+                        "title": conversation.title,
+                        "sources": [],
+                        "actions": [],
+                        "tool_events": [],
+                    }
+                # monitor mode: fall through but log
+                log.warning("guardrails_monitor_mode_allow category=%s", safety_result.category)
+
         user_id = user.id
         if conversation_id is None:
             conversation = self._conversations.create(user_id, _title_from_message(message))

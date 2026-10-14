@@ -134,6 +134,18 @@ def _register_startup_tasks(app: FastAPI) -> None:
         finally:
             db.close()
 
+    @app.on_event("startup")
+    def _log_guardrails_mode() -> None:
+        """Warn loudly if guardrails are in monitor mode."""
+        from app.core.config import settings
+        if settings.guardrails_enabled and settings.guardrails_mode == "monitor":
+            logger.warning(
+                "GUARDRAILS_MODE=monitor: guardrails will LOG violations but NOT enforce them. "
+                "Set GUARDRAILS_MODE=enforce for production."
+            )
+        elif not settings.guardrails_enabled:
+            logger.warning("GUARDRAILS_ENABLED=false: all guardrails are DISABLED.")
+
 
 def _register_error_handlers(app: FastAPI) -> None:
     def _request_id(request: Request) -> str:
@@ -229,6 +241,18 @@ def _register_health_endpoints(app: FastAPI) -> None:
                 },
             )
         return JSONResponse(status_code=200, content={"status": "ok", "checks": {"database": "ok"}})
+
+    @app.get("/health/guardrails", tags=["health"])
+    def guardrails_health() -> dict[str, object]:
+        """Guardrails status for observability."""
+        from app.core.config import settings
+        return {
+            "enabled": settings.guardrails_enabled,
+            "mode": settings.guardrails_mode,
+            "policy_version": "1.0",
+            "classifier_model_configured": bool(settings.guard_model or settings.groq_model),
+            "canary_configured": bool(settings.guard_canary),
+        }
 
 
 def _ping(db: Session) -> None:

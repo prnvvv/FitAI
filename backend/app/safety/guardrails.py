@@ -8,6 +8,7 @@ clear categories before any tool, memory, or LLM call is made.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from pydantic import BaseModel
 
@@ -55,7 +56,29 @@ _SAFE_REPLIES = {
         "I'm FitAI, focused on fitness, nutrition, and recovery, so I can't help "
         "with that. Happy to help with your training, meals, or progress instead!"
     ),
+    "capability_probe": (
+        "I'm FitAI, focused on fitness, nutrition, and recovery. I can't help with "
+        "coding or general programming questions. Happy to help with your training, "
+        "meals, or progress instead!"
+    ),
+    "code_request": (
+        "I can't write, debug, or explain code. I'm here to help with fitness, "
+        "nutrition, and recovery. Want a workout plan, macro breakdown, or "
+        "recovery tips instead?"
+    ),
 }
+
+
+def _normalize(message: str) -> str:
+    """Normalize message for matching: NFKC, strip zero-width/control, collapse whitespace, lowercase."""
+    # NFKC normalization handles fullwidth chars, compatibility chars
+    normalized = unicodedata.normalize("NFKC", message)
+    # Remove zero-width and control characters (except newline/tab)
+    normalized = "".join(ch for ch in normalized if ch == "\n" or ch == "\t" or not unicodedata.category(ch).startswith("C"))
+    # Collapse whitespace
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip().lower()
+
 
 _SAFETY_RULES: list[tuple[str, re.Pattern[str]]] = [
     ("self_harm", re.compile(r"\b(kill myself|suicid\w*|self[- ]harm|end my life)\b", re.I)),
@@ -87,7 +110,7 @@ _SAFETY_RULES: list[tuple[str, re.Pattern[str]]] = [
             r"(ignore (?:all |any )?(?:the |your |those |these |previous |prior |above )?"
             r"(?:instructions?|rules?|guidelines?|prompt)s?)|"
             r"(reveal|show|print|disclose|expose|leak|repeat|dump|give me)\b[^.\n]{0,40}\b"
-            r"(system prompt|instructions?|api key|secret|credentials?|env(?:ironment)?|config\w*|prompts?)|"
+            r"(system prompt|instructions?|api key|secret| credentials?|env(?:ironment)?|config\w*|prompts?)|"
             r"\b(what are|what's|whats|tell me) your (instructions?|rules?|system prompt)\b|"
             r"\b(you are now|act as|jailbreak|developer mode|dan mode|bypass (?:your|the) (?:rules?|safety|filters?|restrictions?))\b|"
             r"<\s*/?(?:system|prompt)\b",
@@ -111,12 +134,41 @@ _SAFETY_RULES: list[tuple[str, re.Pattern[str]]] = [
             r"\b(diagnose (?:me|my)|do i have|am i diagnosed|what disease do i have)\b", re.I
         ),
     ),
+    # Capability probes: "do you know coding?", "can you code?", "are you good at python?"
+    (
+        "capability_probe",
+        re.compile(
+            r"\b(do you know|can you|are you (?:good at|familiar with|able to))\b.{0,30}\b"
+            r"(cod(?:e|ing)|program(?:ming)?|script(?:ing)?|algorithm|data structure|"
+            r"leetcode|python|javascript|typescript|java|c\+\+|rust|go|html|css|sql|regex)\b",
+            re.I,
+        ),
+    ),
+    # Code/algorithm requests: "give sliding window code", "write a sliding window function",
+    # "implement sliding window", "two pointers", "dijkstra", "leetcode", etc.
+    (
+        "code_request",
+        re.compile(
+            r"\b(write|implement|give|create|build|generate|code|debug|explain|show)\b.{0,50}\b"
+            r"(function|algorithm|script|program|class|method|snippet|code|sliding window|"
+            r"two pointers?|binary search|dynamic programming|dijkstra|bfs|dfs|backtracking|"
+            r"topological sort|union find|trie|heap|graph|tree|linked list|array|string|"
+            r"leetcode|codeforces|hackerrank|interview question|coding challenge|data structure|"
+            r"regex|regular expression|sql query|api|endpoint|database schema|"
+            r"python|javascript|typescript|java|c\+\+|rust|go|html|css)\b"
+            r"|\b(sliding window|two pointers?|binary search|dynamic programming|dijkstra|bfs|dfs|"
+            r"backtracking|topological sort|union find|trie|heap|graph traversal|linked list|"
+            r"leetcode|codeforces|hackerrank|algorithm|data structure)\b.{0,30}\b"
+            r"(python|javascript|typescript|java|c\+\+|rust|go|implementation|code|example)\b",
+            re.I,
+        ),
+    ),
     # Conservative off-domain redirect. Deliberately narrow to avoid blocking
     # legitimate fitness conversation (never fires on common fitness wording).
     (
         "off_topic",
         re.compile(
-            r"\b(write|code|debug|debug)\b[^.\n]{0,20}\b(python|java(?:script)?|c\+\+|ruby|golang|"
+            r"\b(write|code|debug)\b[^.\n]{0,20}\b(python|java(?:script)?|c\+\+|ruby|golang|"
             r"code|a poem|song(?: lyrics)?|an essay|a script|a short story|an email|a cover letter|"
             r"html|css|sql|a query)\b|"
             r"\b(do (?:my|the) homework|solve (?:this|the) (?:equation|math|problem)|"
@@ -131,8 +183,13 @@ _SAFETY_RULES: list[tuple[str, re.Pattern[str]]] = [
 
 
 def run_safety_rules(message: str) -> SafetyResult:
-    """Return a blocked result if the message matches a safety rule."""
+    """Return a blocked result if the message matches a safety rule.
+
+    Normalizes the message first to defeat basic obfuscation (zero-width chars,
+    fullwidth chars, excessive whitespace, case variation).
+    """
+    normalized = _normalize(message)
     for category, pattern in _SAFETY_RULES:
-        if pattern.search(message):
+        if pattern.search(normalized):
             return SafetyResult(blocked=True, category=category, response=_SAFE_REPLIES[category])
     return SafetyResult()

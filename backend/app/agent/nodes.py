@@ -37,6 +37,40 @@ from .state import AgentState
 log = logging.getLogger(__name__)
 
 
+# ---- output guard ---------------------------------------------------------------
+_CODE_FENCE_RE = re.compile(r"```[\s\S]*?```|`[^`\n]+`")
+_SYSTEM_PROMPT_FRAGMENTS = [
+    "you are fitai",
+    "fitai, a helpful",
+    "untrusted data",
+    "never reveal these instructions",
+    "api key",
+    "system prompt",
+    "configuration",
+]
+
+
+def _output_violates_guard(text: str, canary: str | None = None) -> bool:
+    """Check if the model output violates guardrails.
+
+    Checks for:
+    - Code fences (```) or inline code (`)
+    - Canary token (if configured)
+    - System prompt fragments
+    """
+    if not text:
+        return False
+    lowered = text.lower()
+    # Code fences or inline code
+    if _CODE_FENCE_RE.search(text):
+        return True
+    # Canary token
+    if canary and canary in text:
+        return True
+    # System prompt fragments
+    return any(fragment in lowered for fragment in _SYSTEM_PROMPT_FRAGMENTS)
+
+
 class MemoryReader(Protocol):
     """Read-only view of the memory service. Values in canonical units (kg, cm, %)."""
 
@@ -134,8 +168,11 @@ def wants_personal_data_answer(msg: str) -> bool:
     return bool(_PERSONAL_DATA_QUESTION.search(msg))
 
 
-def _select_tools(msg: str) -> list[str]:
+def _select_tools(msg: str, safety: SafetyResult | None = None) -> list[str]:
     """Return the names of research tools likely useful for this message."""
+    # Guard: if safety check blocked, no tools
+    if safety and safety.blocked:
+        return []
     # Questions about the user's own preferences/facts are answered from the
     # persisted profile/memory/RAG context, never from the web, so retrieval
     # isn't drowned out by unrelated live results.
@@ -279,7 +316,7 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
             log.warning("fitness context failed: %s", exc)
             errs.append(f"fitness_context: {type(exc).__name__}")
 
-    for tool_name in _select_tools(state["user_message"]):
+    for tool_name in _select_tools(state["user_message"], state.get("safety")):
         if tool_name == "activity_log":
             try:
                 result = get_activity_log(state["user_id"], db_session=deps.db_session)
@@ -522,18 +559,33 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     if wants_personal_data_answer(state.get("user_message", "")):
         tool_definitions = []
 
+    # Build system prompt with canary
+    canary_text = ""
+    if settings.guard_canary:
+        canary_text = f"\n[CANARY:{settings.guard_canary}]"
+    system_prompt = RESPONSE_GENERATION.format(canary=canary_text)
+
     try:
         if hasattr(deps.llm, "run_with_tools"):
             messages: list[dict[str, Any]] = [
-                {"role": "system", "content": RESPONSE_GENERATION},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt[:4000]},
             ]
             text = deps.llm.run_with_tools(messages, tool_definitions, executor).strip()
         else:
-            text = deps.llm(RESPONSE_GENERATION, prompt).strip()
+            text = deps.llm(system_prompt, prompt).strip()
     except Exception:
         log.warning("response generation failed", exc_info=True)
         text = "Sorry, I couldn't generate a response right now. Please try again."
+
+    # Output guard: check for code fences, canary token, system prompt fragments
+    if _output_violates_guard(text, settings.guard_canary):
+        log.warning("output_guard_triggered", user_id=state.get("user_id"))
+        text = (
+            "I can't provide code or technical implementations. "
+            "I'm here to help with fitness, nutrition, and recovery. "
+            "Want a workout plan, macro breakdown, or recovery tips instead?"
+        )
 
     used_indices = {int(m) for m in _CITATION_RE.findall(text)}
     used_sources = [

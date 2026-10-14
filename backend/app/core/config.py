@@ -141,6 +141,12 @@ class Settings(BaseSettings):
     research_model: str | None = None
     synth_model: str | None = None
 
+    # Guardrails configuration
+    guardrails_enabled: bool = True
+    guardrails_mode: str = "enforce"  # "enforce" | "monitor" | "disabled"
+    guard_model: str | None = None  # model for LLM classifier (defaults to groq_model)
+    guard_canary: str | None = None  # canary token for output guard
+
     # Location / weather defaults
     geocoding_provider: str = "nominatim"  # nominatim | google | mapbox
     google_geocoding_api_key: str | None = None

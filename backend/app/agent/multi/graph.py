@@ -1,6 +1,6 @@
 """Multi-agent orchestrator behind AGENT_MULTI_AGENT.
 
-Topology: router -> (personal fallback | web/local research -> synthesizer).
+Topology: safety_check -> router -> (personal fallback | web/local research -> synthesizer).
 The existing single-agent graph handles pure personal-statement turns; this
 orchestrator handles questions that need live web or local context.
 """
@@ -25,6 +25,7 @@ from app.agent.multi.state import MultiAgentState
 from app.agent.nodes import AgentDeps, _format_profile
 from app.core.config import settings
 from app.llm.client import GroqClient
+from app.safety import SafetyResult, run_safety_rules
 from app.tools.location import find_places
 from app.tools.web.fetch import fetch_url
 from app.tools.web.providers.registry import SearchClient
@@ -33,6 +34,22 @@ from app.tools.web.weather import get_weather
 log = logging.getLogger(__name__)
 
 _MAX_RESEARCH_SOURCES = 4
+
+
+def multi_safety_check(state: MultiAgentState) -> dict[str, Any]:
+    """Run safety guardrails on the user message."""
+    safety = run_safety_rules(state.get("user_message", ""))
+    return {"safety": safety}
+
+
+def _blocked_multi(state: MultiAgentState) -> bool:
+    s = state.get("safety")
+    return s is None or s.blocked
+
+
+def multi_safe_response(state: MultiAgentState) -> dict[str, Any]:
+    s = state.get("safety") or SafetyResult()
+    return {"response": s.response or "I can't help with that request.", "sources": [], "actions": []}
 
 
 def _llm(model: str | None = None) -> GroqClient:
@@ -322,15 +339,28 @@ def route_decision(state: MultiAgentState) -> str:
     return state.get("route", "mixed")
 
 
+def route_after_safety(state: MultiAgentState) -> str:
+    if _blocked_multi(state):
+        return "safe_response"
+    return "router"
+
+
 def build_multi_graph(deps: AgentDeps) -> Any:
     """Compile the multi-agent graph."""
     g = StateGraph(MultiAgentState)
+    g.add_node("safety_check", multi_safety_check)
+    g.add_node("safe_response", multi_safe_response)
     g.add_node("router", lambda state: router_node(state, deps))
     g.add_node("web_research", lambda state: web_research_node(state, deps))
     g.add_node("local_research", lambda state: local_research_node(state, deps))
     g.add_node("synthesize", lambda state: synthesizer_node(state, deps))
 
-    g.set_entry_point("router")
+    g.set_entry_point("safety_check")
+    g.add_conditional_edges(
+        "safety_check",
+        route_after_safety,
+        ["safe_response", "router"],
+    )
     g.add_conditional_edges(
         "router",
         route_decision,
@@ -345,6 +375,7 @@ def build_multi_graph(deps: AgentDeps) -> Any:
     g.add_edge("web_research", "local_research")
     g.add_edge("local_research", "synthesize")
     g.add_edge("synthesize", END)
+    g.add_edge("safe_response", END)
     return g.compile()
 
 

@@ -2,8 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import multiprocessing
 import sys
 from pathlib import Path
+
+# On Windows, set the multiprocessing start method to 'spawn' before any
+# multiprocessing code runs (ChromaDB's ONNX embedding may spawn processes).
+if sys.platform == "win32":
+    multiprocessing.set_start_method("spawn", force=True)
 
 # The app package lives under backend/; make it importable when this script is
 # run as a module from the repository root.
