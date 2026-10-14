@@ -8,6 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Protocol
 
 from app.core.config import settings
@@ -253,12 +254,21 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
 _CITATION_RE = re.compile(r"\[(\d+)\]")
 
 
+def _display(value: object) -> str:
+    """Render a value for the prompt, unwrapping string enums to their value."""
+    return str(value.value) if isinstance(value, Enum) else str(value)
+
+
 def _format_profile(mem: dict[str, MemoryEntry], profile: dict[str, object] | None) -> str:
     lines: list[str] = []
     for k, e in mem.items():
-        lines.append(f"{k}: {e.value}{' ' + e.unit if e.unit else ''}")
+        label = e.key or k
+        unit = f" {e.unit}" if e.unit else ""
+        lines.append(f"{label}: {e.value}{unit}")
     if profile:
-        lines.append("profile: " + ", ".join(f"{k}={v}" for k, v in profile.items() if v))
+        lines.append(
+            "profile: " + ", ".join(f"{k}={_display(v)}" for k, v in profile.items() if v)
+        )
     return "\n".join(lines) if lines else "(none)"
 
 

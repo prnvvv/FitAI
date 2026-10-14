@@ -59,6 +59,12 @@ class _ProfileReaderAdapter(ProfileReader):
         return {k: v for k, v in data.items() if v is not None and v != []}
 
 
+_CANONICAL_UNIT_BY_KEY: dict[MemoryKey, str] = {
+    MemoryKey.WEIGHT: "kg",
+    MemoryKey.HEIGHT: "cm",
+}
+
+
 class _MemoryReaderAdapter(MemoryReader):
     """Adapt MemoryService to the agent's MemoryReader protocol."""
 
@@ -68,14 +74,16 @@ class _MemoryReaderAdapter(MemoryReader):
 
     def get_current_memory(self, user_id: str) -> Mapping[str, MemoryEntry]:
         items = self._service.list_current(UUID(user_id))
-        return {
-            item.key: MemoryEntry(
-                key=item.key,
+        memory: dict[str, MemoryEntry] = {}
+        for item in items:
+            key = item.key.value if isinstance(item.key, MemoryKey) else str(item.key)
+            memory[key] = MemoryEntry(
+                key=key,
                 value=self._scalar(item.value),
+                unit=_CANONICAL_UNIT_BY_KEY.get(item.key),
                 updated_at=item.updated_at,
             )
-            for item in items
-        }
+        return memory
 
     @staticmethod
     def _scalar(value: object) -> float | str | list[str]:
