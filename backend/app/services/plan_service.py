@@ -334,6 +334,20 @@ class PlanService:
 
         return [days[d] for d in sorted(days)]
 
+    def list_sessions(
+        self,
+        user_id: uuid.UUID,
+        *,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[PlannedSession], int]:
+        """Return a page of the user's planned sessions in a date range."""
+        return self._planned.list_for_user(
+            user_id, from_date=from_date, to_date=to_date, limit=limit, offset=offset
+        )
+
     def get(self, session_id: uuid.UUID, user_id: uuid.UUID) -> PlannedSession:
         """Return one of the user's planned sessions or raise NotFoundError."""
         session = self._planned.get(session_id, user_id)

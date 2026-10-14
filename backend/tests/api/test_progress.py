@@ -139,3 +139,22 @@ def test_progress_is_scoped_to_the_user(make_client) -> None:
     assert len(other.get("/api/v1/progress/weight").json()) == 0
     assert other.get("/api/v1/progress/bmi").json() == []
     assert other.get("/api/v1/progress/derived").json()["sessions_completed"] == 0
+
+
+def test_height_measurement_mirrors_onto_the_profile(client) -> None:
+    """The profile caches the newest height; the measurement stays canonical."""
+    _log(client, "height", 175, "cm", "2026-01-01")
+    _log(client, "height", 178, "cm", "2026-02-01")
+
+    profile = client.get("/api/v1/profile").json()
+    assert float(profile["height_cm"]) == 178.0
+    assert len(client.get("/api/v1/progress/height").json()) == 2
+
+
+def test_inches_are_converted_before_storage_and_mirroring(client) -> None:
+    _log(client, "height", 68.9, "in", "2026-01-01")
+
+    profile = client.get("/api/v1/profile").json()
+    assert float(profile["height_cm"]) == 175.01  # 68.9 in -> cm
+    point = client.get("/api/v1/progress/bmi").json()
+    assert point == []

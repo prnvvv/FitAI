@@ -46,7 +46,7 @@ def _check_sql(values: list[str]) -> str:
 
 def upgrade() -> None:
     # Widen the measurements.type check constraint to include new metric types.
-    op.drop_constraint("ck_measurements_ck_measurements_measurement_type", "measurements")
+    op.drop_constraint("ck_measurements_measurement_type", "measurements")
     op.create_check_constraint(
         "ck_measurements_measurement_type",
         "measurements",
@@ -120,7 +120,7 @@ def downgrade() -> None:
 
     op.drop_constraint("ck_measurements_measurement_type", "measurements")
     op.create_check_constraint(
-        "ck_measurements_ck_measurements_measurement_type",
+        "ck_measurements_measurement_type",
         "measurements",
         sa.text(
             _check_sql(

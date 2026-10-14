@@ -9,12 +9,14 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError, NotFoundError
 from app.models.enums import MeasurementType
 from app.models.measurement import Measurement
+from app.models.profile import Profile
 from app.models.workout import WorkoutSession
 from app.repositories.measurement_repository import MeasurementRepository
 from app.repositories.workout_repository import WorkoutRepository
@@ -118,9 +120,30 @@ class WorkoutService:
             measured_at,
             notes=notes,
         )
+        self._mirror_to_profile(user_id, measurement_type, normalized_value)
         self._commit()
         self._db.refresh(measurement)
         return measurement
+
+    def _mirror_to_profile(
+        self, user_id: UUID, measurement_type: MeasurementType, value: object
+    ) -> None:
+        """Keep the profile's height/weight in step with the newest measurement.
+
+        The measurement history stays the single source of truth; the profile is
+        a cached mirror so tools and the UI always see the latest value.
+        """
+        column = {
+            MeasurementType.HEIGHT: "height_cm",
+            MeasurementType.WEIGHT: "weight_kg",
+        }.get(measurement_type)
+        if column is None:
+            return
+        profile = self._db.scalar(select(Profile).where(Profile.user_id == user_id))
+        if profile is None:
+            profile = Profile(user_id=user_id)
+            self._db.add(profile)
+        setattr(profile, column, value)
 
     @staticmethod
     def _normalize_height(value: object, unit: str) -> tuple[object, str]:

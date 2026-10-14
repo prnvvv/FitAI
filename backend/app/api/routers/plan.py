@@ -83,7 +83,7 @@ def list_sessions(
     offset: int = Query(default=0, ge=0),
 ) -> Page[PlannedSessionOut]:
     """List planned sessions in a date range."""
-    items, total = PlanService(db)._planned.list_for_user(
+    items, total = PlanService(db).list_sessions(
         current_user.id, from_date=from_date, to_date=to_date, limit=limit, offset=offset
     )
     return Page[PlannedSessionOut](
