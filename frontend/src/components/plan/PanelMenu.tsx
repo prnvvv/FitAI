@@ -4,6 +4,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 export interface PanelMenuItem {
   label: string
   onSelect: () => void
+  disabled?: boolean
 }
 
 interface PanelMenuProps {
@@ -108,6 +109,7 @@ export function PanelMenu({ triggerLabel, trigger, items }: PanelMenuProps) {
               type="button"
               role="menuitem"
               className="plan__menu-item"
+              disabled={item.disabled}
               onClick={() => {
                 close()
                 item.onSelect()
