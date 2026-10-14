@@ -2716,6 +2716,11 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.plan__content--week {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 @media (max-width: 1023px) {
   .page--plan {
     height: auto;

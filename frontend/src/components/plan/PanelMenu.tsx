@@ -57,6 +57,7 @@ export function PanelMenu({ triggerLabel, trigger, items }: PanelMenuProps) {
   const handleMenuKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault()
+      event.stopPropagation()
       close()
       return
     }

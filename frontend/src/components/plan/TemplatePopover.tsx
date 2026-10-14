@@ -50,6 +50,7 @@ export function TemplatePopover({
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
       event.preventDefault()
+      event.stopPropagation()
       onClose()
     }
   }

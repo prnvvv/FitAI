@@ -751,7 +751,9 @@ export function PlanPage() {
         </div>
       )}
 
-      <div className={`plan__content ${view === 'year' ? 'plan__content--year' : ''}`}>
+      <div
+        className={`plan__content ${view === 'year' ? 'plan__content--year' : ''} ${view === 'week' ? 'plan__content--week' : ''}`}
+      >
         <section className="plan__calendar" aria-label={periodTitle(view, anchor)}>
           {view === 'week' && (
             <div className="plan__week" role="group" aria-label="Week" onKeyDown={handleWeekKeyDown}>
