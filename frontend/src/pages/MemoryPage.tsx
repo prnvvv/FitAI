@@ -46,7 +46,7 @@ export function MemoryPage() {
     if (!confirm('Forget this memory?')) return
     try {
       await api.deleteMemory(id)
-      setMemories((prev) => prev.filter((m) => m.id !== id))
+      load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete memory')
     }
@@ -95,9 +95,9 @@ export function MemoryPage() {
 
     setSavingId(memory.id)
     try {
-      const updated = await api.correctMemory(memory.id, value)
-      setMemories((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
+      await api.correctMemory(memory.id, value)
       setEditingId(null)
+      load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update memory')
     } finally {

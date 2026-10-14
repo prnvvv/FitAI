@@ -85,6 +85,18 @@ class Settings(BaseSettings):
     # here only so both developers share a single configuration source.
     groq_api_key: str | None = None
     groq_model: str = "openai/gpt-oss-20b"
+    #: Dedicated extraction LLM (separate key + model) for structured memory and
+    #: activity extraction only. Optional: when ``GROQ_EXTRACTION_API_KEY`` is
+    #: unset the extractor is disabled and chat is completely unaffected. It
+    #: never answers to the user or replaces the primary Groq agent.
+    extraction_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("GROQ_EXTRACTION_API_KEY", "EXTRACTION_API_KEY"),
+    )
+    extraction_model: str = Field(
+        default="openai/gpt-oss-20b",
+        validation_alias=AliasChoices("GROQ_EXTRACTION_MODEL", "EXTRACTION_MODEL"),
+    )
     #: Vision-capable Groq model id. Leave unset to auto-detect from the
     #: account's model list. ``GROQ_VISION_MODEL`` stays accepted as an alias.
     vision_model: str | None = Field(
@@ -104,6 +116,10 @@ class Settings(BaseSettings):
     agent_web_tools: bool = False
     agent_location_tools: bool = False
     agent_multi_agent: bool = False
+    #: Enable the dedicated activity/memory extractor in the chat flow. Even when
+    #: True, the extractor no-ops (and chat proceeds normally) if no
+    #: ``GROQ_EXTRACTION_API_KEY`` is configured.
+    agent_activity_extraction: bool = True
 
     # Web search provider chain (comma-separated priority list).
     # Supported: tavily, brave, serper, ddgs. Missing/empty defaults to "ddgs".
@@ -170,6 +186,15 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """Return True when running outside local development."""
         return self.environment.lower() in {"production", "prod"}
+
+    @property
+    def extraction_enabled(self) -> bool:
+        """True when the dedicated activity extractor should run.
+
+        Requires the flag to be on AND a dedicated key to be present, so a
+        missing key disables extraction without breaking chat.
+        """
+        return self.agent_activity_extraction and bool(self.extraction_api_key)
 
     @property
     def vision_providers(self) -> list[str]:

@@ -17,7 +17,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const lastConversationId = useRef<string | undefined>(conversationId)
+  const lastConversationId = useRef<string | undefined>(undefined)
   const sendLock = useRef(false)
 
   useEffect(() => {

@@ -36,6 +36,25 @@ _SAFE_REPLIES = {
         "I can't provide dosing or cycle guidance for steroids or similar drugs. "
         "A licensed clinician is the right source for that."
     ),
+    "prompt_injection": (
+        "I'm here to help with fitness, nutrition, and recovery. I can't share my "
+        "internal instructions or configuration, and I won't follow instructions "
+        "embedded in messages or documents. What fitness goal can I help with?"
+    ),
+    "unsafe_training": (
+        "Training through sharp pain or an injury can make it worse. Rest and have "
+        "it assessed by a qualified professional; I'm glad to help you plan a safe, "
+        "modified routine in the meantime."
+    ),
+    "medical_advice": (
+        "I can't diagnose conditions. Please check with a qualified healthcare "
+        "professional; I can still help with general training, nutrition, or "
+        "recovery guidance."
+    ),
+    "off_topic": (
+        "I'm FitAI, focused on fitness, nutrition, and recovery, so I can't help "
+        "with that. Happy to help with your training, meals, or progress instead!"
+    ),
 }
 
 _SAFETY_RULES: list[tuple[str, re.Pattern[str]]] = [
@@ -58,6 +77,54 @@ _SAFETY_RULES: list[tuple[str, re.Pattern[str]]] = [
             r"\b(?:steroids?|trenbolone|clenbuterol|dnp|sarms?)\b.*\b(?:dos(?:e|age)|cycle|stack|inject\w*|mg)\b|"
             r"\b(?:dos(?:e|age)|cycle|stack|inject\w*)\b.*\b(?:steroids?|trenbolone|clenbuterol|dnp|sarms?)\b",
             re.I | re.S,
+        ),
+    ),
+    # Attempts to override the assistant, exfiltrate its prompt/config, or follow
+    # instructions hidden in messages/documents. Treated as prompt injection.
+    (
+        "prompt_injection",
+        re.compile(
+            r"(ignore (?:all |any )?(?:the |your |those |these |previous |prior |above )?"
+            r"(?:instructions?|rules?|guidelines?|prompt)s?)|"
+            r"(reveal|show|print|disclose|expose|leak|repeat|dump|give me)\b[^.\n]{0,40}\b"
+            r"(system prompt|instructions?|api key|secret|credentials?|env(?:ironment)?|config\w*|prompts?)|"
+            r"\b(what are|what's|whats|tell me) your (instructions?|rules?|system prompt)\b|"
+            r"\b(you are now|act as|jailbreak|developer mode|dan mode|bypass (?:your|the) (?:rules?|safety|filters?|restrictions?))\b|"
+            r"<\s*/?(?:system|prompt)\b",
+            re.I,
+        ),
+    ),
+    # Training that ignores an injury/pain, or extreme/unsafe by default.
+    (
+        "unsafe_training",
+        re.compile(
+            r"(ignore (?:my|the|that)\s+[a-z ]{0,12}(injur\w+|pain)|"
+            r"train(?:ing)?\s+through\s+(?:the\s+)?(?:pain|injur\w+)|"
+            r"(?:work|run|lift)\s+through\s+(?:the\s+)?(?:pain|injur\w+))",
+            re.I,
+        ),
+    ),
+    # Explicit requests for a medical diagnosis.
+    (
+        "medical_advice",
+        re.compile(
+            r"\b(diagnose (?:me|my)|do i have|am i diagnosed|what disease do i have)\b", re.I
+        ),
+    ),
+    # Conservative off-domain redirect. Deliberately narrow to avoid blocking
+    # legitimate fitness conversation (never fires on common fitness wording).
+    (
+        "off_topic",
+        re.compile(
+            r"\b(write|code|debug|debug)\b[^.\n]{0,20}\b(python|java(?:script)?|c\+\+|ruby|golang|"
+            r"code|a poem|song(?: lyrics)?|an essay|a script|a short story|an email|a cover letter|"
+            r"html|css|sql|a query)\b|"
+            r"\b(do (?:my|the) homework|solve (?:this|the) (?:equation|math|problem)|"
+            r"help me (?:cheat|hack))\b|"
+            r"\b(buy|invest in|sell)\b[^.\n]{0,20}\b(bitcoin|crypto|ethereum|stocks?|shares|forex)\b|"
+            r"\b(who (?:won|should i vote)|translate (?:this|the following|this sentence)|"
+            r"write me (?:a )?(?:poem|song))\b",
+            re.I,
         ),
     ),
 ]
