@@ -1,4 +1,4 @@
-import { Brain, FileText, LogOut, Settings, User } from 'lucide-react'
+import { Brain, LogOut, User } from 'lucide-react'
 import { useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -55,7 +55,7 @@ export function AccountMenu({ open, onClose }: AccountMenuProps) {
         role="menuitem"
         onClick={() => {
           onClose()
-          navigate('/profile')
+          navigate('/chat/profile')
         }}
       >
         <User size={20} />
@@ -67,35 +67,11 @@ export function AccountMenu({ open, onClose }: AccountMenuProps) {
         role="menuitem"
         onClick={() => {
           onClose()
-          navigate('/memory')
+          navigate('/chat/memory')
         }}
       >
         <Brain size={20} />
         <span>Memory</span>
-      </button>
-      <button
-        type="button"
-        className="account-menu__item"
-        role="menuitem"
-        onClick={() => {
-          onClose()
-          navigate('/library')
-        }}
-      >
-        <FileText size={20} />
-        <span>Library</span>
-      </button>
-      <button
-        type="button"
-        className="account-menu__item"
-        role="menuitem"
-        onClick={() => {
-          onClose()
-          navigate('/settings')
-        }}
-      >
-        <Settings size={20} />
-        <span>Settings</span>
       </button>
       <div className="account-menu__divider" />
       <button

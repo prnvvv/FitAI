@@ -63,7 +63,7 @@ export function AppShell({
         onDelete={onDelete}
       />
       <div className="app-shell__content">
-        <TopBar />
+        <TopBar onToggleSidebar={onToggleSidebar} sidebarOpen={sidebarOpen} />
         <main className="app-shell__main">
           <Outlet />
         </main>

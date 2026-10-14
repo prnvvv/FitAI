@@ -1,23 +1,26 @@
+import { type ComponentType } from 'react'
+
+interface Suggestion {
+  text: string
+  icon: ComponentType<{ size?: number }>
+}
+
 interface SuggestionListProps {
+  suggestions: Suggestion[]
   onSelect: (text: string) => void
 }
 
-const SUGGESTIONS = [
-  'Help me plan my week',
-  'What should I eat after a late workout?',
-  'Explain progressive overload simply',
-]
-
-export function SuggestionList({ onSelect }: SuggestionListProps) {
+export function SuggestionList({ suggestions, onSelect }: SuggestionListProps) {
   return (
     <div className="suggestion-list">
-      {SUGGESTIONS.map((text) => (
+      {suggestions.map(({ text, icon: Icon }) => (
         <button
           key={text}
           type="button"
           className="suggestion-item"
           onClick={() => onSelect(text)}
         >
+          <Icon size={20} aria-hidden="true" />
           <span>{text}</span>
         </button>
       ))}

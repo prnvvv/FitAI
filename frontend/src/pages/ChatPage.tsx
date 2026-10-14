@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { Share2, Check } from 'lucide-react'
 import { Composer } from '../components/chat/Composer'
 import { MessageList } from '../components/chat/MessageList'
 import { WelcomeScreen } from '../components/chat/WelcomeScreen'
@@ -17,6 +18,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [shareCopied, setShareCopied] = useState(false)
   const lastConversationId = useRef<string | undefined>(conversationId)
   const sendLock = useRef(false)
 
@@ -109,9 +111,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
         console.error(err)
         const message = err instanceof Error ? err.message : 'Failed to send message'
         setError(message)
-        setMessages((prev) =>
-          prev.filter((m) => m.id !== optimisticUserMessage.id),
-        )
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticUserMessage.id))
       } finally {
         setStreaming(false)
         sendLock.current = false
@@ -120,10 +120,52 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
     [conversationId, navigate, onConversationCreated, streaming],
   )
 
+  const handleShare = useCallback(async () => {
+    if (!conversationId) return
+    const url = `${window.location.origin}/chat/${conversationId}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea')
+      textarea.value = url
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    }
+  }, [conversationId])
+
   const hasMessages = messages.length > 0
+  const showChatHeader = hasMessages && conversationId
 
   return (
     <div className="chat-page">
+      {showChatHeader && (
+        <header className="chat-page__header">
+          <div className="chat-page__header-content">
+            <h2 className="chat-page__conversation-title">
+              {messages.find((m) => m.role === 'user')?.content?.slice(0, 50) ?? 'New conversation'}
+            </h2>
+          </div>
+          <button
+            type="button"
+            className={`chat-page__share-btn ${shareCopied ? 'chat-page__share-btn--copied' : ''}`}
+            onClick={handleShare}
+            aria-label={shareCopied ? 'Copied!' : 'Share conversation'}
+            title={shareCopied ? 'Copied to clipboard!' : 'Copy conversation link'}
+          >
+            {shareCopied ? <Check size={18} /> : <Share2 size={18} />}
+            <span className="sr-only">{shareCopied ? 'Copied!' : 'Share conversation'}</span>
+          </button>
+        </header>
+      )}
       {!hasMessages && !loading && !error ? (
         <WelcomeScreen onSuggestion={(text) => handleSend(text, [])} />
       ) : (

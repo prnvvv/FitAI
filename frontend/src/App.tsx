@@ -4,8 +4,10 @@ import './App.css'
 import { AppShell } from './components/layout/AppShell'
 import { PageErrorBoundary } from './components/layout/PageErrorBoundary'
 import { useAuth } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
 import { useConversations } from './hooks/useConversations'
 import { ChatPage } from './pages/ChatPage'
+import { LandingPage } from './pages/LandingPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
 import { MemoryPage } from './pages/MemoryPage'
@@ -18,7 +20,7 @@ function AuthenticatedApp() {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const stored = typeof window !== 'undefined' ? window.localStorage.getItem('fitai_sidebar_open') : null
-    if (stored !== null) return stored !== 'false'
+    if (stored !== null) return stored === 'true'
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
     return !isMobile
   })
@@ -44,7 +46,7 @@ function AuthenticatedApp() {
 
   const handleNewChat = useCallback(async () => {
     setSidebarOpen(false)
-    navigate('/')
+    navigate('/chat')
   }, [navigate])
 
   const handleSelectConversation = useCallback(
@@ -68,7 +70,7 @@ function AuthenticatedApp() {
     async (id: string) => {
       await deleteConversation(id)
       if (activeId === id) {
-        navigate('/')
+        navigate('/chat')
       }
     },
     [deleteConversation, activeId, navigate],
@@ -89,7 +91,7 @@ function AuthenticatedApp() {
   return (
     <Routes>
       <Route
-        path="/"
+        path="/chat"
         element={
           <AppShell
             sidebarOpen={sidebarOpen}
@@ -108,14 +110,8 @@ function AuthenticatedApp() {
           />
         }
       >
-        <Route
-          index
-          element={<ChatPage onConversationCreated={handleConversationCreated} />}
-        />
-        <Route
-          path="chat/:conversationId"
-          element={<ChatPage onConversationCreated={handleConversationCreated} />}
-        />
+        <Route index element={<ChatPage onConversationCreated={handleConversationCreated} />} />
+        <Route path=":conversationId" element={<ChatPage onConversationCreated={handleConversationCreated} />} />
         <Route
           path="library"
           element={
@@ -143,20 +139,23 @@ function AuthenticatedApp() {
           }
         />
         <Route path="settings" element={<ProfilePage />} />
-        <Route path="workouts" element={<Navigate to="/plan" replace />} />
-        <Route path="documents" element={<Navigate to="/library" replace />} />
+        <Route path="workouts" element={<Navigate to="/chat/plan" replace />} />
+        <Route path="documents" element={<Navigate to="/chat/library" replace />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/chat" replace />} />
     </Routes>
   )
 }
 
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/*" element={<AuthenticatedApp />} />
-    </Routes>
+    <ThemeProvider>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/*" element={<AuthenticatedApp />} />
+      </Routes>
+    </ThemeProvider>
   )
 }
 

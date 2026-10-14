@@ -45,7 +45,7 @@ describe('Sidebar', () => {
   it('calls onToggle when header toggle button is clicked', () => {
     const onToggle = vi.fn()
     renderSidebar({ onToggle })
-    fireEvent.click(screen.getByLabelText('Collapse sidebar'))
+    fireEvent.click(screen.getByLabelText('Close sidebar'))
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
 

@@ -53,7 +53,7 @@ export function Sidebar({
   const navigate = useNavigate()
   const location = useLocation()
   const [accountOpen, setAccountOpen] = useState(false)
-  const isChat = location.pathname === '/' || location.pathname.startsWith('/chat/')
+  const isChat = location.pathname === '/chat' || location.pathname.startsWith('/chat/')
 
   useEffect(() => {
     if (!open) return
@@ -81,7 +81,7 @@ export function Sidebar({
           <button
             type="button"
             className="sidebar__icon-btn"
-            aria-label={open ? 'Collapse sidebar' : 'Open sidebar'}
+            aria-label={open ? 'Close sidebar' : 'Open sidebar'}
             aria-controls={id}
             onClick={onToggle}
           >
@@ -127,28 +127,28 @@ export function Sidebar({
             <SidebarNavItem
               icon={<CalendarDays size={20} />}
               label="Plan"
-              active={location.pathname === '/plan'}
+              active={location.pathname === '/chat/plan'}
               onClick={() => {
                 onClose()
-                navigate('/plan')
+                navigate('/chat/plan')
               }}
             />
             <SidebarNavItem
               icon={<TrendingUp size={20} />}
               label="Progress"
-              active={location.pathname === '/progress'}
+              active={location.pathname === '/chat/progress'}
               onClick={() => {
                 onClose()
-                navigate('/progress')
+                navigate('/chat/progress')
               }}
             />
             <SidebarNavItem
               icon={<BookOpen size={20} />}
               label="Library"
-              active={location.pathname === '/library'}
+              active={location.pathname === '/chat/library'}
               onClick={() => {
                 onClose()
-                navigate('/library')
+                navigate('/chat/library')
               }}
             />
           </div>

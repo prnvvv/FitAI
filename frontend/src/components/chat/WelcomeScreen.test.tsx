@@ -15,9 +15,9 @@ describe('WelcomeScreen', () => {
   it('renders greeting and triggers on select', () => {
     const onSuggestion = vi.fn()
     renderWelcome(onSuggestion)
-    expect(screen.getByRole('heading')).toHaveTextContent('Ready to dive in?')
-    const button = screen.getByRole('button', { name: /Help me plan my week/i })
+    expect(screen.getByRole('heading')).toHaveTextContent('Ready to work toward your goals?')
+    const button = screen.getByRole('button', { name: /Create a workout plan/i })
     fireEvent.click(button)
-    expect(onSuggestion).toHaveBeenCalledWith('Help me plan my week')
+    expect(onSuggestion).toHaveBeenCalledWith('Create a workout plan for this week')
   })
 })
