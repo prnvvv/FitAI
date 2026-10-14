@@ -2377,7 +2377,7 @@
 }
 
 .plan__section-label {
-  font-size: 0.75rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -2396,9 +2396,15 @@
 
 .plan__session {
   border: 1px solid var(--divider);
-  border-radius: 10px;
-  background-color: var(--bg-main);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
   padding: 14px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.plan__session:hover {
+  border-color: var(--divider-strong);
+  box-shadow: var(--shadow-sm);
 }
 
 .plan__session-header {
@@ -2423,7 +2429,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 0.875rem;
+  font-size: var(--font-size-base);
   color: var(--text-secondary);
 }
 
@@ -2442,10 +2448,11 @@
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .plan__icon-btn:hover {
