@@ -4341,13 +4341,12 @@
 
 .progress__chart {
   width: 100%;
-  height: 160px;
-  overflow: visible;
-}
-
-.progress__point-label {
-  fill: var(--text-secondary);
-  font-size: 4px;
+  height: 200px;
+  margin: 16px 0;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  background-color: var(--bg-composer);
+  padding: 12px;
 }
 
 .progress__chart-table {

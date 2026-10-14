@@ -1,5 +1,14 @@
 import { AlertCircle, Loader2, Plus, Ruler, Scale, Trash2, TrendingUp, Undo2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { api, toMessage, validationIssues } from '../services/api'
 import type { BmiPoint, DerivedMetrics, Measurement, Profile } from '../types'
 import {
@@ -101,8 +110,6 @@ function ProgressChart({
   unit: string
   label: string
 }) {
-  const [hovered, setHovered] = useState<number | null>(null)
-
   if (points.length === 0) {
     return (
       <div className="progress__chart-empty" role="status">
@@ -111,14 +118,21 @@ function ProgressChart({
     )
   }
 
-  const values = points.map((point) => point.value)
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min || Math.abs(max) || 1
-  const width = 100
-  const x = (index: number) => (points.length === 1 ? width / 2 : (index / (points.length - 1)) * width)
-  const y = (value: number) => 60 - ((value - min) / span) * 46
+  const data = points.map((point) => ({
+    date: new Date(point.measured_at).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+    }),
+    fullDate: new Date(point.measured_at).toLocaleDateString(undefined, {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }),
+    value: point.value,
+  }))
 
+  const values = points.map((point) => point.value)
   const description =
     points.length === 1
       ? `One entry: ${values[0].toFixed(1)} ${unit} on ${new Date(points[0].measured_at).toLocaleDateString()}`
@@ -126,52 +140,61 @@ function ProgressChart({
 
   return (
     <div className="progress__chart-wrap">
-      <svg
+      <div
         className="progress__chart"
-        viewBox={`0 0 ${width} 70`}
         role="img"
         aria-label={`${label} chart. ${description}`}
-        preserveAspectRatio="none"
-        onMouseLeave={() => setHovered(null)}
       >
-        {points.length > 1 && (
-          <polyline
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="1.5"
-            points={points.map((point, index) => `${x(index)},${y(point.value)}`).join(' ')}
-          />
-        )}
-        {points.map((point, index) => (
-          <g key={point.id}>
-            <circle
-              cx={x(index)}
-              cy={y(point.value)}
-              r={points.length === 1 ? 3 : 2}
-              fill="var(--accent)"
-              tabIndex={0}
-              onFocus={() => setHovered(index)}
-              onBlur={() => setHovered(null)}
-              onMouseEnter={() => setHovered(index)}
-              aria-label={`${point.value.toFixed(1)} ${unit}`}
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <defs>
+              <linearGradient id={`gradient-${label}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.2} />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--divider)" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+              axisLine={{ stroke: 'var(--divider)' }}
+              tickLine={false}
             />
-            {(points.length === 1 || hovered === index) && (
-              <text x={x(index)} y={Math.max(y(point.value) - 6, 8)} textAnchor="middle" className="progress__point-label">
-                {point.value.toFixed(1)}
-              </text>
-            )}
-          </g>
-        ))}
-      </svg>
-      {hovered !== null && (
-        <p className="progress__tooltip" role="status">
-          {new Date(points[hovered].measured_at).toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-          })}{' '}
-          · <strong>{points[hovered].value.toFixed(1)}</strong> {unit}
-        </p>
-      )}
+            <YAxis
+              tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+              axisLine={false}
+              tickLine={false}
+              domain={['auto', 'auto']}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: 'var(--bg-popover)',
+                border: '1px solid var(--popover-border)',
+                borderRadius: '8px',
+                boxShadow: 'var(--shadow-md)',
+                fontSize: '0.8125rem',
+              }}
+              labelStyle={{ color: 'var(--text-secondary)', marginBottom: '4px' }}
+              formatter={(value) => [`${Number(value).toFixed(1)} ${unit}`, label]}
+              labelFormatter={(_, payload) => {
+                if (payload && payload.length > 0) {
+                  return (payload[0].payload as { fullDate: string }).fullDate
+                }
+                return ''
+              }}
+            />
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="var(--accent)"
+              strokeWidth={2}
+              fill={`url(#gradient-${label})`}
+              dot={{ r: 3, fill: 'var(--accent)', strokeWidth: 0 }}
+              activeDot={{ r: 5, fill: 'var(--accent)', strokeWidth: 0 }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
       <details className="progress__chart-table">
         <summary>View as table</summary>
         <table>
