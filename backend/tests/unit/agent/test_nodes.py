@@ -7,6 +7,7 @@ from typing import Any
 
 from app.agent.nodes import (
     AgentDeps,
+    _format_profile,
     extract_facts_node,
     generate_response,
     looks_like_question,
@@ -17,6 +18,7 @@ from app.agent.nodes import (
 )
 from app.agent.state import AgentState
 from app.memory.change_detector import MemoryEntry
+from app.models.enums import ActivityLevel
 from app.safety import SafetyResult
 
 
@@ -33,6 +35,18 @@ def _deps(
         retriever=fake_retriever,
         clock=lambda: datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
     )
+
+
+def test_format_profile_renders_plain_keys_and_units() -> None:
+    mem = {
+        "weight": MemoryEntry(key="weight", value=70.0, unit="kg"),
+        "height": MemoryEntry(key="height", value=163.0, unit="cm"),
+    }
+    rendered = _format_profile(mem, {"activity_level": ActivityLevel.MODERATE})
+    assert "MemoryKey." not in rendered
+    assert "weight: 70.0 kg" in rendered
+    assert "height: 163.0 cm" in rendered
+    assert "activity_level=moderate" in rendered
 
 
 def test_looks_personal_detects_weight() -> None:
