@@ -66,5 +66,6 @@ Thumbs.db
 # Local test files
 test_upload.py
 test_upload.sh
+test_full_flow.py
 test_workout.jpg
 test_workout.pdf

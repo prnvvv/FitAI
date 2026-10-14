@@ -10,7 +10,6 @@ import pytest
 
 from app.rag.loader import (
     DOCUMENT_EXTENSIONS,
-    IMAGE_EXTENSIONS,
     SUPPORTED_EXTENSIONS,
     DocumentLoadError,
     FileSignatureMismatchError,
@@ -19,9 +18,6 @@ from app.rag.loader import (
     resolve_handler,
 )
 
-PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
-JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x00" * 32
-WEBP_BYTES = b"RIFF\x20\x00\x00\x00WEBP" + b"\x00" * 16
 EXE_BYTES = b"MZ\x90\x00\x03" + b"\x00" * 64
 
 
@@ -47,10 +43,9 @@ def _docx(tmp_path: Path) -> Path:
     return p
 
 
-def test_registry_covers_documents_and_images() -> None:
+def test_registry_covers_documents() -> None:
     assert {".pdf", ".txt", ".md", ".docx"} == DOCUMENT_EXTENSIONS
-    assert {".png", ".jpg", ".jpeg", ".webp"} == IMAGE_EXTENSIONS
-    assert SUPPORTED_EXTENSIONS == DOCUMENT_EXTENSIONS | IMAGE_EXTENSIONS
+    assert SUPPORTED_EXTENSIONS == DOCUMENT_EXTENSIONS
 
 
 @pytest.mark.parametrize(
@@ -60,10 +55,6 @@ def test_registry_covers_documents_and_images() -> None:
         ("a.docx", b"PK\x03\x04", "document"),
         ("a.txt", b"plain text", "document"),
         ("a.md", b"# heading", "document"),
-        ("a.png", PNG_BYTES, "image"),
-        ("a.jpg", JPEG_BYTES, "image"),
-        ("a.jpeg", JPEG_BYTES, "image"),
-        ("a.webp", WEBP_BYTES, "image"),
     ],
 )
 def test_resolve_handler_maps_extension_to_kind(name: str, data: bytes, kind: str) -> None:
@@ -80,11 +71,8 @@ def test_unknown_extension_is_rejected() -> None:
 @pytest.mark.parametrize(
     ("name", "data"),
     [
-        ("payload.jpg", EXE_BYTES),  # executable renamed to .jpg
-        ("payload.png", b"GIF89a" + b"\x00" * 32),
         ("payload.pdf", b"not a pdf"),
         ("payload.docx", b"not a zip"),
-        ("payload.webp", b"RIFF\x00\x00\x00\x00AVI LIST"),
         ("payload.txt", EXE_BYTES),  # binary masquerading as text
     ],
 )
@@ -106,90 +94,9 @@ def test_load_file_reads_markdown(tmp_path: Path) -> None:
 
 
 def test_load_file_rejects_spoofed_file(tmp_path: Path) -> None:
-    p = tmp_path / "notreally.jpg"
+    p = tmp_path / "notreally.txt"
     p.write_bytes(EXE_BYTES)
     with pytest.raises(DocumentLoadError, match="does not match"):
-        load_file(p)
-
-
-def test_images_are_routed_to_the_vision_handler(tmp_path: Path, monkeypatch) -> None:
-    """Images must not be parsed as text documents."""
-    from app.rag.image_ocr import ImageReadResult
-
-    called: list[str] = []
-
-    def _fake_read(data: bytes, filename: str, **kwargs: object) -> ImageReadResult:
-        called.append(filename)
-        return ImageReadResult(text="Bulgarian split squat 3x10", provider="rapidocr")
-
-    monkeypatch.setattr("app.rag.image_ocr.read_image", _fake_read)
-
-    p = tmp_path / "photo.jpg"
-    p.write_bytes(JPEG_BYTES)
-    loaded = load_file(p)
-
-    assert loaded.file_type == "image"
-    assert loaded.text == "Bulgarian split squat 3x10"
-    assert called == ["photo.jpg"]
-
-
-def test_image_with_a_vision_description_keeps_both_sections(tmp_path: Path, monkeypatch) -> None:
-    from app.rag.image_ocr import ImageReadResult
-
-    monkeypatch.setattr(
-        "app.rag.image_ocr.read_image",
-        lambda *a, **k: ImageReadResult(
-            text="Squat 3x10\n80 kg",
-            description="A photo of a barbell squat setup",
-            provider="groq",
-        ),
-    )
-    p = tmp_path / "lift.png"
-    p.write_bytes(PNG_BYTES)
-
-    loaded = load_file(p)
-
-    assert "Image description: A photo of a barbell squat setup" in loaded.text
-    assert "Squat 3x10" in loaded.text
-    assert loaded.note is None
-
-
-def test_image_without_text_is_ready_with_a_note(tmp_path: Path, monkeypatch) -> None:
-    from app.rag.image_ocr import ImageReadResult
-
-    monkeypatch.setattr(
-        "app.rag.image_ocr.read_image",
-        lambda *a, **k: ImageReadResult(
-            text="", provider="rapidocr", note="No readable text found"
-        ),
-    )
-    p = tmp_path / "wall.jpg"
-    p.write_bytes(JPEG_BYTES)
-
-    loaded = load_file(p)
-
-    assert loaded.sections == ()
-    assert loaded.note == "No readable text found"
-
-
-def test_empty_image_is_rejected(tmp_path: Path) -> None:
-    p = tmp_path / "blank.png"
-    p.write_bytes(b"")
-    with pytest.raises(DocumentLoadError, match="empty"):
-        load_file(p)
-
-
-def test_image_ocr_failure_becomes_a_load_error(tmp_path: Path, monkeypatch) -> None:
-    from app.rag.image_ocr import ImageOcrError
-
-    def _boom(*_args: object, **_kwargs: object) -> str:
-        raise ImageOcrError("vision unavailable")
-
-    monkeypatch.setattr("app.rag.image_ocr.read_image", _boom)
-    p = tmp_path / "photo.png"
-    p.write_bytes(PNG_BYTES)
-
-    with pytest.raises(DocumentLoadError, match="vision unavailable"):
         load_file(p)
 
 

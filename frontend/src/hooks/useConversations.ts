@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import { api } from '../services/api'
 import type { Conversation } from '../types'
 
@@ -25,13 +25,21 @@ function normalizeTitle(title: string | null | undefined): string {
   return (title ?? '').trim()
 }
 
+function extractConversationIdFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/chat\/([^/]+)$/)
+  return match ? match[1] : null
+}
+
 export function useConversations({ enabled }: UseConversationsOptions): UseConversationsResult {
-  const { conversationId: urlConversationId } = useParams<{ conversationId?: string }>()
+  const { conversationId: paramConversationId } = useParams<{ conversationId?: string }>()
+  const location = useLocation()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Get conversationId from URL path (works for both parent and child routes)
+  const urlConversationId = paramConversationId ?? extractConversationIdFromPath(location.pathname)
   const activeId = urlConversationId ?? null
 
   const load = useCallback(async () => {

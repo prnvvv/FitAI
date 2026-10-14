@@ -1,10 +1,9 @@
-"""Load and extract text from documents and images.
+"""Load and extract text from documents.
 
 One central registry maps an extension to its media types, its magic-byte
 signature and its handler kind. Documents (pdf, txt, md, docx) are parsed
-directly; images (png, jpg, jpeg, webp) are sent through the vision/OCR handler.
-A file whose bytes do not match the signature of its extension is rejected, so a
-renamed executable can never reach a parser.
+directly. A file whose bytes do not match the signature of its extension is
+rejected, so a renamed executable can never reach a parser.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ from typing import Literal
 
 DEFAULT_MAX_BYTES = 25 * 1024 * 1024
 
-HandlerKind = Literal["document", "image"]
+HandlerKind = Literal["document"]
 
 
 class DocumentLoadError(Exception):
@@ -77,36 +76,10 @@ FILE_HANDLERS: dict[str, FileHandler] = {
         "document",
         validate_text=True,
     ),
-    ".png": FileHandler(
-        ".png",
-        frozenset({"image/png"}),
-        "image",
-        magic=(b"\x89PNG\r\n\x1a\n",),
-    ),
-    ".jpg": FileHandler(
-        ".jpg",
-        frozenset({"image/jpeg", "image/jpg"}),
-        "image",
-        magic=(b"\xff\xd8\xff",),
-    ),
-    ".jpeg": FileHandler(
-        ".jpeg",
-        frozenset({"image/jpeg", "image/jpg"}),
-        "image",
-        magic=(b"\xff\xd8\xff",),
-    ),
-    ".webp": FileHandler(
-        ".webp",
-        frozenset({"image/webp"}),
-        "image",
-        magic=(b"WEBP",),
-        magic_offset=8,
-    ),
 }
 
 SUPPORTED_EXTENSIONS = frozenset(FILE_HANDLERS)
 DOCUMENT_EXTENSIONS = frozenset(k for k, h in FILE_HANDLERS.items() if h.kind == "document")
-IMAGE_EXTENSIONS = frozenset(k for k, h in FILE_HANDLERS.items() if h.kind == "image")
 
 
 @dataclass(frozen=True)
@@ -120,10 +93,10 @@ class Section:
 @dataclass(frozen=True)
 class LoadedDocument:
     source: str  # file name only (no server paths)
-    file_type: str  # "pdf" | "txt" | "md" | "docx" | "image"
+    file_type: str  # "pdf" | "txt" | "md" | "docx"
     sections: tuple[Section, ...]
-    #: Set when the source was readable but contained no text (e.g. a photo of a
-    #: wall). Such a document is valid and Ready; it simply indexes no chunks.
+    #: Set when the source was readable but contained no text. Such a document is
+    #: valid and Ready; it simply indexes no chunks.
     note: str | None = None
 
     @property
@@ -226,56 +199,14 @@ def _read_bytes(path: Path, max_bytes: int) -> bytes:
     return data
 
 
-def _load_image(path: Path, data: bytes) -> LoadedDocument:
-    """Read an image through the configured OCR/vision provider chain.
-
-    A vision description and the OCR text are kept as separate sections so the
-    indexed chunks carry both. An image with no readable text is a valid result
-    carrying a note, never a failure.
-    """
-    from .image_ocr import ImageOcrError, read_image
-
-    try:
-        result = read_image(data, path.name)
-    except ImageOcrError as exc:
-        raise DocumentLoadError(str(exc)) from exc
-
-    sections: list[Section] = []
-    if result.description and result.description.strip() != result.text.strip():
-        sections.append(Section(f"Image description: {result.description.strip()}"))
-    if result.text.strip():
-        sections.append(Section(result.text.strip()))
-    if not sections:
-        return LoadedDocument(source=path.name, file_type="image", sections=(), note=result.note)
-    return LoadedDocument(source=path.name, file_type="image", sections=tuple(sections))
-
-
 def load_file(path: str | Path, max_bytes: int = DEFAULT_MAX_BYTES) -> LoadedDocument:
-    """Extract text from a supported document or image file.
-
-    This is the single entry point for ingestion: the registry decides whether
-    the file is a document (native parser) or an image (vision/OCR).
-    """
+    """Extract text from a supported document file (pdf, txt, md, docx)."""
     p = Path(path)
     data = _read_bytes(p, max_bytes)
     handler = resolve_handler(p.name, data)
-
-    if handler.kind == "image":
-        return _load_image(p, data)
 
     loader = {".pdf": _load_pdf, ".docx": _load_docx, ".txt": _load_txt, ".md": _load_txt}
     sections = [s for s in loader[handler.extension](p) if s.text]
     if not sections:
         raise DocumentLoadError("no extractable text in this file")
     return LoadedDocument(source=p.name, file_type=handler.extension[1:], sections=tuple(sections))
-
-
-def load_document(path: str | Path, max_bytes: int = DEFAULT_MAX_BYTES) -> LoadedDocument:
-    """Extract text from a text-based document (pdf, txt, md, docx).
-
-    Images are rejected here; use ``load_file`` for the general case.
-    """
-    p = Path(path)
-    if p.suffix.lower() in IMAGE_EXTENSIONS:
-        raise UnsupportedFileTypeError("images are handled by load_file, not load_document")
-    return load_file(p, max_bytes=max_bytes)

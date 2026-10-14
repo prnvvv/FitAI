@@ -6,8 +6,8 @@ import type { Document } from '../types'
 
 const queued: Document = {
   id: 'doc-1',
-  filename: 'plan.jpg',
-  content_type: 'image/jpeg',
+  filename: 'plan.txt',
+  content_type: 'text/plain',
   size_bytes: 2048,
   status: 'failed',
   failure_reason: "Unsupported file type.",
@@ -37,7 +37,7 @@ async function renderLibrary(overrides: Record<string, unknown> = {}) {
   const user = userEvent.setup()
   const view = render(<module.LibraryPage />)
   if (!('listDocuments' in overrides) || !(overrides.listDocuments instanceof Function)) {
-    await waitFor(() => expect(screen.getByText('plan.jpg')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('plan.txt')).toBeInTheDocument())
   }
   return { spies, user, view }
 }
@@ -65,7 +65,7 @@ describe('LibraryPage', () => {
     })
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
-    await user.upload(input, new File(['data'], 'broken.png', { type: 'image/png' }))
+    await user.upload(input, new File(['data'], 'broken.txt', { type: 'text/plain' }))
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Something went wrong on our side. Please try again.')
@@ -86,7 +86,7 @@ describe('LibraryPage', () => {
 
   it('shows a friendly type instead of a raw MIME string', async () => {
     await renderLibrary()
-    expect(screen.getByText(/Image · JPEG/)).toBeInTheDocument()
+    expect(screen.getByText(/Document · TXT/)).toBeInTheDocument()
   })
 
   it('says "Already in your library" for identical bytes', async () => {
@@ -94,24 +94,24 @@ describe('LibraryPage', () => {
       uploadDocument: vi.fn(async () => ({ document: queued, duplicate: true })),
     })
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
-    await user.upload(input, new File(['x'], 'plan.jpg', { type: 'image/jpeg' }))
+    await user.upload(input, new File(['x'], 'plan.txt', { type: 'text/plain' }))
     expect(await screen.findByText(/Already in your library/)).toBeInTheDocument()
   })
 
   it('renames an item', async () => {
     const { spies, user } = await renderLibrary()
-    await user.click(screen.getByLabelText('Rename plan.jpg'))
-    const input = screen.getByDisplayValue('plan.jpg')
+    await user.click(screen.getByLabelText('Rename plan.txt'))
+    const input = screen.getByDisplayValue('plan.txt')
     await user.clear(input)
-    await user.type(input, 'Squat plan.jpg')
+    await user.type(input, 'Squat plan.txt')
     await user.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(spies.renameDocument).toHaveBeenCalledWith('doc-1', 'Squat plan.jpg'))
+    await waitFor(() => expect(spies.renameDocument).toHaveBeenCalledWith('doc-1', 'Squat plan.txt'))
   })
 
   it('deletes an item', async () => {
     const { spies, user } = await renderLibrary()
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    await user.click(screen.getByLabelText('Delete plan.jpg'))
+    await user.click(screen.getByLabelText('Delete plan.txt'))
     await waitFor(() => expect(spies.deleteDocument).toHaveBeenCalledWith('doc-1'))
   })
 })

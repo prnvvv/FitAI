@@ -342,7 +342,7 @@ class DocumentService:
             suffix = filename[filename.rfind(".") :].lower()
         if content_type not in ALLOWED_CONTENT_TYPES and suffix not in ALLOWED_EXTENSIONS:
             raise UnsupportedMediaTypeError(
-                "Only PDF, TXT, MD, DOCX, PNG, JPG and WEBP files are supported.",
+                "Only PDF, TXT, MD, and DOCX files are supported.",
                 details={"content_type": content_type},
             )
 
