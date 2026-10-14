@@ -6,12 +6,13 @@ import hashlib
 import logging
 import time
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from .chunker import chunk_document
-from .loader import SUPPORTED_EXTENSIONS, DocumentLoadError, load_document
+from .loader import SUPPORTED_EXTENSIONS, DocumentLoadError, load_file
 from .vector_store import KNOWLEDGE_COLLECTION, USER_COLLECTION, VectorStore, VectorStoreError
 
 log = logging.getLogger(__name__)
@@ -95,10 +96,8 @@ class IngestionPipeline:
         try:
             result = self._ingest(tmp_path, USER_COLLECTION, user_id, doc_id, metadata)
         finally:
-            try:
+            with suppress(Exception):
                 tmp_path.unlink()
-            except Exception:
-                pass
         return result
 
     def ingest_curated_directory(self, directory: str | Path) -> list[IngestionResult]:
@@ -125,7 +124,7 @@ class IngestionPipeline:
             return IngestionResult(did, path.name, scope, "failed", 0, n, err)
 
         try:
-            doc = load_document(path)
+            doc = load_file(path)
             did = doc_id or _file_hash(path)
             meta = {**(metadata or {}), "scope": scope}
             prefix = ""

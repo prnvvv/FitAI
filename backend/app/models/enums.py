@@ -99,6 +99,7 @@ class MeasurementType(str, enum.Enum):
     """Supported body measurement types."""
 
     WEIGHT = "weight"
+    HEIGHT = "height"
     BODY_FAT_PERCENT = "body_fat_percent"
     CHEST = "chest"
     WAIST = "waist"
@@ -106,6 +107,12 @@ class MeasurementType(str, enum.Enum):
     ARM = "arm"
     THIGH = "thigh"
     NECK = "neck"
+    SLEEP_HOURS = "sleep_hours"
+    WATER = "water"
+    STEPS = "steps"
+    RESTING_HEART_RATE = "resting_heart_rate"
+    MOOD = "mood"
+    ENERGY = "energy"
 
 
 class ActivityEventType(str, enum.Enum):

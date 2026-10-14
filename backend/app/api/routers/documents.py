@@ -14,6 +14,7 @@ from fastapi import APIRouter, File, UploadFile, status
 from app.api.deps import CurrentUser, DbSession, Pagination
 from app.core.config import settings
 from app.core.errors import PayloadTooLargeError
+from app.core.logging import get_logger
 from app.models.enums import ActivityEventType
 from app.rag.pipeline import IngestionPipeline
 from app.rag.vector_store import VectorStore
@@ -25,6 +26,9 @@ from app.services.document_service import DocumentService
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 _CHUNK_SIZE = 1024 * 1024
+
+logger = get_logger(__name__)
+
 
 def _get_ingestion() -> IngestionPipeline:
     return IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
@@ -103,24 +107,51 @@ def get_document(
     return DocumentOut.model_validate(document)
 
 
+@router.post("/{document_id}/retry", response_model=DocumentOut)
+def retry_document(
+    document_id: UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> DocumentOut:
+    """Re-run ingestion for one of the user's documents."""
+    document = DocumentService(db, ingestion=_get_ingestion()).retry(current_user.id, document_id)
+    return DocumentOut.model_validate(document)
+
+
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 def delete_document(
     document_id: UUID,
     current_user: CurrentUser,
     db: DbSession,
 ) -> None:
-    """Delete a document's metadata and its stored original file.
+    """Delete a document's vectors, stored file and metadata row.
 
-    ChromaDB vector deletion for this document must be completed by Person 2.
+    Vector deletion runs first and is not silenced: leaving indexed chunks
+    behind would keep deleted content retrievable by the owner. If it fails the
+    metadata row is kept so the user can retry the deletion.
     """
+    from app.core.errors import AppError
+    from app.rag.pipeline import IngestionPipeline
     from app.rag.vector_store import VectorStore
+
+    # Ownership check first: a document owned by someone else must 404.
     service = DocumentService(db)
-    # Delete vectors before/after metadata removal is handled in service; also try to clean vectors
+    service.get(current_user.id, document_id)
+
     ingestion = IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
     try:
         ingestion.delete_user_document(str(current_user.id), str(document_id))
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001 - surfaced as a clear error, never swallowed
+        logger.warning(
+            "document_vector_delete_failed",
+            doc_id=str(document_id),
+            error_type=type(exc).__name__,
+        )
+        raise AppError(
+            "The document could not be deleted because its search index could not be "
+            "cleaned up. Please try again."
+        ) from exc
+
     service.delete(current_user.id, document_id)
     ActivityEventService(db).record(
         current_user.id,

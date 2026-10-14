@@ -61,6 +61,14 @@ class PermissionDeniedError(AppError):
     message = "You do not have permission to perform this action."
 
 
+class BadRequestError(AppError):
+    """Raised when a request is malformed (bad query parameters, reversed range)."""
+
+    status_code = 400
+    code = "BAD_REQUEST"
+    message = "The request could not be understood."
+
+
 class ValidationError(AppError):
     """Raised when request data fails domain validation."""
 

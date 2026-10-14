@@ -22,8 +22,10 @@ from app.api.routers import (
     chat,
     conversations,
     documents,
+    exercises,
     location,
     memory,
+    plan,
     profile,
     progress,
     workouts,
@@ -45,7 +47,40 @@ ROUTERS = (
     progress.router,
     activity.router,
     location.router,
+    plan.router,
+    exercises.router,
 )
+
+
+def _check_migrations_at_startup() -> None:
+    """Fail loudly if the database is behind the latest migration.
+
+    This prevents cryptic 500s from missing tables/columns and tells operators
+    exactly what to do.
+    """
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    alembic_cfg = Config("alembic.ini")
+    script = ScriptDirectory.from_config(alembic_cfg)
+    head_revision = script.get_current_head()
+
+    from sqlalchemy import text
+
+    from app.db.session import engine
+
+    with engine.connect() as conn:
+        try:
+            current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        except Exception:
+            # SQLite test databases created from metadata have no alembic_version table.
+            return
+
+    if current != head_revision:
+        raise RuntimeError(
+            f"Database migration mismatch: current={current}, head={head_revision}. "
+            "Run: alembic upgrade head"
+        )
 
 
 def create_app() -> FastAPI:
@@ -69,12 +104,49 @@ def create_app() -> FastAPI:
 
     _register_error_handlers(app)
 
+    app.add_event_handler("startup", _check_migrations_at_startup)
+
     for router in ROUTERS:
         app.include_router(router, prefix=settings.api_v1_prefix)
 
     _register_health_endpoints(app)
+    _register_startup_tasks(app)
 
     return app
+
+
+def _register_startup_tasks(app: FastAPI) -> None:
+    @app.on_event("startup")
+    def _reconcile_stuck_documents() -> None:
+        """Mark documents that were left pending/processing across restarts as failed."""
+        from datetime import datetime, timedelta, timezone
+
+        from app.db.session import SessionLocal
+        from app.models.document import Document
+        from app.models.enums import DocumentStatus
+
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+        db = SessionLocal()
+        try:
+            stuck = (
+                db.query(Document)
+                .filter(
+                    Document.status.in_([DocumentStatus.PENDING, DocumentStatus.PROCESSING]),
+                    Document.created_at < cutoff,
+                )
+                .all()
+            )
+            for doc in stuck:
+                doc.status = DocumentStatus.FAILED
+                doc.failed_at = datetime.now(timezone.utc)
+                doc.error_message = "Processing timed out. Try again or delete this file."
+            if stuck:
+                db.commit()
+                logger.info("reconciled_stuck_documents", count=len(stuck))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("reconcile_stuck_documents_failed", error=str(exc))
+        finally:
+            db.close()
 
 
 def _register_error_handlers(app: FastAPI) -> None:

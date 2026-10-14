@@ -30,7 +30,7 @@ class ActivityEventRepository:
         source: str = "user",
         payload: dict[str, object] | None = None,
     ) -> ActivityEvent:
-        """Append a new activity event."""
+        """Append a new activity event (the caller is responsible for flushing)."""
         from datetime import datetime, timezone
 
         occurred = occurred_at or datetime.now(timezone.utc)
@@ -44,8 +44,37 @@ class ActivityEventRepository:
             payload=payload,
         )
         self._db.add(event)
-        self._db.flush()
         return event
+
+    def exists_within(
+        self,
+        user_id: uuid.UUID,
+        event_type: ActivityEventType,
+        entity_type: str | None,
+        entity_id: str,
+        *,
+        within_seconds: int,
+    ) -> bool:
+        """True when the same entity was already logged for this type recently.
+
+        Used to coalesce rapid repeated edits into a single activity event.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=within_seconds)
+        statement = (
+            select(ActivityEvent.id)
+            .where(
+                ActivityEvent.user_id == user_id,
+                ActivityEvent.type == event_type,
+                ActivityEvent.entity_id == entity_id,
+                ActivityEvent.occurred_at >= cutoff,
+            )
+            .limit(1)
+        )
+        if entity_type is not None:
+            statement = statement.where(ActivityEvent.entity_type == entity_type)
+        return self._db.scalar(statement) is not None
 
     def list_for_user(
         self,

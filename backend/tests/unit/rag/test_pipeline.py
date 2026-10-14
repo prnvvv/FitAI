@@ -20,10 +20,19 @@ def _pipeline() -> tuple[IngestionPipeline, MagicMock]:
 
 def test_ingest_curated_directory_skips_unsupported_files(tmp_path: Path) -> None:
     pipeline, store = _pipeline()
-    (tmp_path / "readme.md").write_text("# readme")
+    (tmp_path / "readme.html").write_text("<h1>readme</h1>")
     results = pipeline.ingest_curated_directory(tmp_path)
     assert len(results) == 0
     store.add_chunks.assert_not_called()
+
+
+def test_ingest_curated_directory_indexes_markdown(tmp_path: Path) -> None:
+    pipeline, store = _pipeline()
+    (tmp_path / "readme.md").write_text("# readme")
+    results = pipeline.ingest_curated_directory(tmp_path)
+    assert len(results) == 1
+    assert results[0].status == "indexed"
+    store.add_chunks.assert_called_once()
 
 
 def test_ingest_curated_rejects_missing_file() -> None:

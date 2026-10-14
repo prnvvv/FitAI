@@ -7,6 +7,7 @@ coordinated by Person 2.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
@@ -23,29 +24,52 @@ from app.core.errors import (
 )
 from app.models.document import Document
 from app.models.enums import DocumentStatus
+from app.rag.loader import FILE_HANDLERS, SUPPORTED_EXTENSIONS
 from app.repositories.document_repository import DocumentRepository
 from app.services.document_storage import DocumentStorage, get_document_storage
 
+#: Derived from the ingestion registry so uploads and ingestion can never disagree.
 ALLOWED_CONTENT_TYPES = {
-    "application/pdf",
-    "text/plain",
-    "text/markdown",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "image/png",
-    "image/jpeg",
-    "image/webp",
+    media_type for handler in FILE_HANDLERS.values() for media_type in handler.media_types
 }
-ALLOWED_EXTENSIONS = {".pdf", ".txt", ".md", ".docx", ".png", ".jpg", ".jpeg", ".webp"}
+ALLOWED_EXTENSIONS = set(SUPPORTED_EXTENSIONS)
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+#: Ingestion failures that are meaningful to a user, mapped to calm copy.
+_FAILURE_COPY: dict[str, str] = {
+    "unsupported file type": "That file type isn't supported. Use PDF, TXT, MD, DOCX, PNG, JPG or WEBP.",
+    "content does not match": "That file doesn't match its extension, so it can't be read.",
+    "file is empty": "That file is empty.",
+    "file too large": "That file is too large to process.",
+    "no extractable text": "No readable text was found in that file.",
+    "password-protected": "That PDF is password-protected.",
+}
+
+
+def _readable_failure(exc: BaseException) -> str:
+    """Turn an ingestion exception into a short, user-readable reason."""
+    from app.rag.loader import DocumentLoadError
+
+    message = str(exc).strip()
+    if isinstance(exc, DocumentLoadError):
+        lowered = message.lower()
+        for needle, copy in _FAILURE_COPY.items():
+            if needle in lowered:
+                return copy
+        return message or "This file could not be processed."
+    return message or "This file could not be processed."
+
+
 class DocumentService:
     """Coordinates document uploads, metadata, and status transitions."""
 
-    def __init__(self, db: Session, storage: DocumentStorage | None = None, ingestion: Any = None) -> None:
+    def __init__(
+        self, db: Session, storage: DocumentStorage | None = None, ingestion: Any = None
+    ) -> None:
         self._db = db
         self._storage = storage or get_document_storage()
         self._documents = DocumentRepository(db)
@@ -99,36 +123,82 @@ class DocumentService:
 
         self._db.refresh(document)
 
-        if trigger_ingestion and self._ingestion is not None:
-            try:
-                result = self._ingestion.ingest_user_document_bytes(
-                    data,
-                    filename,
-                    str(user_id),
-                    str(document_id),
-                    metadata={"storage_key": key, "content_type": content_type},
+        if trigger_ingestion:
+            self._ingest(document, data)
+
+        return document
+
+    def retry(self, user_id: UUID, document_id: UUID) -> Document:
+        """Re-run ingestion for a stored document, resetting its status.
+
+        Used when a previous attempt failed (for example a vision/OCR outage).
+        The metadata row and the stored file are preserved; only the processing
+        status and the ChromaDB chunks are rewritten.
+        """
+        document = self.get(user_id, document_id)
+        if not document.storage_key:
+            raise AppError(
+                "This document has no stored file, so it cannot be reprocessed. "
+                "Upload it again instead."
+            )
+        data = self._storage.read(document.storage_key)
+        document.error_message = None
+        document.failed_at = None
+        self._commit()
+        self._db.refresh(document)
+        return self._ingest(document, data)
+
+    def _ingest(self, document: Document, data: bytes) -> Document:
+        """Run the ingestion pipeline and record a readable terminal status.
+
+        Status always progresses queued -> reading -> ready|failed, and a failure
+        stores a human-readable reason on the record instead of raising.
+        """
+        if self._ingestion is None:
+            return document
+
+        self.mark_status(document.user_id, document.id, DocumentStatus.PROCESSING)
+        try:
+            result = self._ingestion.ingest_user_document_bytes(
+                data,
+                document.filename,
+                str(document.user_id),
+                str(document.id),
+                metadata={
+                    "storage_key": document.storage_key,
+                    "content_type": document.content_type,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 - ingestion is best-effort; status records why
+            from app.core.logging import get_logger
+
+            logger = get_logger(__name__)
+            logger.warning(
+                "document_ingestion_failed",
+                doc_id=str(document.id),
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            with suppress(Exception):
+                self.mark_status(
+                    document.user_id,
+                    document.id,
+                    DocumentStatus.FAILED,
+                    error_message=_readable_failure(exc),
                 )
-                if result.status == "indexed":
-                    self.mark_status(user_id, document.id, DocumentStatus.INDEXED)
-                else:
-                    self.mark_status(
-                        user_id,
-                        document.id,
-                        DocumentStatus.FAILED,
-                        error_message=result.error or "Ingestion failed",
-                    )
-            except Exception as exc:  # noqa: BLE001
-                from app.core.logging import get_logger
+            self._db.refresh(document)
+            return document
 
-                logger = get_logger(__name__)
-                logger.warning("document_ingestion_failed", doc_id=str(document.id), error=str(exc))
-                try:
-                    self.mark_status(
-                        user_id, document.id, DocumentStatus.FAILED, error_message="Ingestion failed"
-                    )
-                except Exception:
-                    pass
-
+        if result.status == "indexed":
+            self.mark_status(document.user_id, document.id, DocumentStatus.INDEXED)
+        else:
+            self.mark_status(
+                document.user_id,
+                document.id,
+                DocumentStatus.FAILED,
+                error_message=result.error or "This file could not be processed.",
+            )
+        self._db.refresh(document)
         return document
 
     def delete(self, user_id: UUID, document_id: UUID) -> None:
@@ -166,7 +236,10 @@ class DocumentService:
         """
         document = self.get(user_id, document_id)
         document.status = status
-        if status == DocumentStatus.INDEXED:
+        if status == DocumentStatus.PROCESSING:
+            document.error_message = None
+            document.failed_at = None
+        elif status == DocumentStatus.INDEXED:
             document.completed_at = _utcnow()
             document.error_message = None
         elif status == DocumentStatus.FAILED:

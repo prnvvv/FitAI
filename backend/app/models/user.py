@@ -20,9 +20,11 @@ if TYPE_CHECKING:
     from app.models.activity_event import ActivityEvent
     from app.models.conversation import Conversation
     from app.models.document import Document
+    from app.models.exercise_library import ExerciseLibrary
     from app.models.measurement import Measurement
     from app.models.memory import Memory, MemoryHistory
     from app.models.pending_update import PendingMemoryUpdate
+    from app.models.planned_session import PlannedSession
     from app.models.profile import Profile
     from app.models.workout import WorkoutSession
 
@@ -81,4 +83,14 @@ class User(Base, TimestampMixin):
         cascade="all, delete-orphan",
         passive_deletes=True,
         order_by="ActivityEvent.occurred_at.desc()",
+    )
+    exercises: Mapped[list[ExerciseLibrary]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    planned_sessions: Mapped[list[PlannedSession]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )

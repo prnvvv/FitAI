@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -72,6 +73,43 @@ class WorkoutRepository:
         """Delete a workout session and (by cascade) its sets."""
         self._db.delete(session)
         self._db.flush()
+
+    def list_sessions_in_range(
+        self, user_id: UUID, from_date: date, to_date: date
+    ) -> list[WorkoutSession]:
+        """Return logged sessions whose date falls in the inclusive range."""
+        statement = (
+            select(WorkoutSession)
+            .where(
+                WorkoutSession.user_id == user_id,
+                func.date(WorkoutSession.performed_at) >= from_date,
+                func.date(WorkoutSession.performed_at) <= to_date,
+            )
+            .order_by(WorkoutSession.performed_at)
+        )
+        return list(self._db.scalars(statement))
+
+    def list_sessions_with_sets(
+        self, user_id: UUID, from_date: date, to_date: date
+    ) -> list[WorkoutSession]:
+        """Return logged sessions (with their sets) in an inclusive date range.
+
+        Uses an indexed timestamp range rather than ``func.date`` so the query
+        stays sargable.
+        """
+        start = datetime.combine(from_date, time.min)
+        end = datetime.combine(to_date + timedelta(days=1), time.min)
+        statement = (
+            select(WorkoutSession)
+            .where(
+                WorkoutSession.user_id == user_id,
+                WorkoutSession.performed_at >= start,
+                WorkoutSession.performed_at < end,
+            )
+            .options(selectinload(WorkoutSession.sets))
+            .order_by(WorkoutSession.performed_at)
+        )
+        return list(self._db.scalars(statement))
 
     def list_sets_with_load(
         self, user_id: UUID, *, exercise_name: str | None = None

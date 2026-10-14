@@ -97,18 +97,53 @@ class WorkoutService:
         *,
         notes: str | None = None,
     ) -> Measurement:
-        """Record a new measurement without overwriting prior entries."""
+        """Record a new measurement without overwriting prior entries.
+
+        Heights and weights are normalised to canonical units (cm / kg) before
+        storage so derived metrics such as BMI are always consistent.
+        """
+
+        normalized_value = value
+        normalized_unit = unit
+        if measurement_type == MeasurementType.HEIGHT:
+            normalized_value, normalized_unit = self._normalize_height(value, unit)
+        elif measurement_type == MeasurementType.WEIGHT:
+            normalized_value, normalized_unit = self._normalize_weight(value, unit)
+
         measurement = self._measurements.create(
             user_id,
             measurement_type,
-            value,
-            unit,
+            normalized_value,
+            normalized_unit,
             measured_at,
             notes=notes,
         )
         self._commit()
         self._db.refresh(measurement)
         return measurement
+
+    @staticmethod
+    def _normalize_height(value: object, unit: str) -> tuple[object, str]:
+        from decimal import Decimal
+
+        if unit == "cm":
+            return value, "cm"
+        if unit == "in":
+            return Decimal(value) * Decimal("2.54"), "cm"
+        if unit == "ft_in":
+            # value is total inches when sent as ft_in.
+            return Decimal(value) * Decimal("2.54"), "cm"
+        return value, unit
+
+    @staticmethod
+    def _normalize_weight(value: object, unit: str) -> tuple[object, str]:
+        from decimal import Decimal
+
+        if unit == "kg":
+            return value, "kg"
+        if unit == "lb":
+            return Decimal(value) * Decimal("0.45359237"), "kg"
+        return value, unit
 
     def delete_measurement(self, user_id: UUID, measurement_id: UUID) -> None:
         """Delete the user's measurement."""

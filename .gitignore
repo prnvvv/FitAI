@@ -41,6 +41,8 @@ secrets/
 
 # Local data
 chroma_data/
+# ChromaDB persistence written next to the backend package (default path)
+backend/data/chroma/
 uploads/
 local_data/
 *.db

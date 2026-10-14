@@ -66,3 +66,31 @@ def test_vector_store_embedding_model_mismatch_raises() -> None:
     store = VectorStore(client=client, embedding_function=MagicMock())
     with pytest.raises(VectorStoreError, match="re-index required"):
         store._col(KNOWLEDGE_COLLECTION)
+
+
+def test_delete_document_filters_by_owner_and_doc_id() -> None:
+    """Deleting a document may only remove its own owner's vectors."""
+    collection = _mock_collection()
+    collection.get.return_value = {"ids": ["c1", "c2"]}
+    client = MagicMock()
+    client.get_or_create_collection.return_value = collection
+    store = VectorStore(client=client, embedding_function=MagicMock())
+
+    removed = store.delete_document(USER_COLLECTION, "doc-1", owner_id="user-1")
+
+    assert removed == 2
+    _, kwargs = collection.get.call_args
+    assert kwargs["where"] == {"$and": [{"owner_id": "user-1"}, {"doc_id": "doc-1"}]}
+    collection.delete.assert_called_once_with(ids=["c1", "c2"])
+
+
+def test_delete_document_requires_an_owner_for_user_collection() -> None:
+    store = VectorStore(client=MagicMock(), embedding_function=MagicMock())
+    with pytest.raises(PermissionError, match="owner_id is required"):
+        store.delete_document(USER_COLLECTION, "doc-1")
+
+
+def test_query_requires_an_owner_for_user_collection() -> None:
+    store = VectorStore(client=MagicMock(), embedding_function=MagicMock())
+    with pytest.raises(PermissionError, match="owner_id is required"):
+        store.query(USER_COLLECTION, "squat")

@@ -6,14 +6,16 @@ Person 2's advanced fitness intelligence.
 
 from __future__ import annotations
 
+import datetime as dt
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import CurrentUser, DbSession, Pagination
+from app.core.errors import BadRequestError
 from app.models.enums import ActivityEventType, MeasurementType
 from app.schemas.common import Page
-from app.schemas.progress import ExerciseMaxLoadOut
+from app.schemas.progress import BmiPointOut, DerivedMetricsOut, ExerciseMaxLoadOut
 from app.schemas.workout import MeasurementCreate, MeasurementOut
 from app.services.activity_event_service import ActivityEventService
 from app.services.progress_service import ProgressService
@@ -94,6 +96,42 @@ def weight_series(
     """Return the user's weight measurements in chronological order."""
     measurements = ProgressService(db).weight_series(current_user.id)
     return [MeasurementOut.model_validate(item) for item in measurements]
+
+
+@router.get("/height", response_model=list[MeasurementOut])
+def height_series(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> list[MeasurementOut]:
+    """Return the user's height measurements in chronological order."""
+    measurements = ProgressService(db).height_series(current_user.id)
+    return [MeasurementOut.model_validate(item) for item in measurements]
+
+
+@router.get("/bmi", response_model=list[BmiPointOut])
+def bmi_series(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> list[BmiPointOut]:
+    """Return the user's derived BMI series in chronological order."""
+    points = ProgressService(db).bmi_series(current_user.id)
+    return [BmiPointOut.model_validate(point) for point in points]
+
+
+@router.get("/derived", response_model=DerivedMetricsOut)
+def derived_metrics(
+    current_user: CurrentUser,
+    db: DbSession,
+    from_date: dt.date | None = Query(default=None, alias="from"),
+    to_date: dt.date | None = Query(default=None, alias="to"),
+) -> DerivedMetricsOut:
+    """Return metrics computed from the user's sessions (volume, streaks, PRs)."""
+    if from_date and to_date and from_date > to_date:
+        raise BadRequestError("The 'from' date must not be after the 'to' date.")
+    metrics = ProgressService(db).derived_metrics(
+        current_user.id, from_date=from_date, to_date=to_date
+    )
+    return DerivedMetricsOut.model_validate(metrics)
 
 
 @router.get("/records", response_model=list[ExerciseMaxLoadOut])

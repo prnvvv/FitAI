@@ -20,9 +20,11 @@ from app.models.enums import (
     PendingUpdateStatus,
     WeightUnit,
 )
+from app.models.exercise_library import ExerciseLibrary
 from app.models.measurement import Measurement
 from app.models.memory import Memory, MemoryHistory
 from app.models.pending_update import PendingMemoryUpdate
+from app.models.planned_session import PlannedExercise, PlannedSession
 from app.models.profile import Profile
 from app.models.user import User
 from app.models.workout import WorkoutSession, WorkoutSet
@@ -35,6 +37,7 @@ __all__ = [
     "Conversation",
     "Document",
     "DocumentStatus",
+    "ExerciseLibrary",
     "Measurement",
     "MeasurementType",
     "Memory",
@@ -46,6 +49,8 @@ __all__ = [
     "MessageRole",
     "PendingMemoryUpdate",
     "PendingUpdateStatus",
+    "PlannedExercise",
+    "PlannedSession",
     "Profile",
     "User",
     "WeightUnit",

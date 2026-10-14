@@ -13,6 +13,7 @@ from app.models.enums import MeasurementType, WeightUnit
 #: Allowed units per measurement type.
 MEASUREMENT_UNITS: dict[MeasurementType, frozenset[str]] = {
     MeasurementType.WEIGHT: frozenset({"kg", "lb"}),
+    MeasurementType.HEIGHT: frozenset({"cm", "in", "ft_in"}),
     MeasurementType.BODY_FAT_PERCENT: frozenset({"%"}),
     MeasurementType.CHEST: frozenset({"cm", "in"}),
     MeasurementType.WAIST: frozenset({"cm", "in"}),
@@ -20,6 +21,33 @@ MEASUREMENT_UNITS: dict[MeasurementType, frozenset[str]] = {
     MeasurementType.ARM: frozenset({"cm", "in"}),
     MeasurementType.THIGH: frozenset({"cm", "in"}),
     MeasurementType.NECK: frozenset({"cm", "in"}),
+    MeasurementType.SLEEP_HOURS: frozenset({"h"}),
+    MeasurementType.WATER: frozenset({"ml", "oz", "L", "cups"}),
+    MeasurementType.STEPS: frozenset({"steps"}),
+    MeasurementType.RESTING_HEART_RATE: frozenset({"bpm"}),
+    MeasurementType.MOOD: frozenset({"1-5"}),
+    MeasurementType.ENERGY: frozenset({"1-5"}),
+}
+
+
+#: Plausible ranges per metric. Values outside these are rejected with a clear
+#: 422 instead of being stored, so charts and BMI stay meaningful.
+MEASUREMENT_RANGES: dict[MeasurementType, tuple[Decimal, Decimal]] = {
+    MeasurementType.WEIGHT: (Decimal("20"), Decimal("500")),
+    MeasurementType.HEIGHT: (Decimal("50"), Decimal("260")),
+    MeasurementType.BODY_FAT_PERCENT: (Decimal("1"), Decimal("70")),
+    MeasurementType.SLEEP_HOURS: (Decimal("0"), Decimal("24")),
+    MeasurementType.WATER: (Decimal("0"), Decimal("20000")),
+    MeasurementType.STEPS: (Decimal("0"), Decimal("200000")),
+    MeasurementType.RESTING_HEART_RATE: (Decimal("25"), Decimal("250")),
+    MeasurementType.MOOD: (Decimal("1"), Decimal("5")),
+    MeasurementType.ENERGY: (Decimal("1"), Decimal("5")),
+    MeasurementType.CHEST: (Decimal("30"), Decimal("250")),
+    MeasurementType.WAIST: (Decimal("30"), Decimal("250")),
+    MeasurementType.HIPS: (Decimal("30"), Decimal("250")),
+    MeasurementType.ARM: (Decimal("10"), Decimal("90")),
+    MeasurementType.THIGH: (Decimal("20"), Decimal("120")),
+    MeasurementType.NECK: (Decimal("20"), Decimal("80")),
 }
 
 
@@ -97,6 +125,11 @@ class MeasurementCreate(BaseModel):
             raise ValueError(
                 f"Unit '{self.unit}' is not valid for measurement type '{self.type.value}'. "
                 f"Allowed: {sorted(allowed)}."
+            )
+        low, high = MEASUREMENT_RANGES[self.type]
+        if not low <= self.value <= high:
+            raise ValueError(
+                f"{self.type.value.replace('_', ' ')} must be between {low} and {high} {self.unit}."
             )
         return self
 

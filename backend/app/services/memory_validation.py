@@ -60,7 +60,7 @@ def validate_memory_value(key: MemoryKey, value: object) -> None:
 
 def _validate_measurement(key: MemoryKey, value: object) -> None:
     allowed_units = _MEASUREMENT_UNITS[key]
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         if not isinstance(value, dict):
             raise ValidationError(
                 "Measurement must be a number or an object with 'value' and 'unit'.",
@@ -68,7 +68,7 @@ def _validate_measurement(key: MemoryKey, value: object) -> None:
             )
         numeric = value.get("value")
         unit = value.get("unit")
-        if isinstance(numeric, bool) or not isinstance(numeric, (int, float)):
+        if isinstance(numeric, bool) or not isinstance(numeric, int | float):
             raise ValidationError(
                 "Measurement 'value' must be a number.",
                 details={"key": key.value},

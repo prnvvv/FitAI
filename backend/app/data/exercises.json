@@ -1,0 +1,989 @@
+{
+  "version": 1,
+  "exercises": [
+    {
+      "slug": "_meadows_row",
+      "name": " Meadows Row",
+      "primary_muscle_group": "back",
+      "equipment": "dumbbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "ab_wheel_rollout",
+      "name": "Ab Wheel Rollout",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "abductor_machine",
+      "name": "Abductor Machine",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "adductor_machine",
+      "name": "Adductor Machine",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "ankle_mobility",
+      "name": "Ankle Mobility",
+      "primary_muscle_group": "mobility",
+      "equipment": "none",
+      "movement_type": "mobility",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "arnold_press",
+      "name": "Arnold Press",
+      "primary_muscle_group": "shoulders",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "back_extension",
+      "name": "Back Extension",
+      "primary_muscle_group": "back",
+      "equipment": "bodyweight",
+      "movement_type": "pull",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "barbell_back_squat",
+      "name": "Barbell Back Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "barbell_row",
+      "name": "Barbell Row",
+      "primary_muscle_group": "back",
+      "equipment": "barbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "battle_ropes",
+      "name": "Battle Ropes",
+      "primary_muscle_group": "cardio",
+      "equipment": "rope",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "bench_dip",
+      "name": "Bench Dip",
+      "primary_muscle_group": "arms",
+      "equipment": "bodyweight",
+      "movement_type": "push",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "bench_press",
+      "name": "Bench Press",
+      "primary_muscle_group": "chest",
+      "equipment": "barbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "bicep_curl",
+      "name": "Bicep Curl",
+      "primary_muscle_group": "arms",
+      "equipment": "dumbbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "bird_dog",
+      "name": "Bird Dog",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "box_squat",
+      "name": "Box Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "bulgarian_split_squat",
+      "name": "Bulgarian Split Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "dumbbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "burpees",
+      "name": "Burpees",
+      "primary_muscle_group": "cardio",
+      "equipment": "bodyweight",
+      "movement_type": "cardio",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "cable_crunch",
+      "name": "Cable Crunch",
+      "primary_muscle_group": "core",
+      "equipment": "cable",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "cable_curl",
+      "name": "Cable Curl",
+      "primary_muscle_group": "arms",
+      "equipment": "cable",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "cable_fly",
+      "name": "Cable Fly",
+      "primary_muscle_group": "chest",
+      "equipment": "cable",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "calf_raise",
+      "name": "Calf Raise",
+      "primary_muscle_group": "legs",
+      "equipment": "bodyweight",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "cat_cow",
+      "name": "Cat-Cow",
+      "primary_muscle_group": "mobility",
+      "equipment": "none",
+      "movement_type": "mobility",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "chest_dip",
+      "name": "Chest Dip",
+      "primary_muscle_group": "chest",
+      "equipment": "bodyweight",
+      "movement_type": "push",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "chest_supported_row",
+      "name": "Chest-supported Row",
+      "primary_muscle_group": "back",
+      "equipment": "machine",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "chin_up",
+      "name": "Chin-up",
+      "primary_muscle_group": "back",
+      "equipment": "bodyweight",
+      "movement_type": "pull",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "clean_and_jerk",
+      "name": "Clean and Jerk",
+      "primary_muscle_group": "full body",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "close_grip_bench_press",
+      "name": "Close-grip Bench Press",
+      "primary_muscle_group": "arms",
+      "equipment": "barbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "close_grip_pulldown",
+      "name": "Close-grip Pulldown",
+      "primary_muscle_group": "back",
+      "equipment": "machine",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "concentration_curl",
+      "name": "Concentration Curl",
+      "primary_muscle_group": "arms",
+      "equipment": "dumbbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "conventional_deadlift",
+      "name": "Conventional Deadlift",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "cossack_squat",
+      "name": "Cossack Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "bodyweight",
+      "movement_type": "legs",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "crunch",
+      "name": "Crunch",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "cycling",
+      "name": "Cycling",
+      "primary_muscle_group": "cardio",
+      "equipment": "bike",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "dead_bug",
+      "name": "Dead Bug",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "dead_hang",
+      "name": "Dead Hang",
+      "primary_muscle_group": "back",
+      "equipment": "bodyweight",
+      "movement_type": "pull",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "decline_bench_press",
+      "name": "Decline Bench Press",
+      "primary_muscle_group": "chest",
+      "equipment": "barbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "deficit_deadlift",
+      "name": "Deficit Deadlift",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "diamond_push_up",
+      "name": "Diamond Push-up",
+      "primary_muscle_group": "chest",
+      "equipment": "bodyweight",
+      "movement_type": "push",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "dips",
+      "name": "Dips",
+      "primary_muscle_group": "arms",
+      "equipment": "bodyweight",
+      "movement_type": "push",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "dumbbell_bench_press",
+      "name": "Dumbbell Bench Press",
+      "primary_muscle_group": "chest",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "dumbbell_fly",
+      "name": "Dumbbell Fly",
+      "primary_muscle_group": "chest",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "dumbbell_row",
+      "name": "Dumbbell Row",
+      "primary_muscle_group": "back",
+      "equipment": "dumbbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "dumbbell_shoulder_press",
+      "name": "Dumbbell Shoulder Press",
+      "primary_muscle_group": "shoulders",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "elliptical",
+      "name": "Elliptical",
+      "primary_muscle_group": "cardio",
+      "equipment": "machine",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "face_pull",
+      "name": "Face Pull",
+      "primary_muscle_group": "shoulders",
+      "equipment": "cable",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "farmer's_walk",
+      "name": "Farmer's Walk",
+      "primary_muscle_group": "full body",
+      "equipment": "dumbbell",
+      "movement_type": "core",
+      "unit_mode": "distance"
+    },
+    {
+      "slug": "foam_rolling",
+      "name": "Foam Rolling",
+      "primary_muscle_group": "mobility",
+      "equipment": "foam roller",
+      "movement_type": "mobility",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "front_raise",
+      "name": "Front Raise",
+      "primary_muscle_group": "shoulders",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "front_squat",
+      "name": "Front Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "glute_bridge",
+      "name": "Glute Bridge",
+      "primary_muscle_group": "legs",
+      "equipment": "bodyweight",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "goblet_carry",
+      "name": "Goblet Carry",
+      "primary_muscle_group": "full body",
+      "equipment": "dumbbell",
+      "movement_type": "core",
+      "unit_mode": "distance"
+    },
+    {
+      "slug": "goblet_squat",
+      "name": "Goblet Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "dumbbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "hack_squat",
+      "name": "Hack Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "hammer_curl",
+      "name": "Hammer Curl",
+      "primary_muscle_group": "arms",
+      "equipment": "dumbbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "hang_clean",
+      "name": "Hang Clean",
+      "primary_muscle_group": "full body",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "hanging_leg_raise",
+      "name": "Hanging Leg Raise",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "hiking",
+      "name": "Hiking",
+      "primary_muscle_group": "cardio",
+      "equipment": "none",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "hip_flexor_stretch",
+      "name": "Hip Flexor Stretch",
+      "primary_muscle_group": "mobility",
+      "equipment": "none",
+      "movement_type": "mobility",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "hip_thrust",
+      "name": "Hip Thrust",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "incline_bench_press",
+      "name": "Incline Bench Press",
+      "primary_muscle_group": "chest",
+      "equipment": "barbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "incline_dumbbell_press",
+      "name": "Incline Dumbbell Press",
+      "primary_muscle_group": "chest",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "jump_rope",
+      "name": "Jump Rope",
+      "primary_muscle_group": "cardio",
+      "equipment": "rope",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "kettlebell_swing",
+      "name": "Kettlebell Swing",
+      "primary_muscle_group": "full body",
+      "equipment": "kettlebell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "lat_pulldown",
+      "name": "Lat Pulldown",
+      "primary_muscle_group": "back",
+      "equipment": "machine",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "lateral_raise",
+      "name": "Lateral Raise",
+      "primary_muscle_group": "shoulders",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "leg_curl",
+      "name": "Leg Curl",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "leg_extension",
+      "name": "Leg Extension",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "leg_press",
+      "name": "Leg Press",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "lying_leg_raise",
+      "name": "Lying Leg Raise",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "machine_chest_press",
+      "name": "Machine Chest Press",
+      "primary_muscle_group": "chest",
+      "equipment": "machine",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "mountain_climbers",
+      "name": "Mountain Climbers",
+      "primary_muscle_group": "cardio",
+      "equipment": "bodyweight",
+      "movement_type": "cardio",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "nordic_curl",
+      "name": "Nordic Curl",
+      "primary_muscle_group": "legs",
+      "equipment": "bodyweight",
+      "movement_type": "legs",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "overhead_press",
+      "name": "Overhead Press",
+      "primary_muscle_group": "shoulders",
+      "equipment": "barbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "overhead_triceps_extension",
+      "name": "Overhead Triceps Extension",
+      "primary_muscle_group": "arms",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "pallof_press",
+      "name": "Pallof Press",
+      "primary_muscle_group": "core",
+      "equipment": "cable",
+      "movement_type": "core",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "pause_squat",
+      "name": "Pause Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "pec_deck",
+      "name": "Pec Deck",
+      "primary_muscle_group": "chest",
+      "equipment": "machine",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "pendlay_row",
+      "name": "Pendlay Row",
+      "primary_muscle_group": "back",
+      "equipment": "barbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "pendulum_squat",
+      "name": "Pendulum Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "pike_push_up",
+      "name": "Pike Push-up",
+      "primary_muscle_group": "shoulders",
+      "equipment": "bodyweight",
+      "movement_type": "push",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "plank",
+      "name": "Plank",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "power_clean",
+      "name": "Power Clean",
+      "primary_muscle_group": "full body",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "preacher_curl",
+      "name": "Preacher Curl",
+      "primary_muscle_group": "arms",
+      "equipment": "barbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "pull_up",
+      "name": "Pull-up",
+      "primary_muscle_group": "back",
+      "equipment": "bodyweight",
+      "movement_type": "pull",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "push_up",
+      "name": "Push-up",
+      "primary_muscle_group": "chest",
+      "equipment": "bodyweight",
+      "movement_type": "push",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "rack_pull",
+      "name": "Rack Pull",
+      "primary_muscle_group": "back",
+      "equipment": "barbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "rear_delt_fly",
+      "name": "Rear Delt Fly",
+      "primary_muscle_group": "shoulders",
+      "equipment": "dumbbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "reverse_crunch",
+      "name": "Reverse Crunch",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "reverse_lunge",
+      "name": "Reverse Lunge",
+      "primary_muscle_group": "legs",
+      "equipment": "dumbbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "reverse_wrist_curl",
+      "name": "Reverse Wrist Curl",
+      "primary_muscle_group": "arms",
+      "equipment": "dumbbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "romanian_deadlift",
+      "name": "Romanian Deadlift",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "rowing_machine",
+      "name": "Rowing Machine",
+      "primary_muscle_group": "cardio",
+      "equipment": "machine",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "running",
+      "name": "Running",
+      "primary_muscle_group": "cardio",
+      "equipment": "none",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "russian_twist",
+      "name": "Russian Twist",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "seated_cable_row",
+      "name": "Seated Cable Row",
+      "primary_muscle_group": "back",
+      "equipment": "cable",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "seated_calf_raise",
+      "name": "Seated Calf Raise",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "shrugs",
+      "name": "Shrugs",
+      "primary_muscle_group": "shoulders",
+      "equipment": "barbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "side_plank",
+      "name": "Side Plank",
+      "primary_muscle_group": "core",
+      "equipment": "bodyweight",
+      "movement_type": "core",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "sissy_squat",
+      "name": "Sissy Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "bodyweight",
+      "movement_type": "legs",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "skull_crusher",
+      "name": "Skull Crusher",
+      "primary_muscle_group": "arms",
+      "equipment": "barbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "sled_push",
+      "name": "Sled Push",
+      "primary_muscle_group": "cardio",
+      "equipment": "sled",
+      "movement_type": "cardio",
+      "unit_mode": "distance"
+    },
+    {
+      "slug": "snatch",
+      "name": "Snatch",
+      "primary_muscle_group": "full body",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "standing_calf_raise",
+      "name": "Standing Calf Raise",
+      "primary_muscle_group": "legs",
+      "equipment": "machine",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "stationary_bike",
+      "name": "Stationary Bike",
+      "primary_muscle_group": "cardio",
+      "equipment": "bike",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "step_up",
+      "name": "Step-up",
+      "primary_muscle_group": "legs",
+      "equipment": "dumbbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "straight_arm_pulldown",
+      "name": "Straight-arm Pulldown",
+      "primary_muscle_group": "back",
+      "equipment": "cable",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "stretching",
+      "name": "Stretching",
+      "primary_muscle_group": "mobility",
+      "equipment": "none",
+      "movement_type": "mobility",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "sumo_deadlift",
+      "name": "Sumo Deadlift",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "swimming",
+      "name": "Swimming",
+      "primary_muscle_group": "cardio",
+      "equipment": "pool",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "t_bar_row",
+      "name": "T-Bar Row",
+      "primary_muscle_group": "back",
+      "equipment": "machine",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "tempo_squat",
+      "name": "Tempo Squat",
+      "primary_muscle_group": "legs",
+      "equipment": "barbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "thoracic_rotation",
+      "name": "Thoracic Rotation",
+      "primary_muscle_group": "mobility",
+      "equipment": "none",
+      "movement_type": "mobility",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "treadmill_run",
+      "name": "Treadmill Run",
+      "primary_muscle_group": "cardio",
+      "equipment": "treadmill",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "triceps_pushdown",
+      "name": "Triceps Pushdown",
+      "primary_muscle_group": "arms",
+      "equipment": "cable",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "turkish_get_up",
+      "name": "Turkish Get-up",
+      "primary_muscle_group": "full body",
+      "equipment": "kettlebell",
+      "movement_type": "core",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "upright_row",
+      "name": "Upright Row",
+      "primary_muscle_group": "shoulders",
+      "equipment": "barbell",
+      "movement_type": "push",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "walking",
+      "name": "Walking",
+      "primary_muscle_group": "cardio",
+      "equipment": "none",
+      "movement_type": "cardio",
+      "unit_mode": "time"
+    },
+    {
+      "slug": "walking_lunge",
+      "name": "Walking Lunge",
+      "primary_muscle_group": "legs",
+      "equipment": "dumbbell",
+      "movement_type": "legs",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "wall_slides",
+      "name": "Wall Slides",
+      "primary_muscle_group": "mobility",
+      "equipment": "none",
+      "movement_type": "mobility",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "woodchop",
+      "name": "Woodchop",
+      "primary_muscle_group": "core",
+      "equipment": "cable",
+      "movement_type": "core",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "world's_greatest_stretch",
+      "name": "World's Greatest Stretch",
+      "primary_muscle_group": "mobility",
+      "equipment": "none",
+      "movement_type": "mobility",
+      "unit_mode": "reps_only"
+    },
+    {
+      "slug": "wrist_curl",
+      "name": "Wrist Curl",
+      "primary_muscle_group": "arms",
+      "equipment": "dumbbell",
+      "movement_type": "pull",
+      "unit_mode": "reps_weight"
+    },
+    {
+      "slug": "yoga_flow",
+      "name": "Yoga Flow",
+      "primary_muscle_group": "mobility",
+      "equipment": "none",
+      "movement_type": "mobility",
+      "unit_mode": "time"
+    }
+  ]
+}

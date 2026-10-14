@@ -32,6 +32,13 @@ class DocumentStorage(ABC):
     def delete(self, key: str) -> None:
         """Remove the object stored under ``key`` if it exists."""
 
+    @abstractmethod
+    def read(self, key: str) -> bytes:
+        """Return the bytes stored under ``key``.
+
+        Required to re-run ingestion for an existing document (retry).
+        """
+
 
 class UnconfiguredDocumentStorage(DocumentStorage):
     """Backend used until an approved storage target is configured."""
@@ -46,6 +53,9 @@ class UnconfiguredDocumentStorage(DocumentStorage):
         )
 
     def delete(self, key: str) -> None:  # noqa: ARG002
+        raise ServiceUnavailableError("Document storage is not configured.")
+
+    def read(self, key: str) -> bytes:  # noqa: ARG002
         raise ServiceUnavailableError("Document storage is not configured.")
 
 
@@ -79,6 +89,12 @@ class LocalDocumentStorage(DocumentStorage):
         if path.exists():
             path.unlink()
 
+    def read(self, key: str) -> bytes:
+        path = self._resolve(key)
+        if not path.exists():
+            raise ServiceUnavailableError("The stored file is no longer available.")
+        return path.read_bytes()
+
 
 class SupabaseDocumentStorage(DocumentStorage):
     """Placeholder for the not-yet-approved Supabase Storage backend."""
@@ -93,6 +109,9 @@ class SupabaseDocumentStorage(DocumentStorage):
         )
 
     def delete(self, key: str) -> None:  # noqa: ARG002
+        raise ServiceUnavailableError("Supabase Storage support has not been implemented.")
+
+    def read(self, key: str) -> bytes:  # noqa: ARG002
         raise ServiceUnavailableError("Supabase Storage support has not been implemented.")
 
 

@@ -1,13 +1,22 @@
-"""Load and extract text from PDF, TXT and DOCX files."""
+"""Load and extract text from documents and images.
+
+One central registry maps an extension to its media types, its magic-byte
+signature and its handler kind. Documents (pdf, txt, md, docx) are parsed
+directly; images (png, jpg, jpeg, webp) are sent through the vision/OCR handler.
+A file whose bytes do not match the signature of its extension is rejected, so a
+renamed executable can never reach a parser.
+"""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
-SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".docx"}
 DEFAULT_MAX_BYTES = 25 * 1024 * 1024
+
+HandlerKind = Literal["document", "image"]
 
 
 class DocumentLoadError(Exception):
@@ -16,6 +25,88 @@ class DocumentLoadError(Exception):
 
 class UnsupportedFileTypeError(DocumentLoadError):
     """Extension is not one of the supported types."""
+
+
+class FileSignatureMismatchError(DocumentLoadError):
+    """File content does not match the format implied by its extension."""
+
+
+@dataclass(frozen=True)
+class FileHandler:
+    """A supported file type: how to recognise it and how to read it."""
+
+    extension: str
+    media_types: frozenset[str]
+    kind: HandlerKind
+    #: Magic-byte prefixes that identify the format. Empty means "text-like":
+    #: the content is accepted when it decodes as text and contains no NUL bytes.
+    magic: tuple[bytes, ...] = ()
+    #: Offset applied to every magic prefix (RIFF containers check bytes 8..12).
+    magic_offset: int = 0
+    #: Sentinel used when the format has no magic bytes.
+    validate_text: bool = False
+
+
+#: The single source of truth for supported uploads.
+FILE_HANDLERS: dict[str, FileHandler] = {
+    ".pdf": FileHandler(
+        ".pdf",
+        frozenset({"application/pdf"}),
+        "document",
+        magic=(b"%PDF",),
+    ),
+    ".docx": FileHandler(
+        ".docx",
+        frozenset(
+            {
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            }
+        ),
+        "document",
+        magic=(b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"),
+    ),
+    ".txt": FileHandler(
+        ".txt",
+        frozenset({"text/plain"}),
+        "document",
+        validate_text=True,
+    ),
+    ".md": FileHandler(
+        ".md",
+        frozenset({"text/markdown", "text/x-markdown", "text/plain"}),
+        "document",
+        validate_text=True,
+    ),
+    ".png": FileHandler(
+        ".png",
+        frozenset({"image/png"}),
+        "image",
+        magic=(b"\x89PNG\r\n\x1a\n",),
+    ),
+    ".jpg": FileHandler(
+        ".jpg",
+        frozenset({"image/jpeg", "image/jpg"}),
+        "image",
+        magic=(b"\xff\xd8\xff",),
+    ),
+    ".jpeg": FileHandler(
+        ".jpeg",
+        frozenset({"image/jpeg", "image/jpg"}),
+        "image",
+        magic=(b"\xff\xd8\xff",),
+    ),
+    ".webp": FileHandler(
+        ".webp",
+        frozenset({"image/webp"}),
+        "image",
+        magic=(b"WEBP",),
+        magic_offset=8,
+    ),
+}
+
+SUPPORTED_EXTENSIONS = frozenset(FILE_HANDLERS)
+DOCUMENT_EXTENSIONS = frozenset(k for k, h in FILE_HANDLERS.items() if h.kind == "document")
+IMAGE_EXTENSIONS = frozenset(k for k, h in FILE_HANDLERS.items() if h.kind == "image")
 
 
 @dataclass(frozen=True)
@@ -29,7 +120,7 @@ class Section:
 @dataclass(frozen=True)
 class LoadedDocument:
     source: str  # file name only (no server paths)
-    file_type: str  # "pdf" | "txt" | "docx"
+    file_type: str  # "pdf" | "txt" | "md" | "docx" | "image"
     sections: tuple[Section, ...]
 
     @property
@@ -88,27 +179,84 @@ def _load_docx(path: Path) -> list[Section]:
     return [Section(_clean("\n".join(parts)))]
 
 
-def load_document(path: str | Path, max_bytes: int = DEFAULT_MAX_BYTES) -> LoadedDocument:
-    """Extract text from a supported file. Raises DocumentLoadError subclasses."""
-    p = Path(path)
-    ext = p.suffix.lower()
-    if ext not in SUPPORTED_EXTENSIONS:
-        raise UnsupportedFileTypeError(f"unsupported file type {ext or '(none)'}")
-    if not p.is_file():
-        raise DocumentLoadError("file not found")
-    if p.stat().st_size > max_bytes:
-        raise DocumentLoadError("file too large")
-    if p.stat().st_size == 0:
-        raise DocumentLoadError("file is empty")
-    with p.open("rb") as fh:
-        head = fh.read(4)
-    if (ext == ".pdf" and head != b"%PDF") or (ext == ".docx" and head[:2] != b"PK"):
-        raise DocumentLoadError(f"content does not match {ext} format")
+TEXT_PEEK_BYTES = 4096
 
-    loader = {".pdf": _load_pdf, ".txt": _load_txt, ".docx": _load_docx}[ext]
-    sections = [s for s in loader(p) if s.text]
+
+def resolve_handler(filename: str, data: bytes) -> FileHandler:
+    """Return the handler for ``filename``, verifying its magic bytes.
+
+    Raises ``UnsupportedFileTypeError`` for unknown extensions and
+    ``FileSignatureMismatchError`` when the content contradicts the extension.
+    """
+    ext = Path(filename).suffix.lower()
+    handler = FILE_HANDLERS.get(ext)
+    if handler is None:
+        raise UnsupportedFileTypeError(f"unsupported file type {ext or '(none)'}")
+
+    if handler.magic:
+        for signature in handler.magic:
+            start = handler.magic_offset
+            if data[start : start + len(signature)] == signature:
+                return handler
+        raise FileSignatureMismatchError(f"content does not match {ext} format")
+
+    # Text-like formats: reject binary payloads masquerading as .txt/.md.
+    if handler.validate_text:
+        head = data[:TEXT_PEEK_BYTES]
+        if b"\x00" in head:
+            raise FileSignatureMismatchError(f"content does not match {ext} format")
+        try:
+            head.decode("utf-8")
+        except UnicodeDecodeError:
+            raise FileSignatureMismatchError(f"content does not match {ext} format") from None
+    return handler
+
+
+def _read_bytes(path: Path, max_bytes: int) -> bytes:
+    if not path.is_file():
+        raise DocumentLoadError("file not found")
+    if path.stat().st_size > max_bytes:
+        raise DocumentLoadError("file too large")
+    data = path.read_bytes()
+    if not data:
+        raise DocumentLoadError("file is empty")
+    return data
+
+
+def load_file(path: str | Path, max_bytes: int = DEFAULT_MAX_BYTES) -> LoadedDocument:
+    """Extract text from a supported document or image file.
+
+    This is the single entry point for ingestion: the registry decides whether
+    the file is a document (native parser) or an image (vision/OCR).
+    """
+    p = Path(path)
+    data = _read_bytes(p, max_bytes)
+    handler = resolve_handler(p.name, data)
+
+    if handler.kind == "image":
+        from .image_ocr import ImageOcrError, load_image_document
+
+        try:
+            text = load_image_document(data, p.name)
+        except ImageOcrError as exc:
+            raise DocumentLoadError(str(exc)) from exc
+        if not text.strip():
+            raise DocumentLoadError("no extractable text in image")
+        return LoadedDocument(source=p.name, file_type="image", sections=(Section(text),))
+
+    loader = {".pdf": _load_pdf, ".docx": _load_docx, ".txt": _load_txt, ".md": _load_txt}
+    sections = [s for s in loader[handler.extension](p) if s.text]
     if not sections:
-        raise DocumentLoadError(
-            "no extractable text (scanned documents need OCR, which is not supported)"
-        )
-    return LoadedDocument(source=p.name, file_type=ext[1:], sections=tuple(sections))
+        raise DocumentLoadError("no extractable text in this file")
+    return LoadedDocument(source=p.name, file_type=handler.extension[1:], sections=tuple(sections))
+
+
+def load_document(path: str | Path, max_bytes: int = DEFAULT_MAX_BYTES) -> LoadedDocument:
+    """Extract text from a text-based document (pdf, txt, md, docx).
+
+    Images are rejected here; use ``load_file`` for the general case.
+    """
+    p = Path(path)
+    if p.suffix.lower() in IMAGE_EXTENSIONS:
+        raise UnsupportedFileTypeError("images are handled by load_file, not load_document")
+    return load_file(p, max_bytes=max_bytes)
