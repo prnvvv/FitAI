@@ -51,7 +51,7 @@ grounded, personalized, and remember relevant context across conversations.
 | Backend        | Python 3.10+, FastAPI, Pydantic 2, SQLAlchemy 2, Alembic, Uvicorn                              |
 | Data & storage | PostgreSQL via Supabase, Supabase Auth, ChromaDB (vector store)                                |
 | AI & retrieval | Groq (LLM inference), LangGraph (agent orchestration), ChromaDB embeddings                      |
-| Tooling        | Ruff, MyPy, Pytest, oxlint, GitHub Actions, Dependabot                                          |
+| Tooling        | Ruff, MyPy, Pytest, oxlint                                               |
 
 ## Repository structure
 
@@ -89,8 +89,8 @@ FitAI/
 │
 ├── docs/                     # architecture, setup, API contracts, extraction
 ├── knowledge_base/           # curated fitness/nutrition source documents
-├── scripts/                  # dev + audit + audit/smoke utilities
-├── AGENTS.md                 # project conventions and ownership
+├── scripts/                  # dev, ingestion, audit, and smoke-test utilities
+├── AGENTS.MD                 # project conventions and ownership
 └── README.md
 ```
 
