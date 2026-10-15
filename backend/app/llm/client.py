@@ -39,6 +39,7 @@ class GroqClient:
         model: str = DEFAULT_MODEL,
         temperature: float = DEFAULT_TEMPERATURE,
         timeout: float = 60.0,
+        max_tokens: int | None = None,
     ):
         key = api_key or os.getenv("GROQ_API_KEY")
         if not key:
@@ -47,6 +48,7 @@ class GroqClient:
         self._model = model
         self._temperature = temperature
         self._timeout = timeout
+        self._max_tokens = max_tokens
 
     def __call__(self, system: str, user: str, *, json_mode: bool = False) -> str:
         """Call the chat completions endpoint and return the message content."""
@@ -59,6 +61,8 @@ class GroqClient:
             "temperature": self._temperature,
             "messages": messages,
         }
+        if self._max_tokens is not None:
+            kwargs["max_tokens"] = self._max_tokens
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
         try:

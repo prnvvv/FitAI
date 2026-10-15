@@ -564,6 +564,7 @@ class ChatService:
                 api_key=settings.groq_api_key,
                 model=settings.guard_model or settings.groq_model,
                 timeout=settings.guard_timeout_s,
+                max_tokens=settings.guard_max_tokens,
             )
         except Exception:
             log.warning("guard classifier could not be initialised", exc_info=True)

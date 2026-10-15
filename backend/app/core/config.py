@@ -151,6 +151,8 @@ class Settings(BaseSettings):
     guard_classifier_enabled: bool = True
     #: Per-call timeout (seconds) for the classifier's single Groq completion.
     guard_timeout_s: float = 1.5
+    #: Cap on the classifier's completion length; its JSON verdict is tiny.
+    guard_max_tokens: int = 200
     #: Below this classifier confidence the decision degrades to the
     #: deterministic fallback (allow + no cache), i.e. fail-open to current
     #: behaviour rather than block on a weak signal.
