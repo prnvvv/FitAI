@@ -45,3 +45,69 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
+
+/* --------------------------------------------------------------------------
+ * Sidebar
+ * ----------------------------------------------------------------------- */
+
+.sidebar {
+  background-color: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.sidebar__brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background-color: var(--accent);
+  color: var(--on-accent);
+  flex-shrink: 0;
+}
+
+.sidebar__section-label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sidebar-nav-item {
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.sidebar-nav-item:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-nav-item[data-active='true'] {
+  background-color: var(--bg-active);
+  color: var(--text-primary);
+}
+
+/* New chat: the one filled call to action in the rail. */
+.sidebar-nav-item[data-variant='primary'] {
+  background-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.sidebar-nav-item[data-variant='primary']:hover {
+  background-color: var(--accent-hover);
+  color: var(--on-accent);
+}

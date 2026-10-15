@@ -1,6 +1,7 @@
 import {
   BookOpen,
   CalendarDays,
+  Dumbbell,
   MessageSquarePlus,
   PanelLeftClose,
   PanelRightOpen,
@@ -53,7 +54,6 @@ export function Sidebar({
   const navigate = useNavigate()
   const location = useLocation()
   const [accountOpen, setAccountOpen] = useState(false)
-  const isChat = location.pathname === '/' || location.pathname.startsWith('/chat/')
 
   useEffect(() => {
     if (!open) return
@@ -76,7 +76,14 @@ export function Sidebar({
       aria-expanded={open}
     >
       <div className="sidebar__header">
-        {open && <span className="sidebar__brand">FitAI</span>}
+        {open && (
+          <span className="sidebar__brand">
+            <span className="sidebar__brand-mark" aria-hidden="true">
+              <Dumbbell size={16} />
+            </span>
+            FitAI
+          </span>
+        )}
         <div className="sidebar__header-actions">
           <button
             type="button"
@@ -121,7 +128,7 @@ export function Sidebar({
             <SidebarNavItem
               icon={<MessageSquarePlus size={20} />}
               label="New chat"
-              active={isChat && !selectedId}
+              variant="primary"
               onClick={handleNewChat}
             />
             <SidebarNavItem
@@ -153,7 +160,7 @@ export function Sidebar({
             />
           </div>
 
-          <div className="sidebar__section-label">Chat history</div>
+          <div className="sidebar__section-label">Recent chats</div>
           <ConversationList
             conversations={conversations}
             selectedId={selectedId}

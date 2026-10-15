@@ -6,9 +6,18 @@ interface SidebarNavItemProps {
   active?: boolean
   onClick?: () => void
   ariaLabel?: string
+  /** `primary` renders the filled blue call-to-action treatment (New chat). */
+  variant?: 'default' | 'primary'
 }
 
-export function SidebarNavItem({ icon, label, active, onClick, ariaLabel }: SidebarNavItemProps) {
+export function SidebarNavItem({
+  icon,
+  label,
+  active,
+  onClick,
+  ariaLabel,
+  variant = 'default',
+}: SidebarNavItemProps) {
   return (
     <button
       type="button"
@@ -16,6 +25,7 @@ export function SidebarNavItem({ icon, label, active, onClick, ariaLabel }: Side
       aria-label={ariaLabel ?? label}
       className="sidebar-nav-item"
       data-active={active}
+      data-variant={variant}
     >
       <span className="sidebar-nav-item__icon">{icon}</span>
       <span className="sidebar-nav-item__label">{label}</span>
