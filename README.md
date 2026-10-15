@@ -93,3 +93,116 @@ FitAI/
 ├── AGENTS.md                 # project conventions and ownership
 └── README.md
 ```
+
+## Getting started
+
+### Prerequisites
+
+- **Python 3.10+** (developed against 3.13).
+- **Node.js and npm** for the frontend.
+- A **Supabase** project for Auth (and optionally a private Storage bucket for
+  documents).
+- A **Groq API key** for LLM inference.
+
+### Backend
+
+```powershell
+cd backend
+python -m venv .venv
+# Windows (PowerShell)
+.\.venv\Scripts\Activate.ps1
+# macOS / Linux
+source .venv/bin/activate
+
+python -m pip install -e ".[dev]"
+
+copy .env.example .env      # Windows; use `cp` on macOS/Linux, then fill in values
+alembic upgrade head
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+- OpenAPI docs: `http://127.0.0.1:8000/docs`
+- Liveness: `GET /health`; readiness: `GET /health/ready` (unauthenticated)
+
+See [`docs/backend_setup.md`](docs/backend_setup.md) for the full environment
+runbook.
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+cp .env.example .env        # then fill in values
+npm run dev
+```
+
+### Run both from the repository root
+
+The root `package.json` wires the two apps together with `concurrently`:
+
+```bash
+npm install        # installs the root dev dependency
+npm run dev        # starts backend (:8000) and frontend (Vite) together
+```
+
+Convenience wrappers are also available: `scripts/dev.ps1` (Windows) and
+`scripts/run-all.sh` (macOS/Linux/Git Bash).
+
+## Configuration
+
+Environment variables are the single source of truth. Templates live in
+[`backend/.env.example`](backend/.env.example) and
+[`frontend/.env.example`](frontend/.env.example); never commit real `.env` files.
+
+Common backend variables (full table in
+[`docs/backend_setup.md`](docs/backend_setup.md)):
+
+| Variable                   | Purpose                                                      |
+| -------------------------- | ------------------------------------------------------------ |
+| `DATABASE_URL`             | PostgreSQL URL (`postgresql+psycopg2://...`, Supabase pooled).|
+| `SUPABASE_URL`             | Project URL; drives JWKS and expected issuer.                |
+| `SUPABASE_JWT_ALGORITHMS`  | Token algorithm allow-list (`ES256,RS256` by default).       |
+| `SUPABASE_JWT_SECRET`      | Only for legacy HS256 signing; leave empty otherwise.        |
+| `GROQ_API_KEY`             | LLM inference.                                               |
+| `BACKEND_HOST` / `BACKEND_PORT` | Dev server address consumed by the scripts and Vite proxy. |
+| `CORS_ORIGINS`             | Comma-separated allowed origins.                             |
+| `DOCUMENT_STORAGE_BACKEND` | `unconfigured` / `local` / `supabase`.                       |
+
+Frontend variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and
+`VITE_API_BASE_URL` (defaults to `/api/v1`). Only the Supabase **anon** key
+belongs in the frontend; server-only secrets must stay in the backend.
+
+## Testing and quality checks
+
+### Backend
+
+```bash
+cd backend
+pytest                          # full suite
+ruff check app tests            # lint
+ruff format --check app tests   # formatting
+mypy app                        # strict type checking
+```
+
+The backend suite runs against an in-memory SQLite database and overrides the
+auth dependency, so **no live Supabase or Groq credentials are required** for
+ordinary runs. A few tests opt into live calls through environment flags, for
+example the guard classifier eval:
+
+```bash
+RUN_GUARD_EVAL=1 pytest tests/guardrails/test_guard_eval.py -q -s
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm run type-check   # tsc -b
+npm run lint         # oxlint
+npm test             # vitest (jsdom)
+npm run build        # production build
+```
+
+From the repository root you can also run `npm run test:backend`,
+`npm run test:frontend`, `npm run type-check:frontend`, and
+`npm run build:frontend`.
