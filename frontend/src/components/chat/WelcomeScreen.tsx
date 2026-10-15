@@ -11,9 +11,7 @@ export function WelcomeScreen({ onSuggestion }: WelcomeScreenProps) {
 
   return (
     <div className="welcome-screen">
-      <h1 className="welcome-screen__title">
-        Hi {firstName} <span className="welcome-screen__wave">👋</span>
-      </h1>
+      <h1 className="welcome-screen__title">Hi {firstName}</h1>
       <p className="welcome-screen__subtitle">How can I help with your fitness today?</p>
       <SuggestionList onSelect={onSuggestion} />
     </div>

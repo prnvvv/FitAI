@@ -517,11 +517,6 @@
   margin: 0 0 6px;
 }
 
-.welcome-screen__wave {
-  display: inline-block;
-  transform-origin: 70% 70%;
-}
-
 .welcome-screen__subtitle {
   margin: 0 0 36px;
   font-size: 1rem;
@@ -1390,5 +1385,63 @@
 .profile__location-btn:hover {
   border-color: var(--border-strong);
   color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+ * Plan calendar (week + month)
+ * ----------------------------------------------------------------------- */
+
+/*
+ * The week view now renders one full-width timetable. `.plan__week` was a
+ * 7-column strip grid built for a button per day, which squeezed the
+ * timetable into a single narrow column; make it a plain block instead.
+ */
+.plan__week {
+  display: block;
+  grid-template-columns: none;
+  gap: 0;
+  margin: 0;
+  overflow: visible;
+}
+
+.plan__week .timetable {
+  width: 100%;
+}
+
+/* Keep the weekday header tracks aligned with the day columns below. */
+.plan__weekdays {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+/* Let the month fill the calendar instead of being capped and centred. */
+.plan__month-grid {
+  max-height: none;
+  margin-block: 0;
+  align-content: stretch;
+}
+
+.plan__month-day {
+  background-color: var(--bg-subtle);
+}
+
+.plan__month-day:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.plan__month-day--outside {
+  background-color: transparent;
+}
+
+.plan__month-day--selected {
+  background-color: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.plan__month-day--today {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
