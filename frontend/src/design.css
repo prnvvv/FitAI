@@ -498,3 +498,148 @@
     display: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+ * Chat welcome + suggestion cards
+ * ----------------------------------------------------------------------- */
+
+.welcome-screen {
+  padding: 40px 24px 56px;
+  background-image: linear-gradient(var(--checker) 1px, transparent 1px),
+    linear-gradient(90deg, var(--checker) 1px, transparent 1px);
+  background-size: var(--checker-size) var(--checker-size);
+}
+
+.welcome-screen__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px;
+}
+
+.welcome-screen__wave {
+  display: inline-block;
+  transform-origin: 70% 70%;
+}
+
+.welcome-screen__subtitle {
+  margin: 0 0 36px;
+  font-size: 1rem;
+}
+
+.suggestion-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+  max-width: 940px;
+}
+
+.suggestion-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--tone, var(--accent)) 24%, var(--border));
+  border-radius: var(--radius);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.suggestion-item:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--tone, var(--accent));
+  transform: translateY(-1px);
+}
+
+.suggestion-item[data-tone='blue'] {
+  --tone: var(--cat-blue);
+}
+
+.suggestion-item[data-tone='amber'] {
+  --tone: var(--cat-amber);
+}
+
+.suggestion-item[data-tone='mint'] {
+  --tone: var(--cat-mint);
+}
+
+.suggestion-item[data-tone='lavender'] {
+  --tone: var(--cat-lavender);
+}
+
+.suggestion-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background-color: color-mix(in srgb, var(--tone, var(--accent)) 16%, transparent);
+  color: var(--tone, var(--accent));
+}
+
+.suggestion-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.suggestion-item__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.suggestion-item__subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .suggestion-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .suggestion-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The icon inherits its tone colour instead of the global accent. */
+.suggestion-item__icon svg {
+  color: inherit;
+}
+
+/* --------------------------------------------------------------------------
+ * Chat composer
+ * ----------------------------------------------------------------------- */
+
+.composer {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background-color: var(--bg-card);
+  box-shadow: var(--shadow-card);
+}
+
+.composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.composer__send {
+  border-radius: 10px;
+}
+
+.chat-page__disclaimer {
+  font-size: 0.75rem;
+}
+
+.chat-page__composer {
+  padding: 12px 16px 20px;
+}

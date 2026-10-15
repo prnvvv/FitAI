@@ -14,7 +14,7 @@ export function Composer({
   disabled,
   streaming,
   onStop,
-  placeholder = 'Ask anything',
+  placeholder = 'Ask anything about fitness...',
 }: ComposerProps) {
   const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])

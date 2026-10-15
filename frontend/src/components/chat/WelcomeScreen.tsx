@@ -1,4 +1,3 @@
-import { Sparkles } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { SuggestionList } from './SuggestionList'
 
@@ -12,10 +11,10 @@ export function WelcomeScreen({ onSuggestion }: WelcomeScreenProps) {
 
   return (
     <div className="welcome-screen">
-      <div className="welcome-screen__icon">
-        <Sparkles size={40} />
-      </div>
-      <h1 className="welcome-screen__title">Hey, {firstName}. Ready to dive in?</h1>
+      <h1 className="welcome-screen__title">
+        Hi {firstName} <span className="welcome-screen__wave">👋</span>
+      </h1>
+      <p className="welcome-screen__subtitle">How can I help with your fitness today?</p>
       <SuggestionList onSelect={onSuggestion} />
     </div>
   )

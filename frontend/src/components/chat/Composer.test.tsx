@@ -7,7 +7,7 @@ describe('Composer', () => {
     const onSend = vi.fn()
     render(<Composer onSend={onSend} />)
 
-    const input = screen.getByPlaceholderText('Ask anything')
+    const input = screen.getByPlaceholderText('Ask anything about fitness...')
     fireEvent.change(input, { target: { value: 'Hello' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
