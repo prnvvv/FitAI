@@ -1,46 +1,143 @@
-:root {
+/*
+ * Design tokens.
+ *
+ * The dark theme is the default (`:root`). A `data-theme="light"` attribute on
+ * the root element swaps the same token names for their light values, so every
+ * component that reads a token themes itself without extra rules.
+ */
+:root,
+:root[data-theme='dark'] {
   /* Backgrounds */
-  --bg-main: #000000;
-  --bg-sidebar: #0d0d0d;
-  --bg-hover: #1f1f1f;
-  --bg-active: #212121;
-  --bg-composer: #1a1a1a;
-  --bg-popover: #1f1f1f;
-  --bg-user-bubble: #2a2a2a;
-  --bg-code: #1a1a1a;
+  --bg-main: #0a0c12;
+  --bg-sidebar: #0d1018;
+  --bg-surface: #121622;
+  --bg-card: #131826;
+  --bg-subtle: #0f131f;
+  --bg-hover: #1b2130;
+  --bg-active: #202a44;
+  --bg-composer: #131826;
+  --bg-popover: #161b28;
+  --bg-user-bubble: #233052;
+  --bg-code: #0f131f;
 
   /* Text */
-  --text-primary: #f5f5f5;
-  --text-secondary: #a0a0a0;
-  --text-muted: #6b6b6b;
+  --text-primary: #f4f6fb;
+  --text-secondary: #9aa6bd;
+  --text-muted: #6b778d;
 
   /* Accent */
   --accent: #2f6bff;
-  --accent-hover: #3b82f6;
-  --accent-disabled: #1e4db3;
+  --accent-hover: #4d84ff;
+  --accent-disabled: #24417e;
+  --accent-soft: rgba(47, 107, 255, 0.16);
+  --on-accent: #ffffff;
 
   /* Borders / dividers */
   --divider: rgba(255, 255, 255, 0.08);
-  --popover-border: rgba(255, 255, 255, 0.08);
-  --focus-ring: rgba(47, 107, 255, 0.4);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --popover-border: rgba(255, 255, 255, 0.1);
+  --focus-ring: rgba(47, 107, 255, 0.45);
 
   /* Semantic */
-  --error: #ef4444;
-  --error-bg: rgba(239, 68, 68, 0.1);
-  --success: #22c55e;
-  --success-bg: rgba(34, 197, 94, 0.1);
+  --error: #f26d6d;
+  --error-bg: rgba(242, 109, 109, 0.12);
+  --color-error: #f26d6d;
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.14);
+  --warning: #f5b544;
+  --warning-bg: rgba(245, 181, 68, 0.14);
+
+  /* Category accents (charts, session cards, suggestion icons) */
+  --cat-blue: #3b82f6;
+  --cat-mint: #34d399;
+  --cat-lavender: #a78bfa;
+  --cat-pink: #f472b6;
+  --cat-amber: #f5b544;
+  --cat-cyan: #22d3ee;
+
+  /* Checkered background pattern */
+  --checker: rgba(255, 255, 255, 0.028);
+  --checker-strong: rgba(255, 255, 255, 0.05);
+  --checker-size: 32px;
 
   /* Shadows */
-  --shadow-popover: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-popover: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35);
 
   /* Layout */
   --sidebar-width: 260px;
   --sidebar-collapsed: 56px;
-  --max-content-width: 768px;
+  --max-content-width: 900px;
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 14px;
 
   /* Type */
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, Helvetica, Arial,
     sans-serif;
+}
+
+:root[data-theme='light'] {
+  /* Backgrounds */
+  --bg-main: #f4f7fc;
+  --bg-sidebar: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-subtle: #f7f9fd;
+  --bg-hover: #eef2f9;
+  --bg-active: #e4ecfb;
+  --bg-composer: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-user-bubble: #e8eefb;
+  --bg-code: #f1f4fa;
+
+  /* Text */
+  --text-primary: #10203c;
+  --text-secondary: #55658a;
+  --text-muted: #8494ad;
+
+  /* Accent */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-disabled: #a9c0f5;
+  --accent-soft: rgba(37, 99, 235, 0.1);
+  --on-accent: #ffffff;
+
+  /* Borders / dividers */
+  --divider: rgba(16, 32, 60, 0.08);
+  --border: rgba(16, 32, 60, 0.09);
+  --border-strong: rgba(16, 32, 60, 0.16);
+  --popover-border: rgba(16, 32, 60, 0.1);
+  --focus-ring: rgba(37, 99, 235, 0.35);
+
+  /* Semantic */
+  --error: #dc2626;
+  --error-bg: rgba(220, 38, 38, 0.08);
+  --color-error: #dc2626;
+  --success: #059669;
+  --success-bg: rgba(5, 150, 105, 0.1);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.12);
+
+  /* Category accents */
+  --cat-blue: #2563eb;
+  --cat-mint: #059669;
+  --cat-lavender: #7c3aed;
+  --cat-pink: #db2777;
+  --cat-amber: #d97706;
+  --cat-cyan: #0891b2;
+
+  /* Checkered background pattern */
+  --checker: rgba(16, 32, 60, 0.035);
+  --checker-strong: rgba(16, 32, 60, 0.055);
+  --checker-size: 32px;
+
+  /* Shadows */
+  --shadow-popover: 0 12px 32px rgba(16, 32, 60, 0.14);
+  --shadow-card: 0 1px 2px rgba(16, 32, 60, 0.06);
 }
 
 * {
@@ -79,8 +176,8 @@ input[type='number'] {
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -88,12 +185,12 @@ input[type='number'] {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
+  background: var(--border-strong);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+  background: var(--text-muted);
 }
 
 /* Reduced motion */
@@ -117,4 +214,29 @@ input[type='number'] {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/*
+ * Checkered box background.
+ *
+ * Two offset linear-gradient layers paint a subtle square grid. It stays very
+ * low-contrast so it never competes with dense dashboard content; it is most
+ * visible on the open landing and chat surfaces.
+ */
+.checker-bg {
+  background-color: var(--bg-main);
+  background-image: linear-gradient(var(--checker) 1px, transparent 1px),
+    linear-gradient(90deg, var(--checker) 1px, transparent 1px),
+    linear-gradient(var(--checker-strong) calc(var(--checker-size) / 2) 1px, transparent calc(var(--checker-size) / 2)),
+    linear-gradient(90deg, var(--checker-strong) calc(var(--checker-size) / 2) 1px, transparent calc(var(--checker-size) / 2));
+  background-size: var(--checker-size) var(--checker-size),
+    var(--checker-size) var(--checker-size),
+    var(--checker-size) var(--checker-size),
+    var(--checker-size) var(--checker-size);
+}
+
+/* Fade the checker out toward the bottom of a scroll area. */
+.checker-bg--fade {
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0%, #000 55%, transparent 100%);
 }

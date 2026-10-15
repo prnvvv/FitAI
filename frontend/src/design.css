@@ -1,0 +1,47 @@
+/*
+ * FitAI visual language.
+ *
+ * Imported after App.css. It holds the refined surface treatments (cards,
+ * toolbars, the weekly timetable, the progress dashboard and the landing page)
+ * and works entirely through the design tokens in index.css so both themes stay
+ * in sync.
+ */
+
+/* --------------------------------------------------------------------------
+ * Top bar + theme toggle
+ * ----------------------------------------------------------------------- */
+
+.top-bar {
+  padding: 8px 16px;
+  min-height: 52px;
+  background-color: var(--bg-main);
+}
+
+.top-bar__spacer {
+  flex: 1;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.theme-toggle:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
