@@ -50,12 +50,17 @@ def _off_network_guard_classifier(monkeypatch) -> None:
     call in any test that reaches the chat path. Disabling it here guarantees
     the whole suite stays deterministic and offline; individual tests opt in by
     flipping the flag back on and injecting a fake classifier.
+
+    Cross-chat continuity is disabled here too so the chat path never opens
+    Chroma or calls the summary model. Tests that exercise continuity enable it
+    explicitly and inject fakes.
     """
     from app.core.config import settings
     from app.guardrails.guard import clear_decision_cache
 
     clear_decision_cache()
     monkeypatch.setattr(settings, "guard_classifier_enabled", False)
+    monkeypatch.setattr(settings, "continuity_enabled", False)
     yield
     clear_decision_cache()
 

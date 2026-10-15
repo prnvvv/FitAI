@@ -11,6 +11,7 @@ from .confirmation import (
     decide,
     decide_all,
 )
+from .continuity import ContinuityContext, format_continuity
 from .extractor import (
     ExtractedFact,
     ExtractionResult,
@@ -20,6 +21,7 @@ from .extractor import (
     extract_facts,
 )
 from .history import HistoryPlan, HistoryRecord, build_history_record, prepare_history
+from .summarizer import build_summary
 
 __all__ = [
     "ExtractedFact",
@@ -28,6 +30,9 @@ __all__ = [
     "Tense",
     "TextCompleter",
     "extract_facts",
+    "ContinuityContext",
+    "format_continuity",
+    "build_summary",
     "ChangeKind",
     "DetectedChange",
     "MemoryEntry",

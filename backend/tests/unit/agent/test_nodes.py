@@ -172,6 +172,32 @@ def test_generate_response_uses_tool_loop_when_available(
     assert any(t["function"]["name"] == "nearby_gyms" for t in llm.tools_passed)
 
 
+def test_generate_response_pins_memory_when_retrieve_node_skipped(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    """Pinned core memory must appear even when retrieve_context_node was skipped.
+
+    Regression: non-question turns route straight to generate_response, so the
+    retrieval node never sets retrieved_memory/retrieved_profile. The generator
+    must still load them so FitAI doesn't "forget" facts between turns.
+    """
+    fake_llm.response = "Here's your plan."
+    fake_memory_reader.memory = {"weight": MemoryEntry(key="weight", value=70, unit="kg")}
+    state: AgentState = {
+        "user_message": "Give me a 4 day routine",
+        "user_id": "user-1",
+        "conversation_context": [],
+        "tool_results": [],
+        "errors": [],
+    }
+    deps = _deps(fake_llm, fake_memory_reader, fake_memory_writer)
+    generate_response(state, deps)
+    _, prompt, _ = fake_llm.calls[-1]
+    assert "User profile and memory:" in prompt
+    assert "weight: 70" in prompt
+    assert "kg" in prompt
+
+
 # ---- workout/progress context wiring -----------------------------------------
 
 

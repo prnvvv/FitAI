@@ -18,6 +18,7 @@ from app.schemas.conversation import (
     ConversationUpdate,
     MessageOut,
 )
+from app.services.continuity_service import delete_summary_vector
 from app.services.conversation_service import ConversationService
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -90,6 +91,8 @@ def delete_conversation(
     The user's profile, memory, measurements, and workouts are unaffected.
     """
     ConversationService(db).delete(current_user.id, conversation_id)
+    # Best-effort: drop the conversation's indexed summary from continuity recall.
+    delete_summary_vector(current_user.id, conversation_id)
 
 
 @router.get("/{conversation_id}/messages", response_model=Page[MessageOut])

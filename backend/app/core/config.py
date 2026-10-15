@@ -156,6 +156,18 @@ class Settings(BaseSettings):
     #: behaviour rather than block on a weak signal.
     guard_conf_threshold: float = 0.6
 
+    # Cross-chat continuity (memories + past-chat summaries)
+    #: Master switch for continuity recall and summary indexing.
+    continuity_enabled: bool = True
+    #: Dedicated model for conversation summaries (defaults to the main model).
+    summary_model: str | None = None
+    #: Default for the per-user "reference past chats" toggle (server-enforced).
+    past_chat_recall_default: bool = True
+    #: Default for the per-user "use memory" toggle (server-enforced).
+    memory_recall_default: bool = True
+    #: Number of recalled items requested from the continuity store per layer.
+    continuity_recall_k: int = 4
+
     # Location / weather defaults
     geocoding_provider: str = "nominatim"  # nominatim | google | mapbox
     google_geocoding_api_key: str | None = None

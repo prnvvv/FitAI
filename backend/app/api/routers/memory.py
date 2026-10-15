@@ -5,6 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Query, status
+from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, DbSession, Pagination
 from app.models.enums import PendingUpdateStatus
@@ -15,9 +16,15 @@ from app.schemas.memory import (
     MemoryOut,
     PendingUpdateOut,
 )
+from app.services.continuity_service import sync_user_memory_vectors
 from app.services.memory_service import MemoryService
 
 router = APIRouter(prefix="/memory", tags=["memory"])
+
+
+def _sync_vectors(db: Session, user_id: UUID) -> None:
+    """Reconcile the user's indexed memory vectors after a mutation (best-effort)."""
+    sync_user_memory_vectors(user_id, MemoryService(db).list_current(user_id))
 
 
 @router.get("", response_model=Page[MemoryOut])
@@ -84,6 +91,7 @@ def confirm_pending_update(
 ) -> MemoryOut:
     """Approve a proposal and apply it to current memory atomically."""
     memory = MemoryService(db).confirm(update_id, current_user.id)
+    _sync_vectors(db, current_user.id)
     return MemoryOut.model_validate(memory)
 
 
@@ -107,6 +115,7 @@ def correct_memory(
 ) -> MemoryOut:
     """Correct an accepted memory, preserving the previous value in history."""
     memory = MemoryService(db).correct(memory_id, current_user.id, payload.value)
+    _sync_vectors(db, current_user.id)
     return MemoryOut.model_validate(memory)
 
 
@@ -118,3 +127,4 @@ def delete_memory(
 ) -> None:
     """Soft-delete a current memory, preserving its history."""
     MemoryService(db).delete(memory_id, current_user.id)
+    _sync_vectors(db, current_user.id)

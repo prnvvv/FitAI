@@ -6,7 +6,7 @@ Alembic autogeneration and ``metadata.create_all`` see the full schema.
 
 from app.db.base import Base
 from app.models.activity_event import ActivityEvent
-from app.models.conversation import Conversation, Message
+from app.models.conversation import Conversation, ConversationSummary, Message
 from app.models.document import Document
 from app.models.enums import (
     ActivityEventType,
@@ -35,6 +35,7 @@ __all__ = [
     "ActivityEventType",
     "ActivityLevel",
     "Conversation",
+    "ConversationSummary",
     "Document",
     "DocumentStatus",
     "ExerciseLibrary",

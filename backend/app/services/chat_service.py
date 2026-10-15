@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.agent import (
     AgentDeps,
+    ContinuityReader,
     FitnessReader,
     MemoryReader,
     ProfileReader,
@@ -28,11 +29,16 @@ from app.guardrails import GuardDecision, IntentClassifier, guarded_run
 from app.llm.client import GroqClient
 from app.memory.change_detector import DetectedChange, MemoryEntry
 from app.memory.confirmation import Decision, MemoryWriter
+from app.memory.continuity import ContinuityContext
+from app.memory.extractor import TextCompleter
 from app.memory.history import HistoryRecord
+from app.memory.summarizer import build_summary
 from app.models.enums import MemoryChangeType, MemoryKey, MessageRole
 from app.models.user import User
+from app.rag.continuity_store import KIND_MEMORY, KIND_SUMMARY, ContinuityHit, ContinuityStore
 from app.rag.retriever import Retriever
 from app.rag.vector_store import VectorStore
+from app.repositories.conversation_summary_repository import ConversationSummaryRepository
 from app.safety import run_safety_rules
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
@@ -80,13 +86,20 @@ class _ProfileReaderAdapter(ProfileReader):
 
 
 class _MemoryReaderAdapter(MemoryReader):
-    """Adapt MemoryService to the agent's MemoryReader protocol."""
+    """Adapt MemoryService to the agent's MemoryReader protocol.
 
-    def __init__(self, db: Session, user_id: UUID) -> None:
+    When the user has disabled memory (server-enforced toggle), this returns no
+    facts, so stored memory is neither pinned nor used in answers.
+    """
+
+    def __init__(self, db: Session, user_id: UUID, *, use_memory: bool = True) -> None:
         self._service = MemoryService(db)
         self._user_id = user_id
+        self._use_memory = use_memory
 
     def get_current_memory(self, user_id: str) -> Mapping[str, MemoryEntry]:
+        if not self._use_memory:
+            return {}
         items = self._service.list_current(UUID(user_id))
         return {
             item.key: MemoryEntry(
@@ -104,6 +117,55 @@ class _MemoryReaderAdapter(MemoryReader):
         if isinstance(value, int | float):
             return float(value)
         return str(value)
+
+
+class _ContinuityReaderAdapter(ContinuityReader):
+    """Owner-scoped cross-chat recall with server-side toggle enforcement.
+
+    Recalls semantically relevant saved facts (``kind="memory"``) and past-chat
+    summaries (``kind="summary"``), each respecting the user's toggles. Every
+    store query is scoped to ``owner_id``. Any store failure degrades to "no
+    recall" rather than breaking the turn.
+    """
+
+    def __init__(
+        self,
+        store: ContinuityStore,
+        *,
+        use_memory: bool = True,
+        use_past_chats: bool = True,
+        k: int = 4,
+    ) -> None:
+        self._store = store
+        self._use_memory = use_memory
+        self._use_past_chats = use_past_chats
+        self._k = k
+
+    def recall(self, user_id: str, query: str) -> ContinuityContext:
+        if not user_id or not query.strip():
+            return ContinuityContext()
+        memories: list[str] = []
+        past_chats: list[str] = []
+        try:
+            if self._use_memory:
+                memories = [
+                    hit.text
+                    for hit in self._store.search(user_id, query, k=self._k, kind=KIND_MEMORY)
+                ]
+            if self._use_past_chats:
+                past_chats = [
+                    self._label(hit)
+                    for hit in self._store.search(user_id, query, k=self._k, kind=KIND_SUMMARY)
+                ]
+        except Exception:
+            log.warning("continuity recall failed", exc_info=True)
+            return ContinuityContext()
+        return ContinuityContext(memories=memories, past_chats=past_chats)
+
+    @staticmethod
+    def _label(hit: ContinuityHit) -> str:
+        title = str(hit.metadata.get("title") or "Earlier chat")
+        return f"{title}: {hit.text}"
 
 
 class _MemoryWriterAdapter(MemoryWriter):
@@ -327,6 +389,7 @@ class ChatService:
         self._db = db
         self._conversations = ConversationService(db)
         self._memory = MemoryService(db)
+        self._summaries = ConversationSummaryRepository(db)
         # Overridable extraction provider. Built lazily from settings so a missing
         # extraction key leaves the default (None) and chat proceeds unchanged.
         self._extractor: RecordExtractor | None = None
@@ -378,6 +441,7 @@ class ChatService:
             # monitor mode: log-only, allow through to the model
             log.warning("guardrails_monitor_mode_allow category=%s", guard.category)
 
+        is_new_conversation = conversation_id is None
         if conversation_id is None:
             conversation = self._conversations.create(user_id, _title_from_message(message))
         else:
@@ -386,23 +450,49 @@ class ChatService:
         conversation_id = conversation.id
         self._conversations.add_message(user_id, conversation_id, MessageRole.USER, message)
 
+        # Cross-chat continuity: when a new chat starts, roll the previous
+        # conversation into a summary (best-effort) so it can be recalled later.
+        if is_new_conversation:
+            self._flush_previous_conversation(user_id, conversation_id)
+
         # Dedicated structured extraction -> authoritative persistence. This runs
         # BEFORE the assistant reply so a truthful confirmation can be appended,
         # and only AFTER the database confirms each write. It must never break
         # the chat response, so every failure is contained here.
         extraction_events, confirmations = self._extract_and_persist(user_id, message)
 
+        # User toggles are enforced server-side: they gate pinned memory and both
+        # recall layers regardless of what the client sends.
+        use_memory, use_past_chats = self._toggles(user_id)
+
         try:
-            retriever = Retriever(VectorStore(persist_dir=settings.chromadb_persist_dir))
+            store = VectorStore(persist_dir=settings.chromadb_persist_dir)
         except Exception:
-            retriever = None
+            store = None
+        retriever = Retriever(store) if store is not None else None
+        continuity_store = (
+            ContinuityStore(store) if store is not None and settings.continuity_enabled else None
+        )
+        if continuity_store is not None:
+            self._index_memories(user_id, continuity_store)
+        continuity = (
+            _ContinuityReaderAdapter(
+                continuity_store,
+                use_memory=use_memory,
+                use_past_chats=use_past_chats,
+                k=settings.continuity_recall_k,
+            )
+            if continuity_store is not None
+            else None
+        )
 
         graph_deps = AgentDeps(
             llm=self._build_llm(),
-            memory_reader=_MemoryReaderAdapter(self._db, user_id),
+            memory_reader=_MemoryReaderAdapter(self._db, user_id, use_memory=use_memory),
             memory_writer=_MemoryWriterAdapter(self._db, user_id),
             profile_reader=_ProfileReaderAdapter(self._db, user_id),
             retriever=retriever,
+            continuity=continuity,
             fitness_reader=_FitnessReaderAdapter(self._db, user_id),
             tools={"web_search": web_search, "nearby_gyms": nearby_gyms},
             db_session=self._db,
@@ -479,6 +569,122 @@ class ChatService:
             log.warning("guard classifier could not be initialised", exc_info=True)
             return None
         return IntentClassifier(completer, model=settings.guard_model or settings.groq_model)
+
+    def _toggles(self, user_id: UUID) -> tuple[bool, bool]:
+        """Return (use_memory, reference_past_chats) from the user's profile.
+
+        Defaults come from settings so the toggles are enforced server-side even
+        when a client never sends them.
+        """
+        profile = ProfileService(self._db).get(user_id)
+        prefs = (
+            profile.preferences
+            if profile is not None and isinstance(profile.preferences, dict)
+            else {}
+        )
+        use_memory = bool(prefs.get("use_memory", settings.memory_recall_default))
+        use_past = bool(prefs.get("reference_past_chats", settings.past_chat_recall_default))
+        return use_memory, use_past
+
+    def _build_summary_llm(self) -> TextCompleter | None:
+        """Return the conversation-summary completer, or None when unavailable."""
+        if not settings.continuity_enabled:
+            return None
+        try:
+            return GroqClient(
+                api_key=settings.groq_api_key,
+                model=settings.summary_model or settings.groq_model,
+            )
+        except Exception:
+            log.warning("summary model could not be initialised", exc_info=True)
+            return None
+
+    def _index_memories(self, user_id: UUID, store: ContinuityStore) -> None:
+        """Make the user's memory vectors reflect current memory (best-effort)."""
+        if not settings.continuity_enabled:
+            return
+        try:
+            items = self._memory.list_current(user_id)
+            mapping = {item.key.value: self._memory_text(item) for item in items}
+            store.sync_memories(str(user_id), mapping)
+        except Exception:
+            log.warning("memory vector sync failed", exc_info=True)
+
+    @staticmethod
+    def _memory_text(item: Any) -> str:
+        value = item.value
+        if isinstance(value, list):
+            value = ", ".join(str(v) for v in value)
+        return f"{item.key.value}: {value}"
+
+    def _flush_previous_conversation(self, user_id: UUID, new_conversation_id: UUID) -> None:
+        """Summarise the user's most recent earlier conversation (best-effort)."""
+        if not settings.continuity_enabled:
+            return
+        try:
+            recent, _ = self._conversations.list_conversations(user_id, limit=2, offset=0)
+        except Exception:
+            log.warning("previous-conversation lookup failed", exc_info=True)
+            return
+        target = next((c for c in recent if c.id != new_conversation_id), None)
+        if target is None:
+            return
+        self._summarize_conversation(user_id, target.id, target.title)
+
+    def _summarize_conversation(
+        self, user_id: UUID, conversation_id: UUID, title: str | None
+    ) -> None:
+        """Summarise one conversation, persist the row, and index it. Contained."""
+        llm = self._build_summary_llm()
+        if llm is None:
+            return
+        try:
+            rows = self._conversations.list_recent_messages(user_id, conversation_id, limit=40)
+        except Exception:
+            log.warning("summary message lookup failed", exc_info=True)
+            return
+        if not rows:
+            return
+        try:
+            existing = self._summaries.get_for_conversation(conversation_id, user_id)
+            if existing is not None and existing.message_count == len(rows):
+                return
+        except Exception:
+            log.warning("summary read failed", exc_info=True)
+            return
+        context = [{"role": row.role.value, "content": row.content} for row in rows]
+        summary = build_summary(context, llm)
+        if not summary:
+            return
+        try:
+            self._summaries.upsert(
+                user_id,
+                conversation_id,
+                summary,
+                message_count=len(rows),
+                last_message_at=rows[-1].created_at,
+            )
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            log.warning("summary persist failed", exc_info=True)
+            return
+        store = self._continuity_store()
+        if store is not None:
+            try:
+                store.index_summary(str(user_id), str(conversation_id), summary, title)
+            except Exception:
+                log.warning("summary index failed", exc_info=True)
+
+    def _continuity_store(self) -> ContinuityStore | None:
+        """Return a continuity store, or None when disabled/unavailable."""
+        if not settings.continuity_enabled:
+            return None
+        try:
+            return ContinuityStore(VectorStore(persist_dir=settings.chromadb_persist_dir))
+        except Exception:
+            log.warning("continuity store unavailable", exc_info=True)
+            return None
 
     def _build_extractor(self) -> RecordExtractor | None:
         """Return the dedicated extractor, or None when disabled/unconfigured."""
