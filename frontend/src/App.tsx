@@ -6,6 +6,7 @@ import { PageErrorBoundary } from './components/layout/PageErrorBoundary'
 import { useAuth } from './context/AuthContext'
 import { useConversations } from './hooks/useConversations'
 import { ChatPage } from './pages/ChatPage'
+import { LandingPage } from './pages/LandingPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
 import { MemoryPage } from './pages/MemoryPage'
@@ -155,6 +156,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/welcome" element={<LandingPage />} />
       <Route path="/*" element={<AuthenticatedApp />} />
     </Routes>
   )
