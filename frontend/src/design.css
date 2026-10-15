@@ -1343,3 +1343,52 @@
   color: var(--error);
 }
 
+/* --------------------------------------------------------------------------
+ * Profile editor
+ * ----------------------------------------------------------------------- */
+
+.profile__form {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-card);
+}
+
+.profile__avatar {
+  background-color: var(--accent-soft);
+}
+
+/* Keep the success note on the shared tokens so it matches both themes. */
+.profile__alert--success {
+  background-color: var(--success-bg);
+  color: var(--success);
+}
+
+.profile__dirty {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.profile__location-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.profile__location-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
