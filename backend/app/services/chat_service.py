@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.extraction.extractor import GroqActivityExtractor, RecordExtractor
 from app.extraction.persistence import persist_extraction
 from app.extraction.schemas import RecordedOutcome
+from app.guardrails import GuardDecision, IntentClassifier, guarded_run
 from app.llm.client import GroqClient
 from app.memory.change_detector import DetectedChange, MemoryEntry
 from app.memory.confirmation import Decision, MemoryWriter
@@ -335,66 +336,33 @@ class ChatService:
 
         Creates a new conversation if `conversation_id` is not provided.
         """
-        # Early guardrails check - fail closed before any processing
-        if settings.guardrails_enabled and settings.guardrails_mode != "disabled":
-            safety_result = run_safety_rules(message)
-            if safety_result.blocked:
-                # Log the blocked request
-                log.info(
-                    "guardrails_blocked user_id=%s category=%s mode=%s",
-                    str(user.id),
-                    safety_result.category,
-                    settings.guardrails_mode,
-                )
-                # In monitor mode, log but allow through; in enforce mode, block
-                if settings.guardrails_mode == "enforce":
-                    # Create conversation if needed for logging
-                    if conversation_id is None:
-                        conversation = self._conversations.create(user.id, _title_from_message(message))
-                    else:
-                        conversation = self._conversations.get(user.id, conversation_id)
-                    self._conversations.add_message(user.id, conversation.id, MessageRole.USER, message)
-                    self._conversations.add_message(
-                        user.id, conversation.id, MessageRole.ASSISTANT, safety_result.response
-                    )
-                    return {
-                        "conversation_id": conversation.id,
-                        "response": safety_result.response,
-                        "title": conversation.title,
-                        "sources": [],
-                        "actions": [],
-                        "tool_events": [],
-                    }
-                # monitor mode: fall through but log
-                log.warning("guardrails_monitor_mode_allow category=%s", safety_result.category)
-
         user_id = user.id
 
-        # Layer A: deterministic pre-filter + scope classifier (run before any LLM,
-        # tool call, or persistence). If the message matches a guardrails rule,
-        # refuse immediately with a fixed safe reply so the LLM never sees the
-        # offending content. Blocked messages are stored with blocked=true in
-        # metadata, replaced by a neutral placeholder in future context, and
-        # never fed to memory extraction, activity log, or knowledge base.
-        safety = run_safety_rules(message)
-        if safety.blocked:
-            response = safety.response or "I can't help with that request."
-            # Create or get conversation for the blocked exchange
+        # Guardrails gate: deterministic rules + optional LLM intent classifier.
+        # This single choke point runs BEFORE any LLM, tool call, memory
+        # extraction, or persistence. A refusal never reaches the model or tools;
+        # blocked messages are stored with blocked=true and replaced by a neutral
+        # placeholder in future context.
+        guard = self._run_guard(message, user_id)
+
+        if guard.blocked and settings.guardrails_mode == "enforce":
+            response = guard.response or "I can't help with that request."
             if conversation_id is None:
                 conversation = self._conversations.create(user_id, _title_from_message(message))
             else:
                 conversation = self._conversations.get(user_id, conversation_id)
-
             conversation_id = conversation.id
-            # Persist user message with blocked flag in metadata
             self._conversations.add_message(
                 user_id,
                 conversation_id,
                 MessageRole.USER,
                 "[Blocked by safety filter]",
-                metadata={"blocked": True, "original_message": message, "category": safety.category},
+                metadata={
+                    "blocked": True,
+                    "original_message": message,
+                    "category": guard.category,
+                },
             )
-            # Persist assistant refusal response
             self._conversations.add_message(
                 user_id, conversation_id, MessageRole.ASSISTANT, response
             )
@@ -406,6 +374,9 @@ class ChatService:
                 "actions": [],
                 "tool_events": [],
             }
+        if guard.blocked:
+            # monitor mode: log-only, allow through to the model
+            log.warning("guardrails_monitor_mode_allow category=%s", guard.category)
 
         if conversation_id is None:
             conversation = self._conversations.create(user_id, _title_from_message(message))
@@ -444,7 +415,7 @@ class ChatService:
             turn = run_multi_turn(graph_deps, str(user_id), message, context)
         else:
             graph = build_graph(graph_deps)
-            turn = run_turn(graph, str(user_id), message, context)
+            turn = run_turn(graph, str(user_id), message, context, wants_tool=guard.wants_tool)
         response = turn["response"]
 
         # Only append a confirmation AFTER the database writes succeeded. This is
@@ -474,6 +445,40 @@ class ChatService:
     def _build_llm() -> GroqClient:
         """Return a Groq-backed completer configured from project settings."""
         return GroqClient(api_key=settings.groq_api_key, model=settings.groq_model)
+
+    def _run_guard(self, message: str, user_id: UUID) -> GuardDecision:
+        """Gate one message via the single guardrails choke point.
+
+        Deterministic rules always run. The LLM classifier refines the decision
+        when enabled and configured; its failure degrades to the deterministic
+        allow path, so a classifier outage never breaks chat. ``run_turn`` only
+        receives a decision for messages that pass this gate.
+        """
+        if not settings.guardrails_enabled or settings.guardrails_mode == "disabled":
+            return GuardDecision(
+                blocked=False, source="deterministic", reason="guardrails disabled"
+            )
+        return guarded_run(message, str(user_id), self._build_classifier())
+
+    def _build_classifier(self) -> IntentClassifier | None:
+        """Return the LLM intent classifier, or None when disabled/unconfigured.
+
+        Built from project settings so a missing key (or the disabled flag) leaves
+        None and the gate falls back to deterministic-only behaviour. The
+        module-level ``GroqClient`` symbol is referenced so tests can patch it.
+        """
+        if not settings.guard_classifier_enabled:
+            return None
+        try:
+            completer = GroqClient(
+                api_key=settings.groq_api_key,
+                model=settings.guard_model or settings.groq_model,
+                timeout=settings.guard_timeout_s,
+            )
+        except Exception:
+            log.warning("guard classifier could not be initialised", exc_info=True)
+            return None
+        return IntentClassifier(completer, model=settings.guard_model or settings.groq_model)
 
     def _build_extractor(self) -> RecordExtractor | None:
         """Return the dedicated extractor, or None when disabled/unconfigured."""

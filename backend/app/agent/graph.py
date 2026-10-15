@@ -111,9 +111,18 @@ def build_graph(deps: AgentDeps) -> Any:
 
 
 def run_turn(
-    graph: Any, user_id: str, message: str, context: list[dict[str, str]] | None = None
+    graph: Any,
+    user_id: str,
+    message: str,
+    context: list[dict[str, str]] | None = None,
+    wants_tool: bool | None = None,
 ) -> dict[str, Any]:
-    """Run one turn. `user_id` must come from authentication, never from the message."""
+    """Run one turn. `user_id` must come from authentication, never from the message.
+
+    ``wants_tool`` carries the guard classifier's signal: True when live tools may
+    be needed, False to suppress external (web/places) tools, None for legacy
+    regex heuristics.
+    """
     out: dict[str, Any] = graph.invoke(
         {
             "user_id": user_id,
@@ -121,6 +130,7 @@ def run_turn(
             "conversation_context": context or [],
             "tool_results": [],
             "errors": [],
+            "wants_tool": wants_tool,
         }
     )
     return {

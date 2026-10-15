@@ -146,6 +146,15 @@ class Settings(BaseSettings):
     guardrails_mode: str = "enforce"  # "enforce" | "monitor" | "disabled"
     guard_model: str | None = None  # model for LLM classifier (defaults to groq_model)
     guard_canary: str | None = None  # canary token for output guard
+    #: Run the LLM intent classifier as the decision layer on top of the
+    #: deterministic rules. Disable to fall back to deterministic-only gating.
+    guard_classifier_enabled: bool = True
+    #: Per-call timeout (seconds) for the classifier's single Groq completion.
+    guard_timeout_s: float = 1.5
+    #: Below this classifier confidence the decision degrades to the
+    #: deterministic fallback (allow + no cache), i.e. fail-open to current
+    #: behaviour rather than block on a weak signal.
+    guard_conf_threshold: float = 0.6
 
     # Location / weather defaults
     geocoding_provider: str = "nominatim"  # nominatim | google | mapbox

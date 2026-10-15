@@ -79,7 +79,11 @@ def _normalize(message: str) -> str:
     # NFKC normalization handles fullwidth chars, compatibility chars
     normalized = unicodedata.normalize("NFKC", message)
     # Remove zero-width and control characters (except newline/tab)
-    normalized = "".join(ch for ch in normalized if ch == "\n" or ch == "\t" or not unicodedata.category(ch).startswith("C"))
+    normalized = "".join(
+        ch
+        for ch in normalized
+        if ch == "\n" or ch == "\t" or not unicodedata.category(ch).startswith("C")
+    )
     # Collapse whitespace
     normalized = re.sub(r"\s+", " ", normalized)
     return normalized.strip().lower()
@@ -254,6 +258,13 @@ _SAFETY_RULES: list[tuple[str, re.Pattern[str]]] = [
         ),
     ),
 ]
+
+
+def get_safe_reply(category: str | None) -> str:
+    """Return the fixed, safe reply for a category (falls back to off-topic)."""
+    if category and category in _SAFE_REPLIES:
+        return _SAFE_REPLIES[category]
+    return _SAFE_REPLIES["off_topic"]
 
 
 def run_safety_rules(message: str) -> SafetyResult:

@@ -23,6 +23,9 @@ class AgentState(TypedDict, total=False):
     proposed_updates: list[Decision]
     tool_results: Annotated[list[dict[str, Any]], operator.add]  # retrieval + memory write outcomes
     safety: SafetyResult
+    #: Guard classifier signal: True when live tools may be needed. None keeps
+    #: the legacy regex heuristics; False suppresses external (web/places) tools.
+    wants_tool: bool | None
     response: str
     sources: list[dict[str, Any]]
     actions: list[dict[str, Any]]

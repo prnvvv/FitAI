@@ -168,10 +168,20 @@ def wants_personal_data_answer(msg: str) -> bool:
     return bool(_PERSONAL_DATA_QUESTION.search(msg))
 
 
-def _select_tools(msg: str, safety: SafetyResult | None = None) -> list[str]:
-    """Return the names of research tools likely useful for this message."""
+def _select_tools(
+    msg: str, safety: SafetyResult | None = None, wants_tool: bool | None = None
+) -> list[str]:
+    """Return the names of research tools likely useful for this message.
+
+    ``wants_tool`` is the guard classifier's signal. When it is explicitly False
+    the classifier judged no live/external tool is needed, so we suppress the
+    web/places/activity tools (RAG and fitness-record grounding are unaffected).
+    """
     # Guard: if safety check blocked, no tools
     if safety and safety.blocked:
+        return []
+    # Classifier says no live tool is needed for this in-scope message.
+    if wants_tool is False:
         return []
     # Questions about the user's own preferences/facts are answered from the
     # persisted profile/memory/RAG context, never from the web, so retrieval
@@ -316,7 +326,9 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
             log.warning("fitness context failed: %s", exc)
             errs.append(f"fitness_context: {type(exc).__name__}")
 
-    for tool_name in _select_tools(state["user_message"], state.get("safety")):
+    for tool_name in _select_tools(
+        state["user_message"], state.get("safety"), state.get("wants_tool")
+    ):
         if tool_name == "activity_log":
             try:
                 result = get_activity_log(state["user_id"], db_session=deps.db_session)
@@ -404,8 +416,7 @@ def _format_fitness_context(result: dict[str, Any]) -> list[str]:
         active_days = totals.get("active_days")
         per_week = totals.get("sessions_per_week")
         out.append(
-            f"- Completed sessions: {sessions} over {active_days} active days"
-            f" (~{per_week}/week)."
+            f"- Completed sessions: {sessions} over {active_days} active days (~{per_week}/week)."
         )
         planned = totals.get("planned_sessions")
         if planned:
