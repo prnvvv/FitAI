@@ -206,3 +206,94 @@ npm run build        # production build
 From the repository root you can also run `npm run test:backend`,
 `npm run test:frontend`, `npm run type-check:frontend`, and
 `npm run build:frontend`.
+
+## Architecture
+
+FitAI is a **modular monolith**. The frontend talks to FastAPI, and the backend
+coordinates authentication, persistence, memory, RAG, tools, safety, and LLM
+responses in a single deployable application.
+
+Dependency direction: **Router → Schema → Service → Repository → Model**.
+
+Core components:
+
+- **Frontend** — chat UI, persistent history, document upload, profile, progress,
+  and memory controls.
+- **API layer** — FastAPI routers, request validation, auth dependencies, response
+  serialization.
+- **Service layer** — business logic coordinating persistence and AI modules.
+- **Database layer** — SQLAlchemy models, repositories, PostgreSQL, Alembic.
+- **Agent layer** — LangGraph state, nodes, conditional routing, final response.
+- **Memory layer** — fact extraction, temporal classification, change detection,
+  confirmation proposals, historical records.
+- **RAG layer** — document loading, chunking, embeddings, ChromaDB storage and
+  retrieval.
+- **Tools layer** — BMI, BMR, TDEE, calorie/macro calculators, workout and progress
+  analysis.
+- **LLM layer** — Groq client configuration and prompts.
+- **Guardrails & safety layer** — policy checks and tool-execution restrictions.
+
+PostgreSQL (via Supabase) is the authoritative store for structured user data and
+conversations. ChromaDB stores searchable document chunks and embeddings; it is
+not the authoritative source for user profiles, conversations, or memory state.
+
+## API
+
+All endpoints are served under `/api/v1`. Route groups include: `health`, `auth`,
+`chat`, `conversations` (and messages), `profile`, `memory` (and pending
+proposals), `documents`, `workouts`, `progress`, `plan`, `exercises`, `location`,
+and `activity`.
+
+Every protected endpoint verifies the Supabase access token and derives the user
+identity from the verified context; private queries and vector retrieval are
+scoped to the authenticated user. See
+[`docs/api_contracts.md`](docs/api_contracts.md) and the live OpenAPI schema at
+`/docs`.
+
+## Project documentation
+
+- [`docs/backend_setup.md`](docs/backend_setup.md) — backend environment and runbook.
+- [`docs/api_contracts.md`](docs/api_contracts.md) — endpoint contracts.
+- [`docs/extraction.md`](docs/extraction.md) — structured fact extraction.
+- [`AGENTS.MD`](AGENTS.MD) — conventions, ownership, and workflow rules.
+
+## Contributing and ownership
+
+Two developers share this repository with clear boundaries:
+
+- **Person 1 — core backend and persistence:** authentication, CRUD routers,
+  Pydantic schemas, SQLAlchemy models, repositories, migrations, conversation and
+  message persistence, profile/memory persistence, document metadata, and
+  workout/measurement persistence.
+- **Person 2 — AI engine and intelligence:** LangGraph agent, Groq prompts, RAG
+  ingestion and retrieval, ChromaDB operations, memory extraction and temporal
+  reasoning, continuity, fitness tools, and safety policies.
+
+Some files are **shared** and require coordination before changes:
+`backend/app/main.py`, `backend/app/api/deps.py`,
+`backend/app/api/routers/chat.py`, `backend/app/services/chat_service.py`,
+`backend/app/core/config.py`, `backend/pyproject.toml`, `backend/.env.example`,
+and `backend/tests/end_to_end/`.
+
+Workflow: read `AGENTS.MD`, inspect the existing code and tests, keep changes
+small and focused, add or update tests, run formatting/lint/type checks/tests, and
+commit focused one-line messages. Backend dependencies are authoritative in
+`backend/pyproject.toml`; the root `requirements.txt` is a convenience mirror.
+
+## Status and limitations
+
+FitAI is **pre-alpha**. Notable open items:
+
+- The document storage target (`supabase`) is a placeholder; `local` is
+  single-instance only.
+- The live Supabase JWT signing type (symmetric vs asymmetric) should be confirmed
+  against the project.
+- The memory-key taxonomy is provisional.
+- `mypy app` currently crashes on the unmodified tree in some environments (see
+  [`docs/backend_setup.md`](docs/backend_setup.md)).
+- FitAI is not a diagnostic or medical-treatment system.
+
+## License
+
+License reference is pending (see `backend/pyproject.toml`). No open-source
+license has been selected yet.
