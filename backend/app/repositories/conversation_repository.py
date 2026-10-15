@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -52,6 +53,16 @@ class ConversationRepository:
     def delete(self, conversation: Conversation) -> None:
         """Delete a conversation and (by cascade) its messages."""
         self._db.delete(conversation)
+        self._db.flush()
+
+    def touch(self, conversation: Conversation) -> None:
+        """Mark a conversation as active so it sorts to the top of the list.
+
+        ``list_for_user`` orders by ``updated_at``; adding a message does not
+        otherwise modify the conversation row, so the timestamp has to be bumped
+        explicitly for "most recently active first" ordering to hold.
+        """
+        conversation.updated_at = datetime.now(timezone.utc)
         self._db.flush()
 
 

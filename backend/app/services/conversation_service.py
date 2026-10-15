@@ -93,8 +93,11 @@ class ConversationService:
         Shared interface used by Person 2's chat pipeline; ownership is verified
         before the message is written.
         """
-        self.get(user_id, conversation_id)
+        conversation = self.get(user_id, conversation_id)
         message = self._messages.create(conversation_id, role, content, metadata)
+        # A new message means the conversation was just active; bump updated_at so
+        # the chat-history list keeps its "most recently active first" ordering.
+        self._conversations.touch(conversation)
         self._commit()
         self._db.refresh(message)
         return message
