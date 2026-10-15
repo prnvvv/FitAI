@@ -202,6 +202,14 @@ export function PlanPage() {
     return map
   }, [workouts])
 
+  const plannedByDate = useMemo(() => {
+    const map: Record<string, PlannedSession[]> = {}
+    for (const session of planned) {
+      map[session.planned_date] = [...(map[session.planned_date] ?? []), session]
+    }
+    return map
+  }, [planned])
+
   const recentExercises = useMemo(() => {
     const names = workouts.flatMap((session) => (session.sets ?? []).map((set) => set.exercise_name))
     const seen = new Set<string>()
@@ -596,6 +604,22 @@ export function PlanPage() {
 
   const weeks = useMemo(() => (view === 'month' ? monthWeeks(anchor) : []), [view, anchor])
   const weekStripDays = useMemo(() => (view === 'week' ? weekDays(anchor) : []), [view, anchor])
+  const weekHours = useMemo(() => {
+    // Cover 6am–9pm by default, widening so every logged session has a row.
+    let start = 6
+    let end = 21
+    for (const day of weekStripDays) {
+      for (const session of loggedByDate[toDateKey(day)] ?? []) {
+        const hour = new Date(session.performed_at).getHours()
+        if (Number.isNaN(hour)) continue
+        start = Math.min(start, hour)
+        end = Math.max(end, hour)
+      }
+    }
+    const hours: number[] = []
+    for (let hour = start; hour <= end; hour += 1) hours.push(hour)
+    return hours
+  }, [weekStripDays, loggedByDate])
   const stripTabbable =
     weekStripDays.map((day) => toDateKey(day)).find((key) => key === focused) ??
     weekStripDays.map((day) => toDateKey(day)).find((key) => key === selected) ??
@@ -757,37 +781,104 @@ export function PlanPage() {
         <section className="plan__calendar" aria-label={periodTitle(view, anchor)}>
           {view === 'week' && (
             <div className="plan__week" role="group" aria-label="Week" onKeyDown={handleWeekKeyDown}>
-              {weekStripDays.map((day) => {
-                const key = toDateKey(day)
-                const info = summaryByDate[key]
-                const completed = info?.completed_count ?? 0
-                const plannedCount = info?.planned_count ?? 0
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    tabIndex={key === stripTabbable ? 0 : -1}
-                    className={`plan__day ${key === selected ? 'plan__day--selected' : ''} ${
-                      key === today ? 'plan__day--today' : ''
-                    }`}
-                    onClick={() => selectDay(key)}
-                    onFocus={() => setFocused(key)}
-                    aria-pressed={key === selected}
-                    aria-label={`${formatDayLabel(key)}, ${cellStatus(key)}`}
-                  >
-                    <span className="plan__day-weekday">
-                      {day.toLocaleDateString(undefined, { weekday: 'short' })}
-                    </span>
-                    <span className="plan__day-date">{day.getDate()}</span>
-                    <span className="plan__day-marks">
-                      {plannedCount > 0 && (
-                        <span className={`plan__day-mark ${completed >= plannedCount ? 'plan__day-mark--done' : ''}`} />
-                      )}
-                      {completed > 0 && plannedCount === 0 && <span className="plan__day-mark plan__day-mark--done" />}
-                    </span>
-                  </button>
-                )
-              })}
+              <div className="timetable">
+                <div className="timetable__head">
+                  <div className="timetable__gutter-head" aria-hidden="true" />
+                  {weekStripDays.map((day) => {
+                    const key = toDateKey(day)
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        tabIndex={key === stripTabbable ? 0 : -1}
+                        className={`timetable__day ${key === selected ? 'is-selected' : ''} ${
+                          key === today ? 'is-today' : ''
+                        }`}
+                        onClick={() => selectDay(key)}
+                        onFocus={() => setFocused(key)}
+                        aria-pressed={key === selected}
+                        aria-label={`${formatDayLabel(key)}, ${cellStatus(key)}`}
+                      >
+                        <span className="timetable__weekday">
+                          {day.toLocaleDateString(undefined, { weekday: 'short' })}
+                        </span>
+                        <span className="timetable__date">{day.getDate()}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="timetable__allday">
+                  <div className="timetable__gutter-label">All day</div>
+                  {weekStripDays.map((day) => {
+                    const key = toDateKey(day)
+                    const sessions = plannedByDate[key] ?? []
+                    return (
+                      <div key={key} className="timetable__allday-col">
+                        {sessions.map((session, index) => {
+                          const label = plannedSessionLabel(session)
+                          const tone = session.day_type === 'rest' ? 'slate' : timetableTone(label, index)
+                          return (
+                            <button
+                              key={session.id}
+                              type="button"
+                              className="timetable__chip"
+                              data-tone={tone}
+                              onClick={() => selectDay(key)}
+                              title={label}
+                            >
+                              {label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="timetable__body">
+                  <div className="timetable__gutter">
+                    {weekHours.map((hour) => (
+                      <div key={hour} className="timetable__hour">
+                        {hourLabel(hour)}
+                      </div>
+                    ))}
+                  </div>
+                  {weekStripDays.map((day) => {
+                    const key = toDateKey(day)
+                    const logged = loggedByDate[key] ?? []
+                    return (
+                      <div
+                        key={key}
+                        className={`timetable__col ${key === selected ? 'is-selected' : ''}`}
+                      >
+                        {weekHours.map((hour) => (
+                          <div key={hour} className="timetable__cell">
+                            {logged
+                              .filter((session) => new Date(session.performed_at).getHours() === hour)
+                              .map((session) => {
+                                const label = session.name?.trim() || 'Workout'
+                                return (
+                                  <div
+                                    key={session.id}
+                                    className="timetable__event"
+                                    data-tone={timetableTone(label)}
+                                    title={`${label} · ${loggedTimeRange(session)}`}
+                                  >
+                                    <span className="timetable__event-title">{label}</span>
+                                    <span className="timetable__event-time">
+                                      {loggedTimeRange(session)}
+                                    </span>
+                                  </div>
+                                )
+                              })}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           )}
 
@@ -966,6 +1057,53 @@ export function dayTypeLabel(day: DaySummary | undefined): string {
   const type = day?.day_type ?? 'none'
   if (type === 'none') return 'No plan'
   return type.replace('_', ' ')
+}
+
+/**
+ * Timetable helpers.
+ *
+ * Planned sessions only carry a date, so they are shown in an "all day" band;
+ * logged workouts carry a time and are placed in their hour row. Colours are
+ * chosen deterministically from the session label so a given session keeps the
+ * same colour between renders without inventing categories.
+ */
+const TIMETABLE_TONES = ['blue', 'mint', 'lavender', 'pink', 'amber', 'cyan'] as const
+
+export function timetableTone(label: string, index = 0): string {
+  let hash = 0
+  for (let i = 0; i < label.length; i += 1) {
+    hash = (hash * 31 + label.charCodeAt(i)) >>> 0
+  }
+  return TIMETABLE_TONES[(hash + index) % TIMETABLE_TONES.length]
+}
+
+/** A readable name for a planned session, falling back to its type. */
+export function plannedSessionLabel(session: PlannedSession): string {
+  const title = session.title?.trim()
+  if (title) return title
+  if (session.day_type === 'rest') return 'Rest Day'
+  if (session.day_type && session.day_type !== 'none') {
+    return session.day_type.charAt(0).toUpperCase() + session.day_type.slice(1)
+  }
+  return 'Workout'
+}
+
+/** "7:30 AM" or "7:30 AM – 8:15 AM" when a duration is recorded. */
+export function loggedTimeRange(session: WorkoutSession): string {
+  const start = new Date(session.performed_at)
+  if (Number.isNaN(start.getTime())) return ''
+  const fmt = (date: Date) =>
+    date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  if (!session.duration_minutes) return fmt(start)
+  const end = new Date(start.getTime() + session.duration_minutes * 60_000)
+  return `${fmt(start)} – ${fmt(end)}`
+}
+
+/** Short hour label such as "6 AM". */
+export function hourLabel(hour: number): string {
+  const date = new Date()
+  date.setHours(hour, 0, 0, 0)
+  return date.toLocaleTimeString(undefined, { hour: 'numeric' })
 }
 
 /** Shade a year-heatmap day by the number of sessions completed. */

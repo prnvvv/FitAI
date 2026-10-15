@@ -619,7 +619,6 @@
 /* --------------------------------------------------------------------------
  * Chat composer
  * ----------------------------------------------------------------------- */
-
 .composer {
   border: 1px solid var(--border);
   border-radius: 18px;
@@ -643,3 +642,223 @@
 .chat-page__composer {
   padding: 12px 16px 20px;
 }
+
+/* --------------------------------------------------------------------------
+ * Week timetable (Plan page)
+ * ----------------------------------------------------------------------- */
+
+/* Shared tone palette; each element picks its colour via `data-tone`. */
+[data-tone='blue'] {
+  --tone: var(--cat-blue);
+}
+
+[data-tone='mint'] {
+  --tone: var(--cat-mint);
+}
+
+[data-tone='lavender'] {
+  --tone: var(--cat-lavender);
+}
+
+[data-tone='pink'] {
+  --tone: var(--cat-pink);
+}
+
+[data-tone='amber'] {
+  --tone: var(--cat-amber);
+}
+
+[data-tone='cyan'] {
+  --tone: var(--cat-cyan);
+}
+
+[data-tone='slate'] {
+  --tone: var(--text-muted);
+}
+
+.timetable {
+  --tt-row: 46px;
+  --tt-gutter: 60px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background-color: var(--bg-card);
+  overflow: hidden;
+}
+
+.timetable__head,
+.timetable__allday,
+.timetable__body {
+  display: grid;
+  grid-template-columns: var(--tt-gutter) repeat(7, minmax(0, 1fr));
+}
+
+.timetable__head {
+  border-bottom: 1px solid var(--border);
+  background-color: var(--bg-subtle);
+}
+
+.timetable__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 4px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.timetable__day:hover {
+  background-color: var(--bg-hover);
+}
+
+.timetable__day.is-selected {
+  background-color: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+.timetable__day.is-today .timetable__date {
+  color: var(--accent);
+}
+
+.timetable__weekday {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.timetable__date {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.timetable__allday {
+  border-bottom: 1px solid var(--border);
+  min-height: 34px;
+}
+
+.timetable__gutter-label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.timetable__allday-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px 3px;
+  border-left: 1px solid var(--border);
+  min-height: 30px;
+}
+
+.timetable__body {
+  max-height: 56vh;
+  overflow-y: auto;
+}
+
+.timetable__gutter {
+  display: flex;
+  flex-direction: column;
+}
+
+.timetable__hour {
+  height: var(--tt-row);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 2px 8px 0;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+.timetable__col {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+}
+
+.timetable__col.is-selected {
+  background-color: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.timetable__cell {
+  min-height: var(--tt-row);
+  border-top: 1px solid var(--border);
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.timetable__chip {
+  display: block;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--tone) 38%, transparent);
+  border-radius: 6px;
+  background-color: color-mix(in srgb, var(--tone) 20%, transparent);
+  color: color-mix(in srgb, var(--tone) 72%, var(--text-primary));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timetable__chip:hover {
+  border-color: var(--tone);
+}
+
+.timetable__event {
+  padding: 3px 6px;
+  border-radius: 6px;
+  border-left: 3px solid var(--tone);
+  background-color: color-mix(in srgb, var(--tone) 16%, var(--bg-subtle));
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.timetable__event-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timetable__event-time {
+  font-size: 0.625rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .timetable {
+    --tt-gutter: 44px;
+    overflow-x: auto;
+  }
+
+  .timetable__head,
+  .timetable__allday,
+  .timetable__body {
+    grid-template-columns: var(--tt-gutter) repeat(7, minmax(72px, 1fr));
+  }
+}
+
