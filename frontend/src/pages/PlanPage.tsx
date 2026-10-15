@@ -1069,7 +1069,7 @@ export function dayTypeLabel(day: DaySummary | undefined): string {
  */
 const TIMETABLE_TONES = ['blue', 'mint', 'lavender', 'pink', 'amber', 'cyan'] as const
 
-export function timetableTone(label: string, index = 0): string {
+function timetableTone(label: string, index = 0): string {
   let hash = 0
   for (let i = 0; i < label.length; i += 1) {
     hash = (hash * 31 + label.charCodeAt(i)) >>> 0
@@ -1078,7 +1078,7 @@ export function timetableTone(label: string, index = 0): string {
 }
 
 /** A readable name for a planned session, falling back to its type. */
-export function plannedSessionLabel(session: PlannedSession): string {
+function plannedSessionLabel(session: PlannedSession): string {
   const title = session.title?.trim()
   if (title) return title
   if (session.day_type === 'rest') return 'Rest Day'
@@ -1089,7 +1089,7 @@ export function plannedSessionLabel(session: PlannedSession): string {
 }
 
 /** "7:30 AM" or "7:30 AM – 8:15 AM" when a duration is recorded. */
-export function loggedTimeRange(session: WorkoutSession): string {
+function loggedTimeRange(session: WorkoutSession): string {
   const start = new Date(session.performed_at)
   if (Number.isNaN(start.getTime())) return ''
   const fmt = (date: Date) =>
@@ -1100,7 +1100,7 @@ export function loggedTimeRange(session: WorkoutSession): string {
 }
 
 /** Short hour label such as "6 AM". */
-export function hourLabel(hour: number): string {
+function hourLabel(hour: number): string {
   const date = new Date()
   date.setHours(hour, 0, 0, 0)
   return date.toLocaleTimeString(undefined, { hour: 'numeric' })

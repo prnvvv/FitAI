@@ -288,6 +288,21 @@ export function ProgressPage() {
   const [savedNote, setSavedNote] = useState<string | null>(null)
   const [undo, setUndo] = useState<(() => void) | null>(null)
 
+  const applyProfile = (profile: Profile) => {
+    if (profile.preferences?.units === 'imperial') setUnits('imperial')
+    if (profile.age) setAge(profile.age)
+    else if (profile.date_of_birth) {
+      const dob = new Date(profile.date_of_birth)
+      const now = new Date()
+      let years = now.getFullYear() - dob.getFullYear()
+      const hadBirthday =
+        now.getMonth() > dob.getMonth() ||
+        (now.getMonth() === dob.getMonth() && now.getDate() >= dob.getDate())
+      if (!hadBirthday) years -= 1
+      setAge(years)
+    }
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -313,21 +328,6 @@ export function ProgressPage() {
       setLoading(false)
     }
   }, [])
-
-  const applyProfile = (profile: Profile) => {
-    if (profile.preferences?.units === 'imperial') setUnits('imperial')
-    if (profile.age) setAge(profile.age)
-    else if (profile.date_of_birth) {
-      const dob = new Date(profile.date_of_birth)
-      const now = new Date()
-      let years = now.getFullYear() - dob.getFullYear()
-      const hadBirthday =
-        now.getMonth() > dob.getMonth() ||
-        (now.getMonth() === dob.getMonth() && now.getDate() >= dob.getDate())
-      if (!hadBirthday) years -= 1
-      setAge(years)
-    }
-  }
 
   useEffect(() => {
     void load()
