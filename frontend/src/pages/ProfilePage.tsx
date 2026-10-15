@@ -18,6 +18,8 @@ const EMPTY_PROFILE: Partial<Profile> = {
     assistant_should_know: '',
     preferred_tone: '',
     units: 'metric',
+    use_memory: true,
+    reference_past_chats: true,
   },
 }
 
@@ -159,6 +161,29 @@ export function ProfilePage() {
             <option value="imperial">Imperial (lb, ft/in)</option>
           </select>
         </label>
+
+        <div className="profile__toggle-group">
+          <span className="profile__toggle-heading">Memory &amp; continuity</span>
+          <label className="profile__toggle">
+            <input
+              type="checkbox"
+              checked={profile.preferences?.use_memory ?? true}
+              onChange={(e) => handlePreferenceChange('use_memory', e.target.checked)}
+            />
+            <span>Use my saved facts and fitness memory</span>
+          </label>
+          <label className="profile__toggle">
+            <input
+              type="checkbox"
+              checked={profile.preferences?.reference_past_chats ?? true}
+              onChange={(e) => handlePreferenceChange('reference_past_chats', e.target.checked)}
+            />
+            <span>Reference past chats</span>
+          </label>
+          <small className="profile__hint">
+            These control what FitAI recalls from your history in every reply.
+          </small>
+        </div>
 
         <div className="profile__row">
           <label className="profile__field">

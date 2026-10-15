@@ -44,6 +44,21 @@ def test_groq_client_json_mode(mock_groq_class: MagicMock) -> None:
     assert call_kwargs["response_format"] == {"type": "json_object"}
 
 
+@patch("app.llm.client.Groq")
+def test_groq_client_max_tokens_only_when_set(mock_groq_class: MagicMock) -> None:
+    mock_client = MagicMock()
+    mock_groq_class.return_value = mock_client
+    mock_client.chat.completions.create.return_value.choices[0].message.content = "{}"
+
+    # Unset by default: the parameter must not be sent.
+    GroqClient(api_key="test-key")("system", "user")
+    assert "max_tokens" not in mock_client.chat.completions.create.call_args.kwargs
+
+    # When set (as the guard classifier does), it caps the completion.
+    GroqClient(api_key="test-key", max_tokens=200)("system", "user")
+    assert mock_client.chat.completions.create.call_args.kwargs["max_tokens"] == 200
+
+
 @patch("app.llm.client.os.getenv")
 def test_groq_client_reads_env(mock_getenv: MagicMock) -> None:
     mock_getenv.return_value = "env-key"

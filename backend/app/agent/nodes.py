@@ -20,6 +20,7 @@ from app.memory.confirmation import (
     apply_decisions,
     decide_all,
 )
+from app.memory.continuity import ContinuityContext, format_continuity
 from app.memory.extractor import TextCompleter, extract_facts
 from app.safety import SafetyResult, run_safety_rules
 from app.tools.activity import get_activity_log
@@ -35,6 +36,9 @@ from app.tools.tool_definitions import (
 from .state import AgentState
 
 log = logging.getLogger(__name__)
+
+#: Character budget (~400 tokens) for the pinned profile/memory context block.
+PINNED_CONTEXT_MAX_CHARS = 1600
 
 
 # ---- output guard ---------------------------------------------------------------
@@ -97,6 +101,16 @@ class FitnessReader(Protocol):
     def get_fitness_context(self, user_id: str) -> dict[str, Any]: ...
 
 
+class ContinuityReader(Protocol):
+    """Owner-scoped cross-chat recall: relevant memories + past-chat summaries.
+
+    Implementations enforce the user's toggles server-side and must never return
+    another user's data. A failure is treated as "no recall" by the caller.
+    """
+
+    def recall(self, user_id: str, query: str) -> ContinuityContext: ...
+
+
 class Tool(Protocol):
     """A callable research tool returning a JSON-serialisable result dict."""
 
@@ -111,6 +125,8 @@ class AgentDeps:
     profile_reader: ProfileReader | None = None
     retriever: Retriever | None = None
     fitness_reader: FitnessReader | None = None
+    #: Owner-scoped cross-chat recall (semantic memories + past-chat summaries).
+    continuity: ContinuityReader | None = None
     tools: Mapping[str, Tool] = dc_field(default_factory=dict)
     db_session: object | None = None
     policy: ConfirmationPolicy = dc_field(default_factory=ConfirmationPolicy)
@@ -168,10 +184,20 @@ def wants_personal_data_answer(msg: str) -> bool:
     return bool(_PERSONAL_DATA_QUESTION.search(msg))
 
 
-def _select_tools(msg: str, safety: SafetyResult | None = None) -> list[str]:
-    """Return the names of research tools likely useful for this message."""
+def _select_tools(
+    msg: str, safety: SafetyResult | None = None, wants_tool: bool | None = None
+) -> list[str]:
+    """Return the names of research tools likely useful for this message.
+
+    ``wants_tool`` is the guard classifier's signal. When it is explicitly False
+    the classifier judged no live/external tool is needed, so we suppress the
+    web/places/activity tools (RAG and fitness-record grounding are unaffected).
+    """
     # Guard: if safety check blocked, no tools
     if safety and safety.blocked:
+        return []
+    # Classifier says no live tool is needed for this in-scope message.
+    if wants_tool is False:
         return []
     # Questions about the user's own preferences/facts are answered from the
     # persisted profile/memory/RAG context, never from the web, so retrieval
@@ -263,6 +289,25 @@ def _load_profile(state: AgentState, deps: AgentDeps) -> dict[str, object] | Non
         return None
 
 
+def _recall_continuity(state: AgentState, deps: AgentDeps) -> tuple[str, ContinuityContext]:
+    """Return the formatted cross-chat recall block and the underlying context.
+
+    Recall is best-effort: any reader failure (Chroma down, etc.) yields no
+    recalled context rather than breaking the turn. The context is returned so
+    the caller can record a compact activity event without re-querying.
+    """
+    if deps.continuity is None or not state.get("user_id"):
+        return "", ContinuityContext()
+    try:
+        context = deps.continuity.recall(state["user_id"], state.get("user_message", ""))
+    except Exception:
+        log.warning("continuity recall failed", exc_info=True)
+        return "", ContinuityContext()
+    if not context or context.is_empty:
+        return "", ContinuityContext()
+    return format_continuity(context), context
+
+
 def detect_changes_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     if _blocked(state) or not state.get("user_id"):
         return {}
@@ -316,7 +361,9 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
             log.warning("fitness context failed: %s", exc)
             errs.append(f"fitness_context: {type(exc).__name__}")
 
-    for tool_name in _select_tools(state["user_message"], state.get("safety")):
+    for tool_name in _select_tools(
+        state["user_message"], state.get("safety"), state.get("wants_tool")
+    ):
         if tool_name == "activity_log":
             try:
                 result = get_activity_log(state["user_id"], db_session=deps.db_session)
@@ -353,6 +400,13 @@ def _format_profile(mem: dict[str, MemoryEntry], profile: dict[str, object] | No
     if profile:
         lines.append("profile: " + ", ".join(f"{k}={v}" for k, v in profile.items() if v))
     return "\n".join(lines) if lines else "(none)"
+
+
+def _truncate(text: str, max_chars: int) -> str:
+    """Bound a prompt section to a rough character budget (keeps it deterministic)."""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars].rstrip() + " …"
 
 
 def _build_sources(tool_results: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -404,8 +458,7 @@ def _format_fitness_context(result: dict[str, Any]) -> list[str]:
         active_days = totals.get("active_days")
         per_week = totals.get("sessions_per_week")
         out.append(
-            f"- Completed sessions: {sessions} over {active_days} active days"
-            f" (~{per_week}/week)."
+            f"- Completed sessions: {sessions} over {active_days} active days (~{per_week}/week)."
         )
         planned = totals.get("planned_sessions")
         if planned:
@@ -519,11 +572,18 @@ def _build_actions(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     ctx = state.get("conversation_context", [])[-10:]
     history = "\n".join(f"{m.get('role', 'user')}: {str(m.get('content', ''))[:500]}" for m in ctx)
-    mem = state.get("retrieved_memory") or {}
-    profile = state.get("retrieved_profile")
-    profile_text = _format_profile(mem, profile)
+    # Pinned core context must be present on EVERY run, not only question turns:
+    # the graph skips retrieve_context_node for non-question messages, so load
+    # profile and current memory here when that node did not populate them. This
+    # is what stops FitAI from "forgetting" the user's facts between turns.
+    mem, _ = _load_memory(state, deps)
+    if mem is None:
+        mem = {}
+    profile = _load_profile(state, deps)
+    profile_text = _truncate(_format_profile(mem, profile), PINNED_CONTEXT_MAX_CHARS)
     sources = _build_sources(state.get("tool_results", []))
     tool_context = _format_tool_context(state.get("tool_results", []), sources)
+    continuity_text, continuity_ctx = _recall_continuity(state, deps)
 
     # Inject authoritative date/time and, if available, the user's timezone so the
     # model never guesses the date.
@@ -538,7 +598,8 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         f"Conversation so far:\n{history or '(none)'}\n\nUser profile and memory:\n{profile_text}\n\n"
         f"Today is {today}.{timezone_hint}\n\n"
         f"Live research:\n{tool_context}\n\n"
-        "If a tool returned an error or no results, say so honestly.\n\n"
+        + (f"Recalled from earlier:\n{continuity_text}\n\n" if continuity_text else "")
+        + "If a tool returned an error or no results, say so honestly.\n\n"
         f"User message:\n{state['user_message']}"
     )
 
@@ -594,4 +655,16 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         if i in used_indices or not used_indices
     ]
     actions = _build_actions(state.get("tool_results", []))
-    return {"response": text, "sources": used_sources, "actions": actions}
+    result: dict[str, Any] = {"response": text, "sources": used_sources, "actions": actions}
+    # Surface recall as a compact activity event (counts only, never content) so
+    # the client can label the turn; it is additive via the tool_results reducer.
+    if not continuity_ctx.is_empty:
+        result["tool_results"] = [
+            {
+                "tool": "continuity",
+                "status": "recalled",
+                "memories": len(continuity_ctx.memories),
+                "past_chats": len(continuity_ctx.past_chats),
+            }
+        ]
+    return result

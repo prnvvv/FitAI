@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Check, Copy, Database, Sparkles, Wrench, X, AlertCircle, ExternalLink } from 'lucide-react'
+import { Check, Copy, Database, History, Sparkles, Wrench, X, AlertCircle, ExternalLink } from 'lucide-react'
 import { api } from '../../services/api'
 import type { ActionItem, Message, Source, ToolEvent } from '../../types'
 
@@ -78,12 +78,21 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     if (t === 'get_datetime') return 'Checked date and time'
     if (t === 'multi_agent') return `Research mode: ${event.route ?? 'mixed'}`
     if (t === 'router') return `Route: ${event.route ?? 'mixed'}`
+    if (t === 'continuity') {
+      const memories = Number(event.memories ?? 0)
+      const pastChats = Number(event.past_chats ?? 0)
+      const parts: string[] = []
+      if (memories) parts.push(`${memories} saved fact${memories === 1 ? '' : 's'}`)
+      if (pastChats) parts.push(`${pastChats} earlier chat${pastChats === 1 ? '' : 's'}`)
+      return parts.length ? `Recalled ${parts.join(' and ')}` : 'Recalled earlier context'
+    }
     return `Used ${t}`
   }
 
   const eventIcon = (event: ToolEvent) => {
     if (event.tool === 'memory_write') return <Database size={12} />
     if (event.tool === 'retriever') return <Sparkles size={12} />
+    if (event.tool === 'continuity') return <History size={12} />
     if (['web_search', 'read_webpage', 'news_search', 'multi_agent', 'router'].includes(event.tool)) {
       return <ExternalLink size={12} />
     }

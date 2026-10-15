@@ -19,6 +19,7 @@ from app.agent.nodes import (
 )
 from app.agent.state import AgentState
 from app.memory.change_detector import MemoryEntry
+from app.memory.continuity import ContinuityContext
 from app.safety import SafetyResult
 
 
@@ -27,12 +28,14 @@ def _deps(
     fake_memory_reader: Any,
     fake_memory_writer: Any,
     fake_retriever: Any | None = None,
+    continuity: Any | None = None,
 ) -> AgentDeps:
     return AgentDeps(
         llm=fake_llm,
         memory_reader=fake_memory_reader,
         memory_writer=fake_memory_writer,
         retriever=fake_retriever,
+        continuity=continuity,
         clock=lambda: datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
     )
 
@@ -170,6 +173,85 @@ def test_generate_response_uses_tool_loop_when_available(
     assert result["response"] == "tool-loop answer"
     assert llm.tools_passed is not None
     assert any(t["function"]["name"] == "nearby_gyms" for t in llm.tools_passed)
+
+
+def test_generate_response_pins_memory_when_retrieve_node_skipped(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    """Pinned core memory must appear even when retrieve_context_node was skipped.
+
+    Regression: non-question turns route straight to generate_response, so the
+    retrieval node never sets retrieved_memory/retrieved_profile. The generator
+    must still load them so FitAI doesn't "forget" facts between turns.
+    """
+    fake_llm.response = "Here's your plan."
+    fake_memory_reader.memory = {"weight": MemoryEntry(key="weight", value=70, unit="kg")}
+    state: AgentState = {
+        "user_message": "Give me a 4 day routine",
+        "user_id": "user-1",
+        "conversation_context": [],
+        "tool_results": [],
+        "errors": [],
+    }
+    deps = _deps(fake_llm, fake_memory_reader, fake_memory_writer)
+    generate_response(state, deps)
+    _, prompt, _ = fake_llm.calls[-1]
+    assert "User profile and memory:" in prompt
+    assert "weight: 70" in prompt
+    assert "kg" in prompt
+
+
+class _FakeContinuityReader:
+    """Returns a fixed recall context and records the query."""
+
+    def __init__(self, memories: list[str], past_chats: list[str]) -> None:
+        self._context = ContinuityContext(memories=memories, past_chats=past_chats)
+        self.calls: list[tuple[str, str]] = []
+
+    def recall(self, user_id: str, query: str) -> ContinuityContext:
+        self.calls.append((user_id, query))
+        return self._context
+
+
+def test_generate_response_injects_continuity_and_emits_activity(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    fake_llm.response = "Based on your earlier cut, keep protein high."
+    reader = _FakeContinuityReader(["weight: 72 kg"], ["Cutting plan: cut to 72 kg"])
+    state: AgentState = {
+        "user_message": "What protein target fits my cut?",
+        "user_id": "user-1",
+        "conversation_context": [],
+        "tool_results": [],
+        "errors": [],
+    }
+    result = generate_response(
+        state, _deps(fake_llm, fake_memory_reader, fake_memory_writer, continuity=reader)
+    )
+    _, prompt, _ = fake_llm.calls[-1]
+    assert "Recalled from earlier:" in prompt
+    assert "weight: 72 kg" in prompt
+    assert "Cutting plan" in prompt
+    events = result.get("tool_results", [])
+    assert events == [{"tool": "continuity", "status": "recalled", "memories": 1, "past_chats": 1}]
+
+
+def test_generate_response_omits_continuity_event_when_empty(
+    fake_llm: Any, fake_memory_reader: Any, fake_memory_writer: Any
+) -> None:
+    fake_llm.response = "Sure."
+    reader = _FakeContinuityReader([], [])
+    state: AgentState = {
+        "user_message": "Give me a plan",
+        "user_id": "user-1",
+        "conversation_context": [],
+        "tool_results": [],
+        "errors": [],
+    }
+    result = generate_response(
+        state, _deps(fake_llm, fake_memory_reader, fake_memory_writer, continuity=reader)
+    )
+    assert "tool_results" not in result
 
 
 # ---- workout/progress context wiring -----------------------------------------

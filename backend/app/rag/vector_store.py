@@ -1,7 +1,8 @@
 """Persistent ChromaDB collections: indexing, search, filtering, deletion.
 
-Two collections: curated knowledge (shared) and user documents (owner-scoped).
-Every user-collection operation requires `owner_id` and is filtered by it.
+Three collections: curated knowledge (shared), user documents (owner-scoped),
+and user continuity (owner-scoped: memory facts + per-conversation summaries).
+Every owner-scoped collection operation requires `owner_id` and is filtered by it.
 """
 
 from __future__ import annotations
@@ -22,6 +23,10 @@ log = logging.getLogger(__name__)
 
 KNOWLEDGE_COLLECTION = "fitness_knowledge"
 USER_COLLECTION = "user_documents"
+#: Owner-scoped collection holding memory facts and conversation summaries for
+#: cross-chat recall. Never mixed with document retrieval.
+CONTINUITY_COLLECTION = "user_continuity"
+_OWNER_SCOPED = (USER_COLLECTION, CONTINUITY_COLLECTION)
 _BATCH = 100
 
 
@@ -65,7 +70,7 @@ class VectorStore:
         self._cols: dict[str, Any] = {}
 
     def _col(self, name: str) -> Any:
-        if name not in (KNOWLEDGE_COLLECTION, USER_COLLECTION):
+        if name not in (KNOWLEDGE_COLLECTION, USER_COLLECTION, CONTINUITY_COLLECTION):
             raise ValueError(f"unknown collection {name!r}")
         if name not in self._cols:
             try:
@@ -88,18 +93,18 @@ class VectorStore:
     def _scope(
         collection: str, owner_id: str | None, where: FilterDict | None
     ) -> FilterDict | None:
-        if collection == USER_COLLECTION:
+        if collection in _OWNER_SCOPED:
             if not owner_id or not owner_id.strip():
-                raise PermissionError("owner_id is required for user documents")
+                raise PermissionError(f"owner_id is required for {collection}")
             return _and({"owner_id": owner_id}, where)
         return where or None
 
     def add_chunks(
         self, collection: str, chunks: Sequence[Chunk], owner_id: str | None = None
     ) -> int:
-        """Upsert chunks. User chunks must carry metadata owner_id == owner_id."""
+        """Upsert chunks. Owner-scoped chunks must carry metadata owner_id == owner_id."""
         self._scope(collection, owner_id, None)
-        if collection == USER_COLLECTION and any(
+        if collection in _OWNER_SCOPED and any(
             c.metadata.get("owner_id") != owner_id for c in chunks
         ):
             raise PermissionError("chunk owner_id does not match owner_id")
@@ -209,6 +214,26 @@ class VectorStore:
         except Exception as exc:
             raise VectorStoreError(f"chunk lookup failed: {exc}") from exc
         return [str(text or "") for text in (result.get("documents") or [])]
+
+    def list_vectors(
+        self, collection: str, owner_id: str | None = None, where: FilterDict | None = None
+    ) -> list[SearchHit]:
+        """Return metadata-only hits for a (filtered) owner-scoped collection.
+
+        Used to reconcile owner-scoped vectors (e.g. drop continuity vectors for
+        facts that no longer exist). Never returns chunk text.
+        """
+        scoped = self._scope(collection, owner_id, where)
+        col = self._col(collection)
+        try:
+            result = col.get(where=scoped, include=["metadatas"])
+        except Exception as exc:
+            raise VectorStoreError(f"vector listing failed: {exc}") from exc
+        ids = result.get("ids") or []
+        metadatas = result.get("metadatas") or []
+        return [
+            SearchHit(str(i), "", dict(m or {}), 0.0) for i, m in zip(ids, metadatas, strict=False)
+        ]
 
     def all_chunk_owners(self, collection: str) -> list[tuple[str, str, str]]:
         """Return ``(chunk_id, doc_id, owner_id)`` for every stored vector.

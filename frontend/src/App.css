@@ -1802,6 +1802,36 @@
   box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
+.profile__toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.profile__toggle-heading {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.profile__toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.profile__toggle input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .profile__alert {
   padding: 10px 12px;
   border-radius: 8px;

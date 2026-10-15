@@ -70,6 +70,8 @@ export interface ToolEvent {
   places?: number
   location?: string
   route?: string
+  memories?: number
+  past_chats?: number
   [key: string]: unknown
 }
 
@@ -140,6 +142,8 @@ export interface ProfilePreferences {
   assistant_should_know?: string | null
   preferred_tone?: string | null
   units?: 'metric' | 'imperial' | null
+  use_memory?: boolean | null
+  reference_past_chats?: boolean | null
 }
 
 export interface NavItem {
