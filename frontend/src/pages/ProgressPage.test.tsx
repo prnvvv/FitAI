@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { summarise } from './ProgressPage'
 
@@ -45,7 +46,11 @@ async function renderProgress(overrides: Record<string, unknown> = {}) {
   })
   const module = await import('./ProgressPage')
   const user = userEvent.setup()
-  render(<module.ProgressPage />)
+  render(
+    <MemoryRouter>
+      <module.ProgressPage />
+    </MemoryRouter>,
+  )
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Progress' })).toBeInTheDocument())
   return { spies, user }
 }

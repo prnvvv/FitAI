@@ -1,5 +1,6 @@
 import { AlertCircle, Loader2, Plus, Ruler, Scale, Trash2, TrendingUp, Undo2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, toMessage, validationIssues } from '../services/api'
 import type { BmiPoint, DerivedMetrics, Measurement, Profile } from '../types'
 import {
@@ -204,11 +205,70 @@ interface DraftMetric {
   unit: string
 }
 
+/** A tiny trend line built from real measurements; hidden with fewer than two. */
+function Sparkline({ values, tone }: { values: number[]; tone: string }) {
+  if (values.length < 2) return null
+  const width = 100
+  const height = 28
+  const pad = 3
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const step = (width - pad * 2) / (values.length - 1)
+  const points = values
+    .map((value, index) => {
+      const x = pad + index * step
+      const y = pad + (height - pad * 2) * (1 - (value - min) / span)
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    .join(' ')
+  return (
+    <svg
+      className="sparkline"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      data-tone={tone}
+      aria-hidden="true"
+    >
+      <polyline className="sparkline__line" points={points} />
+    </svg>
+  )
+}
+
+interface MetricCardData {
+  key: string
+  label: string
+  /** Value and unit in one string so the card never splits the number out. */
+  display: string
+  change: number | null
+  tone: string
+  values: number[]
+}
+
+/** Compact overview tile: label, latest value, change and a sparkline. */
+function MetricCard({ card }: { card: MetricCardData }) {
+  return (
+    <div className="progress__metric" data-tone={card.tone}>
+      <div className="progress__metric-head">
+        <span className="progress__metric-label">{card.label}</span>
+        {card.change !== null && card.change !== 0 && (
+          <span className={`progress__metric-change ${card.change > 0 ? 'is-up' : 'is-down'}`}>
+            {card.change > 0 ? '▲' : '▼'} {Math.abs(card.change).toFixed(1)}
+          </span>
+        )}
+      </div>
+      <div className="progress__metric-value">{card.display}</div>
+      <Sparkline values={card.values} tone={card.tone} />
+    </div>
+  )
+}
+
 export function ProgressPage() {
   const [metric, setMetric] = useState<MetricKey>('weight')
   const [range, setRange] = useState<Range>('30d')
   const [units, setUnits] = useState<'metric' | 'imperial'>('metric')
   const [age, setAge] = useState<number | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
 
   const [series, setSeries] = useState<Record<string, SeriesPoint[]>>({})
   const [bmiPoints, setBmiPoints] = useState<SeriesPoint[]>([])
@@ -240,6 +300,7 @@ export function ProgressPage() {
         api.derivedMetrics(),
       ])
       applyProfile(profile)
+      setProfile(profile)
       setSeries({ weight: toPoints(weights), height: toPoints(heights) })
       setHasHeight(heights.length > 0)
       const bmiSeries = bmiToPoints(bmi)
@@ -390,12 +451,76 @@ export function ProgressPage() {
 
   const bmiLabel = latestBmi === null ? null : age !== null && age < 18 ? null : BMI_CATEGORY_LABELS[bmiCategory(latestBmi)]
 
+  const metricCards = useMemo<MetricCardData[]>(() => {
+    const weightSeries = series.weight ?? []
+    const heightSeries = series.height ?? []
+    const weightSummary = summarise(weightSeries.map((point) => point.value))
+    const heightSummary = summarise(heightSeries.map((point) => point.value))
+    const imperial = units === 'imperial'
+
+    const weightDisplay =
+      weightSummary.latest === null
+        ? '—'
+        : `${(imperial ? kgToLb(weightSummary.latest) : weightSummary.latest).toFixed(1)} ${imperial ? 'lb' : 'kg'}`
+    const heightDisplay =
+      heightSummary.latest === null
+        ? '—'
+        : `${(imperial ? heightSummary.latest / 2.54 : heightSummary.latest).toFixed(1)} ${imperial ? 'in' : 'cm'}`
+
+    return [
+      {
+        key: 'weight',
+        label: 'Weight',
+        display: weightDisplay,
+        change:
+          weightSummary.change === null
+            ? null
+            : imperial
+              ? kgToLb(weightSummary.change)
+              : weightSummary.change,
+        tone: 'blue',
+        values: weightSeries.map((point) => point.value),
+      },
+      {
+        key: 'height',
+        label: 'Height',
+        display: heightDisplay,
+        change:
+          heightSummary.change === null
+            ? null
+            : imperial
+              ? heightSummary.change / 2.54
+              : heightSummary.change,
+        tone: 'cyan',
+        values: heightSeries.map((point) => point.value),
+      },
+      {
+        key: 'bmi',
+        label: 'BMI',
+        display: latestBmi === null ? '—' : `${latestBmi.toFixed(1)} BMI`,
+        change: null,
+        tone: 'amber',
+        values: bmiPoints.map((point) => point.value),
+      },
+      {
+        key: 'body_fat_percent',
+        label: 'Body fat',
+        display: '—',
+        change: null,
+        tone: 'pink',
+        values: [],
+      },
+    ]
+  }, [series, units, latestBmi, bmiPoints])
+
   return (
     <div className="page page--progress">
+      <div className="progress__grid">
+        <div className="progress__analytics">
       <header className="page__header page__header--row">
         <div>
           <h1>Progress</h1>
-          <p>Track how you're doing over time.</p>
+          <p>Track your fitness journey.</p>
         </div>
         <div className="progress__header-actions">
           <div className="progress__range" role="tablist" aria-label="Range">
@@ -601,83 +726,71 @@ export function ProgressPage() {
             </div>
           )}
 
-          <div className="progress__stats">
-            <div className="progress__card">
-              <div className="progress__label">Latest</div>
-              <div className="progress__value">
-                {summary.latest ?? '—'} {summary.latest !== null && displayUnit && <span className="progress__unit">{displayUnit}</span>}
-              </div>
-            </div>
-            <div className="progress__card">
-              <div className="progress__label">Change</div>
-              <div
-                className={`progress__value ${
-                  summary.change != null && summary.change > 0
-                    ? 'progress__value--up'
-                    : summary.change != null && summary.change < 0
-                      ? 'progress__value--down'
-                      : ''
-                }`}
-              >
-                {summary.change != null
-                  ? `${summary.change > 0 ? '+' : ''}${summary.change} ${displayUnit}`
-                  : '—'}
-              </div>
-            </div>
-            <div className="progress__card">
-              <div className="progress__label">Range</div>
-              <div className="progress__value">{summary.rangeLabel}</div>
-            </div>
-            <div className="progress__card">
-              <div className="progress__label">Entries</div>
-              <div className="progress__value">{summary.entries}</div>
-            </div>
+          <div className="progress__metrics">
+            {metricCards.map((card) => (
+              <MetricCard key={card.key} card={card} />
+            ))}
           </div>
 
-          <ProgressChart
-            points={displayPoints}
-            unit={displayUnit}
-            label={metric === 'bmi' ? 'BMI' : (METRIC_BY_KEY[metric].label ?? metric)}
-          />
+          <div className="progress__panels">
+            <section className="progress__panel">
+              <h3 className="plan__section-label">
+                <TrendingUp size={14} />
+                {metric === 'bmi' ? 'BMI' : (METRIC_BY_KEY[metric].label ?? metric)} trend
+              </h3>
+              <ProgressChart
+                points={displayPoints}
+                unit={displayUnit}
+                label={metric === 'bmi' ? 'BMI' : (METRIC_BY_KEY[metric].label ?? metric)}
+              />
+              <p className="progress__panel-meta">
+                {summary.entries === 0
+                  ? 'No entries in this range yet.'
+                  : `${summary.entries} ${summary.entries === 1 ? 'entry' : 'entries'} · ${summary.rangeLabel} ${displayUnit}`.trim()}
+              </p>
+            </section>
 
-          {derived && (
-            <div className="progress__derived">
+            <section className="progress__panel">
               <h3 className="plan__section-label">
                 <TrendingUp size={14} />
                 Training
               </h3>
-              <div className="progress__derived-grid">
-                <div className="progress__card">
-                  <div className="progress__label">Sessions</div>
-                  <div className="progress__value">{derived.sessions_completed}</div>
-                </div>
-                <div className="progress__card">
-                  <div className="progress__label">Active days</div>
-                  <div className="progress__value">{derived.active_days}</div>
-                </div>
-                <div className="progress__card">
-                  <div className="progress__label">Volume</div>
-                  <div className="progress__value">{derived.total_volume_kg.toLocaleString()} kg</div>
-                </div>
-                <div className="progress__card">
-                  <div className="progress__label">Current streak</div>
-                  <div className="progress__value">{derived.current_streak_days} d</div>
-                </div>
-                <div className="progress__card">
-                  <div className="progress__label">Longest streak</div>
-                  <div className="progress__value">{derived.longest_streak_days} d</div>
-                </div>
-                <div className="progress__card">
-                  <div className="progress__label">Planned done</div>
-                  <div className="progress__value">
-                    {derived.planned_sessions === 0
-                      ? '—'
-                      : `${Math.round((derived.planned_completion_rate ?? 0) * 100)}%`}
+              {derived ? (
+                <div className="progress__derived-grid">
+                  <div className="progress__card">
+                    <div className="progress__label">Sessions</div>
+                    <div className="progress__value">{derived.sessions_completed}</div>
+                  </div>
+                  <div className="progress__card">
+                    <div className="progress__label">Active days</div>
+                    <div className="progress__value">{derived.active_days}</div>
+                  </div>
+                  <div className="progress__card">
+                    <div className="progress__label">Volume</div>
+                    <div className="progress__value">{derived.total_volume_kg.toLocaleString()} kg</div>
+                  </div>
+                  <div className="progress__card">
+                    <div className="progress__label">Current streak</div>
+                    <div className="progress__value">{derived.current_streak_days} d</div>
+                  </div>
+                  <div className="progress__card">
+                    <div className="progress__label">Longest streak</div>
+                    <div className="progress__value">{derived.longest_streak_days} d</div>
+                  </div>
+                  <div className="progress__card">
+                    <div className="progress__label">Planned done</div>
+                    <div className="progress__value">
+                      {derived.planned_sessions === 0
+                        ? '—'
+                        : `${Math.round((derived.planned_completion_rate ?? 0) * 100)}%`}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
+              ) : (
+                <p className="progress__panel-meta">No training data yet.</p>
+              )}
+            </section>
+          </div>
 
           <h3 className="plan__section-label">History</h3>
           {filtered.length === 0 ? (
@@ -728,6 +841,46 @@ export function ProgressPage() {
           )}
         </>
       )}
+        </div>
+
+        <aside className="progress__side">
+          <section className="progress__panel progress__profile">
+            <h2 className="plan__section-label">Profile</h2>
+            <p className="progress__profile-sub">Tell FitAI what matters to you.</p>
+            <div className="progress__profile-id">
+              <span className="progress__avatar" aria-hidden="true">
+                {profile?.preferences?.display_name?.trim()?.charAt(0)?.toUpperCase() ?? '?'}
+              </span>
+              <div>
+                <div className="progress__profile-name">
+                  {profile?.preferences?.display_name?.trim() || 'Your profile'}
+                </div>
+                <div className="progress__profile-goal">{profile?.goal?.trim() || 'No goal set'}</div>
+              </div>
+            </div>
+            <dl className="progress__profile-list">
+              <div>
+                <dt>Units</dt>
+                <dd>{units === 'metric' ? 'kg / cm' : 'lb / in'}</dd>
+              </div>
+              <div>
+                <dt>Age</dt>
+                <dd>{age ?? '—'}</dd>
+              </div>
+              <div>
+                <dt>Preferred tone</dt>
+                <dd>{profile?.preferences?.preferred_tone ?? '—'}</dd>
+              </div>
+            </dl>
+            {profile?.preferences?.about_you?.trim() && (
+              <p className="progress__profile-about">{profile.preferences.about_you}</p>
+            )}
+            <Link to="/profile" className="progress__profile-edit">
+              Edit profile
+            </Link>
+          </section>
+        </aside>
+      </div>
 
       {undo && (
         <div className="toast" role="status">
