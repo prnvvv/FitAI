@@ -289,22 +289,23 @@ def _load_profile(state: AgentState, deps: AgentDeps) -> dict[str, object] | Non
         return None
 
 
-def _recall_continuity(state: AgentState, deps: AgentDeps) -> str:
-    """Return the formatted cross-chat recall block, or '' when unavailable.
+def _recall_continuity(state: AgentState, deps: AgentDeps) -> tuple[str, ContinuityContext]:
+    """Return the formatted cross-chat recall block and the underlying context.
 
     Recall is best-effort: any reader failure (Chroma down, etc.) yields no
-    recalled context rather than breaking the turn.
+    recalled context rather than breaking the turn. The context is returned so
+    the caller can record a compact activity event without re-querying.
     """
     if deps.continuity is None or not state.get("user_id"):
-        return ""
+        return "", ContinuityContext()
     try:
         context = deps.continuity.recall(state["user_id"], state.get("user_message", ""))
     except Exception:
         log.warning("continuity recall failed", exc_info=True)
-        return ""
+        return "", ContinuityContext()
     if not context or context.is_empty:
-        return ""
-    return format_continuity(context)
+        return "", ContinuityContext()
+    return format_continuity(context), context
 
 
 def detect_changes_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
@@ -582,7 +583,7 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     profile_text = _truncate(_format_profile(mem, profile), PINNED_CONTEXT_MAX_CHARS)
     sources = _build_sources(state.get("tool_results", []))
     tool_context = _format_tool_context(state.get("tool_results", []), sources)
-    continuity_text = _recall_continuity(state, deps)
+    continuity_text, continuity_ctx = _recall_continuity(state, deps)
 
     # Inject authoritative date/time and, if available, the user's timezone so the
     # model never guesses the date.
@@ -654,4 +655,16 @@ def generate_response(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
         if i in used_indices or not used_indices
     ]
     actions = _build_actions(state.get("tool_results", []))
-    return {"response": text, "sources": used_sources, "actions": actions}
+    result: dict[str, Any] = {"response": text, "sources": used_sources, "actions": actions}
+    # Surface recall as a compact activity event (counts only, never content) so
+    # the client can label the turn; it is additive via the tool_results reducer.
+    if not continuity_ctx.is_empty:
+        result["tool_results"] = [
+            {
+                "tool": "continuity",
+                "status": "recalled",
+                "memories": len(continuity_ctx.memories),
+                "past_chats": len(continuity_ctx.past_chats),
+            }
+        ]
+    return result

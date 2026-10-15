@@ -18,6 +18,7 @@ function activityLabel(activity: ActivityEvent[]): string {
   if (activity.some((a) => a.tool === 'web_search')) return 'Searching the web…'
   if (activity.some((a) => a.tool === 'nearby_gyms')) return 'Finding nearby places…'
   if (activity.some((a) => a.tool === 'retriever')) return 'Reviewing sources…'
+  if (activity.some((a) => a.tool === 'continuity')) return 'Recalling earlier chats…'
   if (activity.some((a) => a.tool === 'memory_write')) return 'Updating memory…'
   return 'Thinking…'
 }
