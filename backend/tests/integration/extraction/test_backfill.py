@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.extraction.backfill import BackfillService
 from app.extraction.schemas import ExtractionResult, UserPreference
+from app.models.activity_event import ActivityEvent
 from app.models.enums import MessageRole
 from app.repositories.conversation_repository import ConversationRepository, MessageRepository
 from app.repositories.user_repository import UserRepository
@@ -68,8 +69,31 @@ def test_backfill_is_idempotent_no_duplicates(db_session: Session) -> None:
 
     service = BackfillService(db_session, _PrefExtractor())
     service.backfill_user(uid)  # first pass saves
-    report2 = service.backfill_user(uid)  # second pass must dedup
+    # Second pass: the durable checkpoint means the message is not re-extracted
+    # at all, so there is nothing new to save and no provider cost.
+    extractor2 = _PrefExtractor()
+    report2 = BackfillService(db_session, extractor2).backfill_user(uid)
 
+    assert report2.saved == 0
+    assert extractor2.calls == 0
+    assert report2.messages_skipped == 1
+    interests = (ProfileService(db_session).get(uid).preferences or {}).get("interests", [])
+    assert interests.count("cycling") == 1
+
+
+def test_backfill_dedupes_even_without_checkpoint(db_session: Session) -> None:
+    """Idempotency does not depend on the checkpoint: replays are deduplicated."""
+    uid = uuid4()
+    UserRepository(db_session).get_or_create(uid, "a@example.com")
+    _seed_conversation(db_session, uid, "I like to do cycling every day.")
+
+    service = BackfillService(db_session, _PrefExtractor())
+    service.backfill_user(uid)
+    # Drop the checkpoints, simulating a replay after a partial state rollback.
+    db_session.query(ActivityEvent).delete()
+    db_session.commit()
+
+    report2 = BackfillService(db_session, _PrefExtractor()).backfill_user(uid)
     assert report2.saved == 0
     assert report2.duplicates >= 1
     interests = (ProfileService(db_session).get(uid).preferences or {}).get("interests", [])

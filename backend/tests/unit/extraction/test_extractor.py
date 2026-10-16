@@ -86,5 +86,50 @@ def test_extraction_result_default_is_empty() -> None:
     assert ExtractionResult().has_any() is False
 
 
+# --- memory insights --------------------------------------------------------
+
+
+def test_insight_candidate_is_parsed_and_validated() -> None:
+    payload = (
+        '{"memory_insights":[{"text":"cycles every morning","category":"routine",'
+        '"status":"current","action":"create","corrects":false,"confidence":0.9,'
+        '"source_text":"I usually cycle every morning"}]}'
+    )
+    result = _extractor(payload).extract("I usually cycle every morning.")
+    assert result.error is None
+    assert len(result.memory_insights) == 1
+    insight = result.memory_insights[0]
+    assert insight.category == "routine"
+    assert insight.status.value == "current"
+
+
+def test_hypothetical_insight_is_downgraded_by_the_backend() -> None:
+    payload = (
+        '{"memory_insights":[{"text":"will swim sometime","status":"current",'
+        '"action":"create","confidence":0.9,"source_text":"I might try swimming someday"}]}'
+    )
+    result = _extractor(payload).extract("I might try swimming someday.")
+    insight = result.memory_insights[0]
+    assert insight.status.value == "hypothetical"
+    assert insight.action.value == "ignore"
+
+
+def test_invalid_insight_is_rejected_not_stored() -> None:
+    result = _validate_result({"memory_insights": [{"text": "x", "confidence": 5}]})
+    assert result.memory_insights == []
+    assert result.rejected
+
+
+def test_malformed_insight_item_is_rejected() -> None:
+    result = _validate_result({"memory_insights": ["not an object"]})
+    assert result.memory_insights == []
+    assert result.rejected
+
+
+def test_null_insights_array_is_tolerated() -> None:
+    result = _validate_result({"memory_insights": None})
+    assert result.memory_insights == []
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-q"]))
