@@ -20,6 +20,10 @@ AGENT_ACTIVITY_EXTRACTION=true   # master switch for the extraction step
   chat response is produced with no false "recorded" claims.
 - The primary assistant keeps using `GROQ_API_KEY` / `GROQ_MODEL`. The
   extractor never answers the user; it only classifies candidates.
+- `EXTRACTION_TIMEOUT_S` (default 10s) bounds one extraction call. Extraction is
+  inline, so a slow or hanging provider cannot hold the response open: on timeout
+  nothing is persisted, nothing is claimed as saved, and the next message
+  retries.
 
 ## Pipeline
 
@@ -52,6 +56,29 @@ Guarantees:
 - **Total containment.** An extractor/provider/DB failure never breaks the chat
   response and never fabricates facts.
 
+### Live verification
+
+`scripts/verify_memory_intelligence.py` drives the real `ChatService` in-process
+against the configured PostgreSQL, the dedicated Groq extraction model and the
+primary Groq model (no HTTP/frontend server needed):
+
+```bash
+cd backend
+PYTHONIOENCODING=utf-8 python ../scripts/verify_memory_intelligence.py
+```
+
+It checks extraction -> persistence -> retrieval -> answer, duplicates,
+hypotheticals, corrections, cross-user isolation and restart persistence, and
+prints per-stage latency.
+
+Three real defects were found and fixed this way:
+
+| failure point | symptom | fix |
+|---|---|---|
+| intent gate | "What do I like to do every day?" was scope-blocked as `off_topic`, so the primary model was never called and memory could not be retrieved | classifier prompt examples + deterministic override in `app/guardrails/guard.py` for own-data questions (safety labels still block) |
+| stored fact quality | the extractor echoed the raw sentence ("I like cycling every day."), so the pinned context read like a quote | `normalize_fact_text` normalizes the candidate at validation and at persistence |
+| query coverage | "my previous routine" did not match the own-data question rule | `wants_personal_data_answer` accepts qualified forms |
+
 ## Durable memory intelligence (`memory_insights`)
 
 Preferences, recurring routines, habits, skills, ongoing projects, decisions and
@@ -71,6 +98,16 @@ actually stored:
 
 Deduplication uses token signatures plus a blended Jaccard/containment score, not
 exact string equality, and an older statement never overwrites a newer one.
+
+### Retrieval index cost (measured)
+
+`ContinuityStore.sync_memories` used to re-embed **every** remembered fact on
+every turn. Measured with 8 facts: 239 ms per turn when nothing had changed.
+It now stores a `text_hash` with each vector and only re-embeds changed facts
+(batched into one upsert), while still pruning removed keys, so a deleted or
+superseded fact stops being recalled on the very next turn. The ChromaDB handle
+and embedding function are also reused per process instead of being rebuilt on
+every request.
 
 ### Cross-chat retrieval
 

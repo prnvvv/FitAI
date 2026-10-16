@@ -33,6 +33,7 @@ Key variables (all owned by Person 1 unless marked Person 2):
 | `CORS_ORIGINS`              | localhost Vite/React   | Comma-separated.                                             |
 | `BACKEND_HOST` / `BACKEND_PORT` | `127.0.0.1` / `8000` | Single source of truth for the dev server address. The Vite proxy, `scripts/dev.ps1` and `scripts/run-all.sh` all read these from `backend/.env`. `HOST`/`PORT` are accepted as deprecated aliases. |
 | `GROQ_API_KEY` / ChromaDB   | —                      | Person 2.                                                    |
+| `PROMPT_GUARD_MODEL` / `PROMPT_GUARD_THRESHOLD` | `meta-llama/llama-prompt-guard-2-86m` / `0.5` | Injection guard; see `docs/models.md`. Fails open. |
 
 `JWT_ALGORITHM`/`JWT_SECRET` (legacy names) are removed in favor of the
 `SUPABASE_JWT_*` set above. Update any deployed environment accordingly.
@@ -87,6 +88,13 @@ the owning process and how to change `BACKEND_PORT`; nothing is auto-moved.
 
 - OpenAPI: `http://127.0.0.1:8000/openapi.json` (docs at `/docs`)
 - Liveness: `GET /health`; readiness: `GET /health/ready` (both unauthenticated)
+
+## 4b. Models
+
+Two models are configured: `openai/gpt-oss-120b` (chat + structured extraction)
+and `meta-llama/llama-prompt-guard-2-86m` (prompt-injection guard). Reasoning
+model quirks (sampling, token budget, no tool calling) are handled in
+`app/llm/client.py`. See `docs/models.md`.
 
 ## 5. Tests (run only when authorized)
 
