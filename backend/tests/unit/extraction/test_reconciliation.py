@@ -250,9 +250,7 @@ def test_unrelated_fact_sharing_a_word_is_not_a_retraction() -> None:
 
 def test_ambiguous_negation_without_a_shared_subject_is_flagged() -> None:
     existing = [_stored(InsightStore(), "enjoys swimming")]
-    candidate = _insight(
-        "does not enjoy rowing", source_text="I do not enjoy rowing any more"
-    )
+    candidate = _insight("does not enjoy rowing", source_text="I do not enjoy rowing any more")
     decision = reconcile(candidate, existing, now=NOW)
     # "rowing" and "swimming" are different subjects, so this is not a retraction.
     assert decision.action is ProposedAction.CREATE
