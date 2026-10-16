@@ -7,6 +7,8 @@ Each candidate type is routed to the EXISTING service that owns that data:
 * progress_record   -> WorkoutService (``measurements``)
 * user_preference   -> ProfileService (``user_profiles.preferences``)
 * profile_fact      -> ProfileService (``user_profiles.preferences``)
+* memory_insight    -> ProfileService (``user_profiles.preferences["memory_insights"]``),
+  reconciled by ``app.extraction.reconciliation`` (dedupe / correction / history)
 
 ``fitness_goal`` is intentionally NOT persisted here: goals continue through the
 existing LangGraph memory-confirmation workflow (``POST /memory/pending`` →
@@ -32,12 +34,15 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.extraction.reconciliation import InsightStore, apply_decision, reconcile
 from app.extraction.schemas import (
     CompletedWorkout,
     ExtractionResult,
+    MemoryInsight,
     PlannedWorkout,
     ProfileFact,
     ProgressRecord,
+    ProposedAction,
     RecordedOutcome,
     UserPreference,
 )
@@ -82,7 +87,48 @@ class ExtractionPersister:
         outcomes += [self._progress_record(item, today, now) for item in result.progress_records]
         outcomes += [self._preference(item) for item in result.user_preferences]
         outcomes += [self._profile_fact(item) for item in result.profile_facts]
+        outcomes += [self._insight(item, now) for item in result.memory_insights]
         return outcomes
+
+    # -- durable insights (reconciled into profile.preferences) ---------------
+    def _insight(self, item: MemoryInsight, now: datetime) -> RecordedOutcome:
+        """Reconcile one proposed insight into the user's durable memory.
+
+        The single authoritative destination is
+        ``user_profiles.preferences["memory_insights"]`` (with superseded
+        records kept in ``memory_insight_history``), so the same fact is never
+        duplicated across profile lists, generic memory and workout rows.
+        """
+        try:
+            profile = self._profiles.get_or_create(self._user_id)
+            store = InsightStore.from_preferences(profile.preferences)
+            decision = reconcile(item, store.live, now=now)
+        except Exception as exc:
+            log.warning("memory_insight reconcile failed: %s", type(exc).__name__)
+            return self._outcome("memory_insight", "failed", None, item.text, type(exc).__name__)
+
+        if not decision.should_store:
+            return self._outcome("memory_insight", "skipped", None, item.text, decision.reason)
+
+        if decision.action is ProposedAction.RETAIN and decision.retains is not None:
+            # Same fact restated: only evidence/timestamps change, and the
+            # vector index needs no new document.
+            apply_decision(store, decision, item, now=now)
+            return self._outcome("memory_insight", "duplicate", str(self._user_id), item.text)
+
+        apply_decision(store, decision, item, now=now)
+        try:
+            self._profiles.update(
+                self._user_id, {"preferences": store.as_preferences()}, partial=True
+            )
+        except Exception as exc:
+            log.warning("memory_insight persist failed: %s", type(exc).__name__)
+            return self._outcome("memory_insight", "failed", None, item.text, type(exc).__name__)
+        status = "updated" if decision.action is ProposedAction.UPDATE else "saved"
+        detail = decision.status.value
+        if decision.needs_confirmation:
+            detail = f"confirm:{detail}"
+        return self._outcome("memory_insight", status, decision.key, item.text, detail)
 
     # -- completed workouts ---------------------------------------------------
     def _completed(self, item: CompletedWorkout, today: date, now: datetime) -> RecordedOutcome:

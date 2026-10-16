@@ -39,6 +39,7 @@ _ARRAY_FIELDS: dict[str, str] = {
     "user_preferences": "UserPreference",
     "fitness_goals": "FitnessGoal",
     "profile_facts": "ProfileFact",
+    "memory_insights": "MemoryInsight",
 }
 
 _MAX_ITEMS = 25

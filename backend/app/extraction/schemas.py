@@ -8,13 +8,31 @@ before any database write.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
+from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from app.models.enums import MeasurementType
 from app.schemas.workout import MEASUREMENT_RANGES, MEASUREMENT_UNITS
+
+#: Phrases that mean "this is not a statement of current reality".
+_HYPOTHETICAL_RE = re.compile(
+    r"\b(if i|would|might|maybe|suppose|imagine|what if|thinking of|thinking about|could try)\b",
+    re.I,
+)
+#: Phrases that mean "this used to be true and is not any more".
+_PAST_RE = re.compile(
+    r"\b(used to|no longer|stopped|quit|formerly|previously|back in|when i was)\b",
+    re.I,
+)
+#: Hedges that weaken an otherwise explicit statement.
+_UNCERTAIN_RE = re.compile(
+    r"\b(about|around|roughly|approximately|approx|i think|probably|not sure|i guess|maybe)\b",
+    re.I,
+)
 
 
 class _Candidate(BaseModel):
@@ -90,6 +108,98 @@ class ProfileFact(_Candidate):
     text: str = Field(min_length=1, max_length=300)
 
 
+class InsightStatus(str, Enum):
+    """Temporal status of a durable personal fact proposed by the extractor.
+
+    Only ``CURRENT`` and ``HISTORICAL`` are treated as real user facts.
+    ``PLANNED``/``HYPOTHETICAL`` statements are never persisted as current
+    personal information, and ``UNCERTAIN`` statements are stored flagged so the
+    backend can ask the user instead of assuming.
+    """
+
+    CURRENT = "current"
+    HISTORICAL = "historical"
+    PLANNED = "planned"
+    HYPOTHETICAL = "hypothetical"
+    UNCERTAIN = "uncertain"
+
+
+class ProposedAction(str, Enum):
+    """What the extraction LLM *suggests* doing. The backend decides for real."""
+
+    CREATE = "create"
+    UPDATE = "update"
+    RETAIN = "retain"
+    CONFIRM = "confirm"
+    IGNORE = "ignore"
+
+
+#: Candidate text that tries to act as an instruction, leak internals, or reach
+#: across users is never a durable personal fact.
+_INJECTION_RE = re.compile(
+    r"(ignore (all |any |the )?(previous|prior|above|earlier)\b|disregard\b|"
+    r"reveal (your |the )?(system|prompt|instructions|api)|system\s*[:\-]|"
+    r"\bapi[_ ]?key\b|\bpassword\b|\bsecret\b|\ball users\b|\bother users\b|"
+    r"you are now\b|new instructions\b)",
+    re.I,
+)
+
+
+class MemoryInsight(_Candidate):
+    """A durable personal fact worth remembering across conversations.
+
+    Covers preferences, recurring routines, habits, skills, ongoing projects /
+    learning interests, decisions, and stable personal context. The LLM only
+    *proposes* it: temporal status is re-derived here from the quoted evidence
+    (guards only downgrade), and persistence + reconciliation is backend code.
+    """
+
+    text: str = Field(min_length=1, max_length=300)
+    category: str = Field(default="personal_context", min_length=1, max_length=40)
+    status: InsightStatus = InsightStatus.CURRENT
+    action: ProposedAction = ProposedAction.CREATE
+    #: True when the user explicitly retracted a previously stated fact
+    #: ("I no longer enjoy jogging"), so the backend can supersede it safely.
+    corrects: bool = False
+
+    @field_validator("text")
+    @classmethod
+    def _clean(cls, value: str) -> str:
+        cleaned = " ".join(value.split())
+        if len(cleaned) < 3:
+            raise ValueError("insight text is too short to be useful")
+        if _INJECTION_RE.search(cleaned):
+            raise ValueError("insight text looks like an instruction, not a user fact")
+        return cleaned
+
+    @model_validator(mode="after")
+    def _reconcile_temporal(self) -> MemoryInsight:
+        """Downgrade the model's status using the quoted evidence.
+
+        Guards never upgrade: a model claiming ``current`` for a clearly
+        hypothetical sentence is corrected here, so persistence can trust it.
+        """
+        span = f"{self.source_text} {self.text}"
+        if _HYPOTHETICAL_RE.search(span):
+            self.status = InsightStatus.HYPOTHETICAL
+            self.action = ProposedAction.IGNORE
+        elif _PAST_RE.search(span):
+            self.status = InsightStatus.HISTORICAL
+        elif self.status is InsightStatus.CURRENT and _UNCERTAIN_RE.search(span):
+            self.status = InsightStatus.UNCERTAIN
+            self.action = ProposedAction.CONFIRM
+            self.confidence = min(self.confidence, 0.6)
+        if self.status in (InsightStatus.PLANNED, InsightStatus.HYPOTHETICAL):
+            self.action = ProposedAction.IGNORE
+        if self.corrects:
+            # A retraction is happening NOW: "I no longer enjoy jogging" states a
+            # current position, not a historical fact.
+            if self.status is InsightStatus.HISTORICAL:
+                self.status = InsightStatus.CURRENT
+            self.action = ProposedAction.UPDATE
+        return self
+
+
 class ExtractionResult(BaseModel):
     """Validated candidates from one message.
 
@@ -104,6 +214,7 @@ class ExtractionResult(BaseModel):
     user_preferences: list[UserPreference] = Field(default_factory=list)
     fitness_goals: list[FitnessGoal] = Field(default_factory=list)
     profile_facts: list[ProfileFact] = Field(default_factory=list)
+    memory_insights: list[MemoryInsight] = Field(default_factory=list)
     rejected: list[str] = Field(default_factory=list)
     error: str | None = None
 
@@ -116,6 +227,7 @@ class ExtractionResult(BaseModel):
             or self.user_preferences
             or self.fitness_goals
             or self.profile_facts
+            or self.memory_insights
         )
 
 
@@ -140,6 +252,9 @@ __all__ = [
     "UserPreference",
     "FitnessGoal",
     "ProfileFact",
+    "MemoryInsight",
+    "InsightStatus",
+    "ProposedAction",
     "ExtractionResult",
     "RecordedOutcome",
 ]
