@@ -23,6 +23,26 @@ DEFAULT_MODEL = "openai/gpt-oss-20b"
 DEFAULT_TEMPERATURE = 0.0
 MAX_TOOL_ITERATIONS = 3
 
+#: Model families that expose a reasoning trace through Groq. They have two
+#: API differences that break the default request shape:
+#:   * sampling parameters must be 1.0 (any other value is rejected);
+#:   * the completion budget covers reasoning tokens too, so a small cap makes
+#:     every call fail with "Please reduce the length of the messages or
+#:     completion", and an uncapped request is rejected as well.
+#: They also reject the ``tools`` parameter entirely.
+REASONING_MODEL_PREFIXES = ("openai/gpt-oss",)
+#: Completion budget used for reasoning models when the caller sets none.
+REASONING_DEFAULT_MAX_COMPLETION_TOKENS = 4096
+#: Floor that leaves room for the reasoning trace plus the actual answer.
+REASONING_MIN_MAX_COMPLETION_TOKENS = 2048
+
+
+def _is_reasoning_model(model: str) -> bool:
+    """True for model ids whose Groq API behaves differently (see above)."""
+    name = (model or "").strip().lower()
+    return any(name.startswith(prefix) for prefix in REASONING_MODEL_PREFIXES)
+
+
 ToolExecutor = Callable[[str, dict[str, Any]], dict[str, Any]]
 
 
@@ -49,6 +69,35 @@ class GroqClient:
         self._temperature = temperature
         self._timeout = timeout
         self._max_tokens = max_tokens
+        self._reasoning = _is_reasoning_model(model)
+
+    @property
+    def model(self) -> str:
+        """The configured model id."""
+        return self._model
+
+    @property
+    def supports_tools(self) -> bool:
+        """False for reasoning models, whose endpoint rejects ``tools``."""
+        return not self._reasoning
+
+    def _request_kwargs(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Build the completion parameters this model actually accepts."""
+        kwargs: dict[str, Any] = {"model": self._model, "messages": messages}
+        if self._reasoning:
+            # gpt-oss on Groq requires default sampling and a budget that covers
+            # the reasoning trace; omitting it (or capping it too low) is
+            # rejected as "Please reduce the length of the messages or
+            # completion". The SDK exposes this as ``max_tokens``.
+            kwargs["temperature"] = 1.0
+            kwargs["top_p"] = 1.0
+            budget = self._max_tokens or REASONING_DEFAULT_MAX_COMPLETION_TOKENS
+            kwargs["max_tokens"] = max(budget, REASONING_MIN_MAX_COMPLETION_TOKENS)
+        else:
+            kwargs["temperature"] = self._temperature
+            if self._max_tokens is not None:
+                kwargs["max_tokens"] = self._max_tokens
+        return kwargs
 
     def __call__(self, system: str, user: str, *, json_mode: bool = False) -> str:
         """Call the chat completions endpoint and return the message content."""
@@ -56,13 +105,7 @@ class GroqClient:
             {"role": "system", "content": system},
             {"role": "user", "content": user[:4000]},
         ]
-        kwargs: dict[str, Any] = {
-            "model": self._model,
-            "temperature": self._temperature,
-            "messages": messages,
-        }
-        if self._max_tokens is not None:
-            kwargs["max_tokens"] = self._max_tokens
+        kwargs = self._request_kwargs(messages)
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
         try:
@@ -94,13 +137,21 @@ class GroqClient:
             The final assistant message content, or a safe fallback if the loop
             does not produce a final answer.
         """
-        kwargs: dict[str, Any] = {
-            "model": self._model,
-            "temperature": self._temperature,
-            "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
-        }
+        if not self.supports_tools:
+            # The model rejects the ``tools`` parameter (e.g. gpt-oss). Answer
+            # from the same context in one plain completion instead of failing.
+            log.info("model %s does not support tool calling; answering without tools", self._model)
+            kwargs = self._request_kwargs(list(messages))
+            try:
+                response = self._client.chat.completions.create(**kwargs)
+            except Exception:
+                log.warning("groq tool-less completion failed", exc_info=True)
+                raise
+            return str(response.choices[0].message.content or "").strip()
+
+        kwargs = self._request_kwargs(list(messages))
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
 
         for iteration in range(max_iterations):
             try:
