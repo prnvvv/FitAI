@@ -168,10 +168,17 @@ _LIVE_INFO_INTENT = re.compile(
 )
 
 
+#: A question about the user's OWN persisted data. The optional qualifier lets
+#: "my previous routine" / "my current goals" match as well as "my routine".
+_PERSONAL_SUBJECT = (
+    r"i (like|prefer|enjoy|love|hate)|my\s+(previous|old|past|earlier|current|usual)?\s*"
+    r"(preference|preferences|hobby|hobbies|interest|interests|favourite|favorite|"
+    r"likes|goal|goals|routine|routines|schedule|habit|habits|plan|profile|training|"
+    r"workouts?|sessions?|weight|progress|records?)"
+)
+
 _PERSONAL_DATA_QUESTION = re.compile(
-    r"\b(what|which|do|tell me|show me)\b.*\b(i like|i prefer|i enjoy|i love|my preference|"
-    r"my preferences|my hobby|my hobbies|my interest|my interests|my favourite|my favorite|"
-    r"my likes|my goal|my goals|my routine|my schedule|my plan|my profile)\b|"
+    r"\b(what|which|do|tell me|show me|remind me)\b.*\b(" + _PERSONAL_SUBJECT + r")\b|"
     r"\b(about me|what do you know about me|what do you remember about me|"
     r"what have i (told|said)|my dietary|my restrictions)\b",
     re.I,

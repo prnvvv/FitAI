@@ -17,6 +17,10 @@ Schema: {"label": "<one of: fitness|off_topic|code_request|capability_probe|wrap
 
 Rules:
 - fitness = training, workouts, exercise technique, nutrition, macros, meal planning, supplements, recovery, sleep, mobility, injury prevention, progress tracking, general wellness.
+- Questions about the USER's OWN stored data are always fitness, never off_topic: their
+  preferences, activities, routines, habits, goals, weight/progress measurements, profile,
+  saved memories, workout history, or "what do you remember about me". Set wants_tool false
+  for these; they are answered from the user's own records, not the web.
 - In-scope small talk: greetings, thanks, goodbyes, and "what can you help me with" are legitimate; label them fitness with in_scope true.
 - code_request = writing/debugging/explaining code, algorithms, scripts, SQL, regex, or "a script to do X" even when X is fitness-related.
 - capability_probe = asking whether you can code or what you know about programming (coding ability only). Asking what fitness/nutrition topics the assistant can help with is fitness, not capability_probe.
@@ -37,6 +41,8 @@ Examples:
 8. "find gyms open now near me" -> {"label":"fitness","in_scope":true,"wants_tool":true,"confidence":0.9,"reason":"needs live nearby data"}
 9. "hey" -> {"label":"fitness","in_scope":true,"wants_tool":false,"confidence":0.92,"reason":"greeting"}
 10. "what can you help me with?" -> {"label":"fitness","in_scope":true,"wants_tool":false,"confidence":0.9,"reason":"asks about fitness help"}
+11. "what do I like to do every day?" -> {"label":"fitness","in_scope":true,"wants_tool":false,"confidence":0.9,"reason":"asks about own preferences"}
+12. "what was my previous routine?" -> {"label":"fitness","in_scope":true,"wants_tool":false,"confidence":0.88,"reason":"asks about own history"}
 
 Now classify the user message. JSON only."""
 

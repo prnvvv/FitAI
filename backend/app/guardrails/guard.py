@@ -30,6 +30,11 @@ _CACHE_MAX_ENTRIES = 1000
 #: decision key -> (monotonic timestamp, decision)
 _CACHE: dict[str, tuple[float, GuardDecision]] = {}
 
+#: Scope-only labels the classifier may use to refuse a message. A question about
+#: the user's OWN stored data is never one of these: blocking it would deny
+#: cross-chat memory recall (a real regression observed in live verification).
+_SCOPE_LABELS = frozenset({"off_topic", "wrapper", "capability_probe", "code_request"})
+
 
 @dataclass(frozen=True)
 class GuardDecision:
@@ -73,12 +78,30 @@ def clear_decision_cache() -> None:
     _CACHE.clear()
 
 
-def _decide_from_intent(intent: Intent, threshold: float) -> GuardDecision:
+def _is_personal_data_question(message: str) -> bool:
+    """True when the message asks about the user's OWN stored data.
+
+    Imported lazily so the guardrails package never depends on the agent graph
+    at import time.
+    """
+    from app.agent.nodes import wants_personal_data_answer
+
+    return wants_personal_data_answer(message)
+
+
+def _decide_from_intent(intent: Intent, threshold: float, message: str = "") -> GuardDecision:
     """Turn a validated classifier :class:`Intent` into a :class:`GuardDecision`.
 
     Fail-closed: a message is only allowed when the classifier both marks it
     ``in_scope`` AND labels it ``fitness``. Low confidence degrades to the
     deterministic fallback (allow, uncached) rather than block on a weak signal.
+
+    One deterministic exception: a *scope* refusal (off_topic and friends) is
+    overridden for questions about the user's own stored preferences, routines,
+    memories or records. Those are core fitness-assistant requests answered from
+    PostgreSQL, and a scope misclassification would silently hide the user's own
+    memory. Safety labels are never overridden — those messages were already
+    screened by the deterministic rules above.
     """
     if intent.confidence < threshold:
         return GuardDecision(blocked=False, source="fallback", reason="low confidence")
@@ -88,6 +111,13 @@ def _decide_from_intent(intent: Intent, threshold: float) -> GuardDecision:
             wants_tool=intent.wants_tool,
             source="classifier",
             reason=intent.reason,
+        )
+    if message and intent.label in _SCOPE_LABELS and _is_personal_data_question(message):
+        return GuardDecision(
+            blocked=False,
+            wants_tool=False,
+            source="deterministic",
+            reason="own-data question; scope refusal overridden",
         )
     return GuardDecision(
         blocked=True,
@@ -138,7 +168,7 @@ def classify_and_decide(
     if intent is None:
         return GuardDecision(blocked=False, source="fallback", reason="classifier unavailable")
 
-    decision = _decide_from_intent(intent, threshold)
+    decision = _decide_from_intent(intent, threshold, message)
     if decision.source == "classifier":
         _set_cached(key, decision)
     return decision
