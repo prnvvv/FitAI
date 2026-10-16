@@ -124,7 +124,7 @@ class Settings(BaseSettings):
     #: so a slow or hanging provider must not hold the user's response open
     #: indefinitely. On timeout extraction is skipped for that turn (chat
     #: continues, nothing is claimed as saved) and the next message retries.
-    extraction_timeout_s: float = 10.0
+    extraction_timeout_s: float = 20.0
 
     # Web search provider chain (comma-separated priority list).
     # Supported: tavily, brave, serper, ddgs. Missing/empty defaults to "ddgs".
