@@ -362,9 +362,10 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     _print_timings()
-    print("
-=== provider health ===")
-    print(f"extraction calls without a usable result : {len(_Providers.extraction_errors) + _Providers.extraction_empty}")
+    print("\n=== provider health ===")
+    print(
+        f"extraction calls without a usable result : {len(_Providers.extraction_errors) + _Providers.extraction_empty}"
+    )
     for err in dict.fromkeys(_Providers.extraction_errors):
         print(f"       extraction error: {err}")
     for err in dict.fromkeys(_Providers.primary_errors):
