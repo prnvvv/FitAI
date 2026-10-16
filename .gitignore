@@ -38,6 +38,8 @@ dist/
 *.pem
 *.key
 secrets/
+# Local audit/harness session files can hold a live access token
+scripts/.session.json
 
 # Local data
 chroma_data/
