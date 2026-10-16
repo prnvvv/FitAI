@@ -319,9 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         superseded = [r for r in corrected.get(HISTORY_KEY, []) if r.get("status") == "superseded"]
         # The affirmative fact must no longer stand as a current fact, and the
         # retraction must be kept as history.
-        original = next(
-            (t for t in stored_facts if t.lower().startswith(("like ", "likes "))), ""
-        )
+        original = next((t for t in stored_facts if t.lower().startswith(("like ", "likes "))), "")
         _record(
             "correction supersedes the current fact and keeps history",
             bool(superseded)
