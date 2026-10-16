@@ -208,6 +208,24 @@ def similarity(left: str, right: str) -> float:
     return (jaccard + containment) / 2
 
 
+#: ``tokens`` truncates to :data:`TOKEN_PREFIX` characters, so a subject token is
+#: at least that long. Shorter fragments are dropped so they cannot, on their
+#: own, make two statements look like the same subject.
+_MIN_SUBJECT_TOKEN = TOKEN_PREFIX
+
+
+def subject_overlap(left: str, right: str) -> int:
+    """Count shared *subject* tokens between two statements.
+
+    Used to recognise a retraction: "cycling" is the subject in both
+    "user likes cycling and does it daily" and "no longer enjoy cycling
+    everyday", even though the sentences share almost nothing else.
+    """
+    a = {t for t in tokens(left) if len(t) >= _MIN_SUBJECT_TOKEN}
+    b = {t for t in tokens(right) if len(t) >= _MIN_SUBJECT_TOKEN}
+    return len(a & b)
+
+
 @dataclass(frozen=True)
 class InsightDecision:
     """What the backend will do with one proposed insight."""
@@ -302,12 +320,49 @@ def reconcile(
 
     new_polarity = polarity(candidate.source_text or text)
     best: tuple[float, Mapping[str, Any]] | None = None
+    #: Best opposite-polarity candidate, matched on the *subject* rather than on
+    #: full-text similarity. A retraction is often worded very differently from
+    #: the habit it retracts ("no longer enjoy cycling everyday" vs "user likes
+    #: cycling and does it daily"), so full-text similarity alone misses it and
+    #: both facts end up stored, which makes the assistant contradict itself.
+    best_negation: tuple[int, Mapping[str, Any]] | None = None
     for record in existing:
         if not _is_live(record):
             continue
-        score = similarity(candidate.text, str(record.get("text", "")))
+        recorded = str(record.get("text", ""))
+        score = similarity(candidate.text, recorded)
         if score >= SIMILARITY_THRESHOLD and (best is None or score > best[0]):
             best = (score, record)
+        if new_polarity != str(record.get("polarity", "affirm")):
+            overlap = subject_overlap(candidate.text, recorded)
+            if overlap > 0 and (best_negation is None or overlap > best_negation[0]):
+                best_negation = (overlap, record)
+
+    if best is None and best_negation is not None:
+        # An explicit retraction of the same subject supersedes it. ``corrects``
+        # is the model's own claim; without it we still trust an unambiguous
+        # negation, because a false "I no longer ..." is rare and the previous
+        # fact is preserved in history either way.
+        record = best_negation[1]
+        if candidate.corrects or candidate.status is InsightStatus.HISTORICAL:
+            return InsightDecision(
+                ProposedAction.UPDATE,
+                key,
+                text,
+                # A retraction is a statement about now: it becomes the current
+                # fact, not a historical one.
+                InsightStatus.CURRENT,
+                "retracts a remembered fact",
+                supersedes=record,
+            )
+        return InsightDecision(
+            ProposedAction.CONFIRM,
+            key,
+            text,
+            InsightStatus.UNCERTAIN,
+            "appears to retract a remembered fact; needs confirmation",
+            needs_confirmation=True,
+        )
 
     if best is not None:
         record = best[1]

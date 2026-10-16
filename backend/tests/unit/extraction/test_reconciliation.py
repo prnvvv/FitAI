@@ -221,3 +221,38 @@ def test_normalized_insight_dedupes_against_the_echoed_form() -> None:
     from app.extraction.schemas import normalize_fact_text
 
     assert signature(normalize_fact_text("I like jogging.")) == signature("like jogging")
+
+
+# --- retractions worded differently from the habit they retract -------------
+def test_differently_worded_retraction_supersedes_the_stored_fact() -> None:
+    """Live regression: both facts used to be stored, so answers contradicted."""
+    store = InsightStore(live=[_stored(InsightStore(), "user likes cycling and does it daily")])
+    retraction = _insight(
+        "no longer enjoy cycling everyday",
+        source_text="I no longer enjoy cycling every day",
+    )
+    decision = reconcile(retraction, store.live, now=NOW)
+
+    assert decision.action is ProposedAction.UPDATE
+    apply_decision(store, decision, retraction, now=NOW)
+    assert [r["text"] for r in store.live] == ["no longer enjoy cycling everyday"]
+    assert any(r["status"] == "superseded" for r in store.history)
+    # The retraction is a statement about now, so it is the current fact.
+    assert store.current_texts() == ["no longer enjoy cycling everyday"]
+
+
+def test_unrelated_fact_sharing_a_word_is_not_a_retraction() -> None:
+    existing = [_stored(InsightStore(), "likes morning walks")]
+    candidate = _insight("does not drink coffee", source_text="I do not drink coffee")
+    candidate = candidate.model_copy(update={"status": InsightStatus.CURRENT})
+    assert reconcile(candidate, existing, now=NOW).action is ProposedAction.CREATE
+
+
+def test_ambiguous_negation_without_a_shared_subject_is_flagged() -> None:
+    existing = [_stored(InsightStore(), "enjoys swimming")]
+    candidate = _insight(
+        "does not enjoy rowing", source_text="I do not enjoy rowing any more"
+    )
+    decision = reconcile(candidate, existing, now=NOW)
+    # "rowing" and "swimming" are different subjects, so this is not a retraction.
+    assert decision.action is ProposedAction.CREATE
