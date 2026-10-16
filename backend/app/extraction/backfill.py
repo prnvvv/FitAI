@@ -14,7 +14,9 @@ controlled batches rather than all at once on every call.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID
@@ -24,8 +26,9 @@ from sqlalchemy.orm import Session
 
 from app.extraction.extractor import RecordExtractor
 from app.extraction.persistence import persist_extraction
-from app.models.enums import MessageRole
+from app.models.enums import ActivityEventType, MessageRole
 from app.models.user import User
+from app.repositories.activity_event_repository import ActivityEventRepository
 from app.repositories.conversation_repository import (
     ConversationRepository,
     MessageRepository,
@@ -40,6 +43,7 @@ class BackfillReport:
 
     users_processed: int = 0
     messages_scanned: int = 0
+    messages_skipped: int = 0
     messages_with_facts: int = 0
     saved: int = 0
     duplicates: int = 0
@@ -48,6 +52,7 @@ class BackfillReport:
     def __str__(self) -> str:  # pragma: no cover - human-readable summary
         return (
             f"users={self.users_processed} scanned={self.messages_scanned} "
+            f"skipped={self.messages_skipped} "
             f"with_facts={self.messages_with_facts} saved={self.saved} "
             f"duplicates={self.duplicates} failed={self.failed}"
         )
@@ -58,12 +63,34 @@ def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
 
 
+@contextlib.contextmanager
+def _suppress() -> Iterator[None]:
+    """Swallow failures in best-effort bookkeeping."""
+    try:
+        yield
+    except Exception:  # pragma: no cover - checkpointing is best-effort
+        log.debug("backfill bookkeeping failed", exc_info=True)
+
+
 class BackfillService:
-    """Re-extract and persist facts from a user's historical messages."""
+    """Re-extract and persist facts from a user's historical messages.
+
+    Progress is checkpointed durably: every message that has been scanned is
+    marked with an activity event (``entity_type="message"``, ``source="backfill"``).
+    An interrupted run can therefore be resumed without paying for, or
+    re-writing, messages that were already processed, and a resumed run can
+    never overwrite a newer fact with an older one (the reconciler compares the
+    original message timestamps).
+    """
+
+    #: Activity-event type used as the durable per-message checkpoint.
+    CHECKPOINT_EVENT = ActivityEventType.PROFILE_UPDATED
+    CHECKPOINT_ENTITY = "message"
 
     def __init__(self, db: Session, extractor: RecordExtractor | None) -> None:
         self._db = db
         self._extractor = extractor
+        self._checkpoints = ActivityEventRepository(db)
 
     def backfill_user(
         self,
@@ -99,9 +126,12 @@ class BackfillService:
                         if report.messages_scanned >= max_messages:
                             break
                         if message.role is MessageRole.USER and (message.content or "").strip():
-                            self._process_message(
-                                user_id, message.content, message.created_at, report
-                            )
+                            if self._already_processed(user_id, message.id):
+                                report.messages_skipped += 1
+                            else:
+                                self._process_message(
+                                    user_id, message.id, message.content, message.created_at, report
+                                )
                         report.messages_scanned += 1
                     msg_page += 1
             conv_page += 1
@@ -116,14 +146,56 @@ class BackfillService:
             user_report = self.backfill_user(user_id, max_messages=max_messages_per_user)
             report.users_processed += user_report.users_processed
             report.messages_scanned += user_report.messages_scanned
+            report.messages_skipped += user_report.messages_skipped
             report.messages_with_facts += user_report.messages_with_facts
             report.saved += user_report.saved
             report.duplicates += user_report.duplicates
             report.failed += user_report.failed
         return report
 
+    def _already_processed(self, user_id: UUID, message_id: object) -> bool:
+        """True when this message already carries a backfill checkpoint."""
+        if message_id is None:
+            return False
+        try:
+            return self._checkpoints.exists(
+                user_id,
+                self.CHECKPOINT_EVENT,
+                entity_type=self.CHECKPOINT_ENTITY,
+                entity_id=str(message_id),
+            )
+        except Exception:
+            log.warning("backfill checkpoint lookup failed", exc_info=True)
+            return False
+
+    def _checkpoint(self, user_id: UUID, message_id: object, when: datetime) -> None:
+        """Durably record that this message has been processed.
+
+        Best-effort: if the checkpoint cannot be written the message may be
+        re-scanned next run, which is safe because persistence is idempotent.
+        """
+        if message_id is None:
+            return
+        with _suppress():
+            event = self._checkpoints.create(
+                user_id,
+                self.CHECKPOINT_EVENT,
+                entity_type=self.CHECKPOINT_ENTITY,
+                entity_id=str(message_id),
+                occurred_at=when,
+                source="backfill",
+                payload={"kind": "memory_extraction_backfill"},
+            )
+            if event is not None:
+                self._db.commit()
+
     def _process_message(
-        self, user_id: UUID, content: str, created_at: datetime, report: BackfillReport
+        self,
+        user_id: UUID,
+        message_id: object,
+        content: str,
+        created_at: datetime,
+        report: BackfillReport,
     ) -> None:
         if self._extractor is None:
             return
@@ -134,22 +206,24 @@ class BackfillService:
             log.warning("backfill extraction failed", exc_info=True)
             report.failed += 1
             return
-        if not result.has_any():
-            return
-        report.messages_with_facts += 1
-        try:
-            outcomes = persist_extraction(self._db, user_id, result, now=when)
-        except Exception:
-            log.warning("backfill persist failed", exc_info=True)
-            report.failed += 1
-            return
-        for outcome in outcomes:
-            if outcome.status == "saved":
-                report.saved += 1
-            elif outcome.status == "duplicate":
-                report.duplicates += 1
-            elif outcome.status == "failed":
+        if result.has_any():
+            report.messages_with_facts += 1
+            try:
+                outcomes = persist_extraction(self._db, user_id, result, now=when)
+            except Exception:
+                log.warning("backfill persist failed", exc_info=True)
                 report.failed += 1
+                return
+            for outcome in outcomes:
+                if outcome.status in {"saved", "updated"}:
+                    report.saved += 1
+                elif outcome.status == "duplicate":
+                    report.duplicates += 1
+                elif outcome.status == "failed":
+                    report.failed += 1
+        # Checkpoint even a message with nothing to extract, so an unchanged
+        # history is never re-extracted (and never re-billed to the provider).
+        self._checkpoint(user_id, message_id, when)
 
 
 def build_backfill_service(db: Session) -> BackfillService:

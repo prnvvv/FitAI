@@ -76,6 +76,30 @@ class ActivityEventRepository:
             statement = statement.where(ActivityEvent.entity_type == entity_type)
         return self._db.scalar(statement) is not None
 
+    def exists(
+        self,
+        user_id: uuid.UUID,
+        event_type: ActivityEventType,
+        *,
+        entity_type: str | None = None,
+        entity_id: str | None = None,
+    ) -> bool:
+        """True when such an event was EVER recorded (durable checkpoint).
+
+        Unlike :meth:`exists_within` this has no time window, which makes it
+        suitable for marking historical messages as already processed by the
+        extraction backfill.
+        """
+        statement = select(ActivityEvent.id).where(
+            ActivityEvent.user_id == user_id,
+            ActivityEvent.type == event_type,
+        )
+        if entity_type is not None:
+            statement = statement.where(ActivityEvent.entity_type == entity_type)
+        if entity_id is not None:
+            statement = statement.where(ActivityEvent.entity_id == entity_id)
+        return self._db.scalar(statement.limit(1)) is not None
+
     def list_for_user(
         self,
         user_id: uuid.UUID,
