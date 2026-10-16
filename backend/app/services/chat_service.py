@@ -24,6 +24,7 @@ from app.agent.multi import run_multi_turn
 from app.core.config import settings
 from app.extraction.extractor import GroqActivityExtractor, RecordExtractor
 from app.extraction.persistence import persist_extraction
+from app.extraction.reconciliation import InsightStore
 from app.extraction.schemas import RecordedOutcome
 from app.guardrails import GuardDecision, IntentClassifier, guarded_run
 from app.llm.client import GroqClient
@@ -79,6 +80,7 @@ class _ProfileReaderAdapter(ProfileReader):
             "units": prefs.get("units") if isinstance(prefs, dict) else None,
             "interests": prefs.get("interests") if isinstance(prefs, dict) else None,
             "profile_notes": prefs.get("profile_notes") if isinstance(prefs, dict) else None,
+            "known_facts": _confirmed_insights(prefs) if isinstance(prefs, dict) else None,
             "timezone": profile.location_timezone,
             "location": profile.location_label,
         }
@@ -382,6 +384,29 @@ def _title_from_message(message: str) -> str:
     return message.strip().split("\n")[0][:50] or "New chat"
 
 
+#: Bound on how many remembered facts are pinned into a single prompt.
+PINNED_INSIGHT_LIMIT = 8
+
+
+def _confirmed_insights(prefs: dict[str, Any]) -> list[str]:
+    """Current, confirmed insights from the profile preferences JSON.
+
+    Historical, superseded, planned, hypothetical and unconfirmed records are
+    never presented as things the user currently does, so a stale statement can
+    never be asserted by the assistant.
+    """
+    store = InsightStore.from_preferences(prefs)
+    texts = store.current_texts(limit=PINNED_INSIGHT_LIMIT)
+    historical = [
+        str(entry.get("text", ""))
+        for entry in store.history
+        if entry.get("status") in {"superseded", "historical"} and entry.get("text")
+    ]
+    if historical:
+        texts.append(f"(earlier, no longer current: {historical[-1]})")
+    return texts
+
+
 class ChatService:
     """Run one chat turn and persist the conversation."""
 
@@ -601,15 +626,37 @@ class ChatService:
             return None
 
     def _index_memories(self, user_id: UUID, store: ContinuityStore) -> None:
-        """Make the user's memory vectors reflect current memory (best-effort)."""
+        """Make the user's memory vectors reflect current memory (best-effort).
+
+        Both the structured memory rows and the reconciled durable insights are
+        synchronised. ``sync_memories`` prunes any key that is no longer
+        present, so a deleted or superseded fact stops being recalled from the
+        derived index and cannot override PostgreSQL.
+        """
         if not settings.continuity_enabled:
             return
         try:
             items = self._memory.list_current(user_id)
             mapping = {item.key.value: self._memory_text(item) for item in items}
+            mapping.update(self._insight_vectors(user_id))
             store.sync_memories(str(user_id), mapping)
         except Exception:
             log.warning("memory vector sync failed", exc_info=True)
+
+    def _insight_vectors(self, user_id: UUID) -> dict[str, str]:
+        """Return ``key -> text`` for confirmed insights, indexable for recall."""
+        profile = ProfileService(self._db).get(user_id)
+        prefs = profile.preferences if profile is not None else None
+        store = InsightStore.from_preferences(prefs)
+        out: dict[str, str] = {}
+        for entry in store.live:
+            if entry.get("status") != "current" or entry.get("needs_confirmation"):
+                continue
+            text = str(entry.get("text", "")).strip()
+            key = str(entry.get("key") or "")
+            if text and key:
+                out[key] = text
+        return out
 
     @staticmethod
     def _memory_text(item: Any) -> str:
@@ -725,7 +772,7 @@ class ChatService:
         events: list[dict[str, Any]] = []
         confirmations: list[str] = []
         for outcome in outcomes:
-            if outcome.status in {"saved", "duplicate", "failed"}:
+            if outcome.status in {"saved", "updated", "duplicate", "failed"}:
                 events.append(
                     {
                         "tool": f"extract_{outcome.kind}",
@@ -743,6 +790,28 @@ class ChatService:
 def _confirmation_line(outcome: RecordedOutcome) -> str | None:
     """Deterministic, truthful user-facing line for a persistence outcome."""
     kind = outcome.kind.replace("_", " ")
+    if outcome.kind == "memory_insight":
+        detail = outcome.detail or "current"
+        historical = detail.endswith("historical")
+        unconfirmed = detail.startswith("confirm:")
+        if outcome.status in {"saved", "updated"} and historical:
+            verb = (
+                "Noted as something you used to do"
+                if outcome.status == "saved"
+                else ("Updated what I remember")
+            )
+            return f"{verb}: {outcome.summary}."
+        if outcome.status == "saved" and unconfirmed:
+            return f"Noted, but let me know if that's right: {outcome.summary}."
+        if outcome.status == "saved":
+            return f"Noted for future chats: {outcome.summary}."
+        if outcome.status == "updated":
+            return f"Updated what I remember: {outcome.summary}."
+        if outcome.status == "failed":
+            return f"I couldn't save that note ({outcome.summary}); please try again."
+        # "duplicate" (restated) and "skipped" (hypothetical/planned/low
+        # confidence) are intentionally silent: nothing changed.
+        return None
     if outcome.kind == "completed_workout":
         if outcome.status == "saved":
             return f"Workout recorded: {outcome.summary}."
