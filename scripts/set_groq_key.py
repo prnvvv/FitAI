@@ -25,6 +25,7 @@ the ``.env``.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import getpass
 import os
 import shutil
@@ -96,7 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     updated = update_env(original, key)
     env_file.write_text(updated, encoding="utf-8")
     # Narrow the permissions on the file we just rewrote (best effort on Windows).
-    with_suppressed(lambda: os.chmod(env_file, 0o600))
+    with contextlib.suppress(OSError):
+        os.chmod(env_file, 0o600)
 
     if not args.no_backup:
         backup = Path(tempfile.gettempdir()) / f"fitai-env-{int(time.time())}.bak"
@@ -106,13 +108,6 @@ def main(argv: list[str] | None = None) -> int:
     print(f"updated {len(KEY_VARIABLES)} variables in {env_file}: " + ", ".join(KEY_VARIABLES))
     print("value not printed; restart the backend for it to take effect")
     return 0
-
-
-def with_suppressed(action) -> None:
-    try:
-        action()
-    except OSError:
-        pass
 
 
 if __name__ == "__main__":
