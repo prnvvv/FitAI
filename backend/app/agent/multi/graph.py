@@ -49,7 +49,11 @@ def _blocked_multi(state: MultiAgentState) -> bool:
 
 def multi_safe_response(state: MultiAgentState) -> dict[str, Any]:
     s = state.get("safety") or SafetyResult()
-    return {"response": s.response or "I can't help with that request.", "sources": [], "actions": []}
+    return {
+        "response": s.response or "I can't help with that request.",
+        "sources": [],
+        "actions": [],
+    }
 
 
 def _llm(model: str | None = None) -> GroqClient:

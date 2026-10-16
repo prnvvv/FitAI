@@ -1,0 +1,63 @@
+name: Backend CI
+
+# Continuous integration for the FastAPI backend: lint, formatting, and the
+# pytest suite. Runs on every pull request that can land on `main` and on every
+# push to `main`.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# The backend job only ever needs to read the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, format, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # ChromaDB telemetry must be disabled before the package is imported.
+      ANONYMIZED_TELEMETRY: "False"
+      # No secrets are provided to this job. The suite mocks the Groq client
+      # and runs against an isolated in-memory SQLite database, so real
+      # credentials, Supabase, or PostgreSQL are never required.
+      GROQ_API_KEY: ""
+      GROQ_EXTRACTION_API_KEY: ""
+      PROMPT_GUARD_API_KEY: ""
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/pyproject.toml
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          # Matches the floor declared in backend/pyproject.toml.
+          python-version: "3.10"
+
+      - name: Install backend and dev dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff lint
+        run: uv run ruff check app tests
+
+      - name: Ruff formatting
+        run: uv run ruff format --check app tests
+
+      - name: Pytest
+        run: uv run pytest
