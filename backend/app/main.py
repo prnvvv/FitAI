@@ -22,6 +22,7 @@ from app.api.routers import (
     activity,
     auth,
     chat,
+    compat,
     conversations,
     documents,
     exercises,
@@ -111,6 +112,9 @@ def create_app() -> FastAPI:
     for router in ROUTERS:
         app.include_router(router, prefix=settings.api_v1_prefix)
 
+    # Unprefixed compatibility routes (discovery probe), like /health.
+    app.include_router(compat.router)
+
     _register_health_endpoints(app)
     _register_startup_tasks(app)
 
@@ -138,6 +142,7 @@ def _register_startup_tasks(app: FastAPI) -> None:
     def _log_guardrails_mode() -> None:
         """Warn loudly if guardrails are in monitor mode."""
         from app.core.config import settings
+
         if settings.guardrails_enabled and settings.guardrails_mode == "monitor":
             logger.warning(
                 "GUARDRAILS_MODE=monitor: guardrails will LOG violations but NOT enforce them. "
@@ -246,6 +251,7 @@ def _register_health_endpoints(app: FastAPI) -> None:
     def guardrails_health() -> dict[str, object]:
         """Guardrails status for observability."""
         from app.core.config import settings
+
         return {
             "enabled": settings.guardrails_enabled,
             "mode": settings.guardrails_mode,

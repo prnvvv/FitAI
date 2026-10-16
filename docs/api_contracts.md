@@ -43,6 +43,7 @@ documentation (see `/docs` when running the server).
 | ------ | --------------- | ---------------------------------------- |
 | GET    | `/health`       | Liveness probe (no dependency checks).   |
 | GET    | `/health/ready` | Readiness; checks the database with `SELECT 1` and returns 503 on failure. |
+| GET    | `/v1/models`    | OpenAI-style discovery stub. Always returns `{"object":"list","data":[]}` so editor plugins/CLIs probing the base URL do not log 404s. Exposes no model ids, keys or configuration, and is not an OpenAI-compatible API — `/v1/chat/completions` deliberately stays 404. The real, authenticated API is `/api/v1`. |
 
 ## 3. Auth (Person 1)
 
