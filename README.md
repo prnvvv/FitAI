@@ -207,6 +207,22 @@ From the repository root you can also run `npm run test:backend`,
 `npm run test:frontend`, `npm run type-check:frontend`, and
 `npm run build:frontend`.
 
+### Continuous integration
+
+GitHub Actions runs on pull requests into `main` and on pushes to `main`:
+
+- `.github/workflows/backend-ci.yml` — installs the backend with `uv`, then runs
+  `ruff check`, `ruff format --check`, and `pytest` with no live credentials.
+- `.github/workflows/frontend-ci.yml` — runs `npm ci`, `npm run lint`,
+  `npm run type-check`, `npm test`, and `npm run build`.
+- `.github/workflows/secret-scan.yml` — fails a pull request if a configured
+  credential value appears in a changed file.
+
+All three use `permissions: contents: read`, pin actions to commit SHAs, and
+inject no production secrets. Dependency updates come from `.github/dependabot.yml`
+(weekly, for pip, npm, and GitHub Actions). See [SECURITY.md](SECURITY.md) for
+how to report a vulnerability.
+
 ## Architecture
 
 FitAI is a **modular monolith**. The frontend talks to FastAPI, and the backend
