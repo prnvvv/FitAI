@@ -71,3 +71,21 @@ def test_primary_llm_uses_the_primary_key_and_model(monkeypatch) -> None:
     llm = chat_service_module.ChatService._build_llm()
     assert _RecordingGroqClient.instances == [("primary-key", "x")]
     assert llm._model == "primary-model"
+
+
+def test_extractor_passes_the_configured_timeout(monkeypatch) -> None:
+    """Extraction runs inline, so the provider call must be time-bounded."""
+    monkeypatch.setattr(settings, "extraction_timeout_s", 3.5)
+    _RecordingGroqClient.instances.clear()
+    captured: dict[str, float | None] = {}
+
+    def factory(api_key: str | None = None, model: str = "x", **kwargs) -> None:
+        captured["timeout"] = kwargs.get("timeout")
+
+    monkeypatch.setattr("app.llm.client.Groq", factory)
+    GroqActivityExtractor(api_key="k", model="m", timeout=settings.extraction_timeout_s)
+    assert captured["timeout"] == 3.5
+
+
+def test_configured_timeout_has_a_safe_default() -> None:
+    assert 0 < settings.extraction_timeout_s <= 60

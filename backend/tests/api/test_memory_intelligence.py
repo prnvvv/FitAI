@@ -218,7 +218,7 @@ def test_completed_workout_is_not_stored_as_generic_memory(
     client: TestClient, monkeypatch, primary: _RecordingPrimaryLLM
 ) -> None:
     class _WorkoutExtractor:
-        def __init__(self, api_key=None, model=None) -> None:
+        def __init__(self, api_key=None, model=None, **kwargs) -> None:
             pass
 
         def extract(self, message: str, now=None) -> ExtractionResult:
@@ -254,7 +254,7 @@ def test_measurement_routes_to_progress_store(
     client: TestClient, monkeypatch, primary: _RecordingPrimaryLLM
 ) -> None:
     class _MeasurementExtractor:
-        def __init__(self, api_key=None, model=None) -> None:
+        def __init__(self, api_key=None, model=None, **kwargs) -> None:
             pass
 
         def extract(self, message: str, now=None) -> ExtractionResult:

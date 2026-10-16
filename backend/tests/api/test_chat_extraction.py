@@ -34,7 +34,7 @@ _RESULT = ExtractionResult(
 
 
 class _FakeExtractor:
-    def __init__(self, api_key=None, model=None) -> None:  # accepts settings kwargs
+    def __init__(self, api_key=None, model=None, **kwargs) -> None:  # settings kwargs
         pass
 
     def extract(self, message: str, now=None) -> ExtractionResult:
@@ -126,7 +126,7 @@ def test_extraction_failure_does_not_break_chat(client: TestClient, monkeypatch)
     monkeypatch.setattr(settings, "extraction_api_key", "test-extraction-key")
 
     class _Broken:
-        def __init__(self, api_key=None, model=None) -> None:
+        def __init__(self, api_key=None, model=None, **kwargs) -> None:
             pass
 
         def extract(self, message, now=None):
@@ -172,7 +172,7 @@ def test_blocked_message_is_not_sent_to_extractor(client: TestClient, monkeypatc
     calls = {"n": 0}
 
     class _RecordingExtractor:
-        def __init__(self, api_key=None, model=None) -> None:
+        def __init__(self, api_key=None, model=None, **kwargs) -> None:
             pass
 
         def extract(self, message, now=None):

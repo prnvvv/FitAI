@@ -203,3 +203,21 @@ def test_store_reads_only_wellformed_records() -> None:
     )
     assert store.live == [{"text": "a"}]
     assert store.history == []
+
+
+# --- normalization of echoed first-person sentences -------------------------
+def test_echoed_sentence_is_normalized_into_a_fact() -> None:
+    from app.extraction.schemas import normalize_fact_text
+
+    assert normalize_fact_text("I like cycling every day.") == "like cycling every day"
+    assert normalize_fact_text("I'm learning machine learning.") == "learning machine learning"
+    assert normalize_fact_text("My usual routine is cycling!") == "usual routine is cycling"
+    # Already-normalized text and proper nouns are left alone.
+    assert normalize_fact_text("likes cycling") == "likes cycling"
+    assert normalize_fact_text("Swimming on Mondays") == "swimming on Mondays"
+
+
+def test_normalized_insight_dedupes_against_the_echoed_form() -> None:
+    from app.extraction.schemas import normalize_fact_text
+
+    assert signature(normalize_fact_text("I like jogging.")) == signature("like jogging")
