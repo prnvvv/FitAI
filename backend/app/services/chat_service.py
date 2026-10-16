@@ -388,6 +388,29 @@ def _title_from_message(message: str) -> str:
 PINNED_INSIGHT_LIMIT = 8
 
 
+#: Process-wide ChromaDB handles, keyed by (persist dir, store class).
+#:
+#: ``VectorStore`` opens a persistent client and loads the embedding function, so
+#: rebuilding it per turn repeated that work on every request. The cache is keyed
+#: by the class as well, so a test that substitutes ``VectorStore`` still gets its
+#: own instance instead of a previously cached one.
+_VECTOR_STORES: dict[tuple[str, type[Any]], VectorStore] = {}
+
+
+def _vector_store() -> VectorStore | None:
+    """Return the shared ChromaDB handle for this process, or None if unavailable."""
+    key = (settings.chromadb_persist_dir, type(VectorStore))
+    store = _VECTOR_STORES.get(key)
+    if store is None:
+        try:
+            store = VectorStore(persist_dir=settings.chromadb_persist_dir)
+        except Exception:
+            log.warning("vector store unavailable", exc_info=True)
+            return None
+        _VECTOR_STORES[key] = store
+    return store
+
+
 def _confirmed_insights(prefs: dict[str, Any]) -> list[str]:
     """Current, confirmed insights from the profile preferences JSON.
 
@@ -491,7 +514,7 @@ class ChatService:
         use_memory, use_past_chats = self._toggles(user_id)
 
         try:
-            store = VectorStore(persist_dir=settings.chromadb_persist_dir)
+            store = _vector_store()
         except Exception:
             store = None
         retriever = Retriever(store) if store is not None else None
@@ -728,20 +751,29 @@ class ChatService:
         """Return a continuity store, or None when disabled/unavailable."""
         if not settings.continuity_enabled:
             return None
+        store = _vector_store()
+        if store is None:
+            return None
         try:
-            return ContinuityStore(VectorStore(persist_dir=settings.chromadb_persist_dir))
+            return ContinuityStore(store)
         except Exception:
             log.warning("continuity store unavailable", exc_info=True)
             return None
 
     def _build_extractor(self) -> RecordExtractor | None:
-        """Return the dedicated extractor, or None when disabled/unconfigured."""
+        """Return the dedicated extractor, or None when disabled/unconfigured.
+
+        The extraction client is created with an explicit timeout so a slow or
+        hanging provider cannot hold the response open: on timeout the extractor
+        reports an error, nothing is persisted and the reply is unaffected.
+        """
         if not settings.extraction_enabled:
             return None
         try:
             return GroqActivityExtractor(
                 api_key=settings.extraction_api_key or "",
                 model=settings.extraction_model,
+                timeout=settings.extraction_timeout_s,
             )
         except Exception:
             log.warning("activity extractor could not be initialised", exc_info=True)

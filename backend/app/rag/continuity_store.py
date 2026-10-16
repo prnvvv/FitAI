@@ -11,6 +11,7 @@ recall available" rather than failing the turn.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +23,11 @@ log = logging.getLogger(__name__)
 
 KIND_MEMORY = "memory"
 KIND_SUMMARY = "summary"
+
+
+def _text_hash(text: str) -> str:
+    """Stable fingerprint of an indexed fact's text."""
+    return hashlib.sha1(" ".join(text.split()).encode()).hexdigest()[:16]
 
 
 @dataclass(frozen=True)
@@ -71,18 +77,39 @@ class ContinuityStore:
         )
 
     def sync_memories(self, user_id: str, memories: dict[str, str]) -> None:
-        """Make the stored memory vectors equal ``memories`` (upsert + prune).
+        """Make the stored memory vectors equal ``memories`` (incremental).
 
-        ``memories`` maps a memory key to its display text. Keys absent from the
-        map are removed so a deleted or superseded fact stops being recalled.
+        ``memories`` maps a memory key to its display text. Only records whose
+        text actually changed are re-embedded; keys absent from the map are
+        removed so a deleted or superseded fact stops being recalled. The result
+        is identical to a full re-index, but an unchanged fact costs a metadata
+        read instead of an embedding.
+
+        Documents are identified by the stable id ``<owner>:<kind>:<key>:0``, so
+        re-indexing is an upsert of the same vector rather than a duplicate, and
+        retrieval sees a change on the very next turn.
         """
-        for key, text in memories.items():
-            self.index_memory(user_id, key, text)
+        if not user_id:
+            return
+        wanted = {key: text for key, text in memories.items() if (text or "").strip()}
+        indexed: dict[str, str] = {}
         for hit in self._store.list_vectors(
             CONTINUITY_COLLECTION, owner_id=str(user_id), where={"kind": KIND_MEMORY}
         ):
             key = str(hit.metadata.get("key", ""))
-            if key and key not in memories:
+            if key:
+                indexed[key] = str(hit.metadata.get("text_hash", ""))
+
+        changed: list[tuple[str, str]] = []
+        for key, text in wanted.items():
+            digest = _text_hash(text)
+            if indexed.get(key) != digest:
+                changed.append((key, text))
+        # Batch the upserts so one embedding call covers every changed fact.
+        if changed:
+            self._upsert_many(user_id, changed)
+        for key in indexed:
+            if key not in wanted:
                 self.delete_memory(user_id, key)
 
     # -- deletion ---------------------------------------------------------
@@ -125,22 +152,58 @@ class ContinuityStore:
         return [hit for hit in out if hit.score >= min_score]
 
     # -- internal ---------------------------------------------------------
+    def _upsert_many(self, user_id: str, items: list[tuple[str, str]]) -> None:
+        """Upsert several memory facts (key, text) in one embedding batch."""
+        chunks = [
+            Chunk(
+                id=f"{user_id}:{KIND_MEMORY}:{key}:0",
+                text=text,
+                metadata=self._metadata(
+                    user_id,
+                    f"{KIND_MEMORY}:{key}",
+                    {"kind": KIND_MEMORY, "key": key, "source": "memory"},
+                    text,
+                ),
+            )
+            for key, text in items
+        ]
+        self._store.add_chunks(CONTINUITY_COLLECTION, chunks, owner_id=str(user_id))
+
     def _upsert(self, user_id: str, doc_id: str, text: str, meta: dict[str, Any]) -> None:
-        text = (text or "").strip()
-        if not text or not user_id:
+        stripped = (text or "").strip()
+        if not stripped or not user_id:
             return
+        self._store.add_chunks(
+            CONTINUITY_COLLECTION,
+            [
+                Chunk(
+                    id=f"{user_id}:{doc_id}:0",
+                    text=stripped,
+                    metadata=self._metadata(user_id, doc_id, meta, stripped),
+                )
+            ],
+            owner_id=str(user_id),
+        )
+
+    @staticmethod
+    def _metadata(
+        user_id: str, doc_id: str, meta: dict[str, Any], text: str
+    ) -> dict[str, str | int | float | bool]:
+        """Owner-scoped metadata for one continuity vector.
+
+        ``text_hash`` lets :meth:`sync_memories` skip unchanged facts without
+        re-embedding them, and detect when a record really changed.
+        """
+        stripped = (text or "").strip()
         metadata: dict[str, str | int | float | bool] = {
             "owner_id": str(user_id),
             "doc_id": doc_id,
             "file_type": "continuity",
             "page": -1,
             "chunk_index": 0,
+            "text_hash": _text_hash(stripped),
         }
         for key, value in meta.items():
             if value is not None:
                 metadata[key] = value if isinstance(value, str | int | float | bool) else str(value)
-        self._store.add_chunks(
-            CONTINUITY_COLLECTION,
-            [Chunk(id=f"{user_id}:{doc_id}:0", text=text, metadata=metadata)],
-            owner_id=str(user_id),
-        )
+        return metadata
