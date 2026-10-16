@@ -127,6 +127,10 @@ class AgentDeps:
     fitness_reader: FitnessReader | None = None
     #: Owner-scoped cross-chat recall (semantic memories + past-chat summaries).
     continuity: ContinuityReader | None = None
+    #: Optional prompt-injection guard used to screen untrusted retrieved
+    #: documents before they reach the prompt. Failures degrade to "keep the
+    #: documents": the guard must never silently empty the context.
+    prompt_guard: Any | None = None
     tools: Mapping[str, Tool] = dc_field(default_factory=dict)
     db_session: object | None = None
     policy: ConfirmationPolicy = dc_field(default_factory=ConfirmationPolicy)
@@ -245,6 +249,37 @@ def wants_fitness_context(msg: str) -> bool:
     return bool(_FITNESS_CONTEXT_INTENT.search(msg))
 
 
+#: Cap on guard calls per turn; the retriever returns a handful of documents, so
+#: this only matters if a caller widens ``k``.
+MAX_SCREENED_DOCS = 6
+
+
+def _screen_documents(docs: list[str], guard: Any | None) -> tuple[list[str], int]:
+    """Drop retrieved documents the prompt guard flags as injection attempts.
+
+    Uploaded documents are untrusted data: instructions inside them must never
+    reach the answering model. Guard errors and timeouts keep the document (fail
+    open), and a withheld document is reported as a count, never as content.
+    """
+    if guard is None or not docs:
+        return docs, 0
+    kept: list[str] = []
+    dropped = 0
+    for index, doc in enumerate(docs):
+        if index < MAX_SCREENED_DOCS:
+            try:
+                if getattr(guard.screen(doc), "unsafe", False):
+                    dropped += 1
+                    continue
+            except Exception:
+                kept.append(doc)
+                continue
+        kept.append(doc)
+    if dropped:
+        log.warning("prompt_guard_withheld_documents count=%d", dropped)
+    return kept, dropped
+
+
 # ---- safety -------------------------------------------------------------------
 def safety_check(state: AgentState) -> dict[str, Any]:
     return {"safety": run_safety_rules(state.get("user_message", ""))}
@@ -356,7 +391,13 @@ def retrieve_context_node(state: AgentState, deps: AgentDeps) -> dict[str, Any]:
     if deps.retriever:
         try:
             docs = deps.retriever.search(state["user_message"], state["user_id"])
-            tool_results.append({"tool": "retriever", "docs": docs})
+            docs, dropped = _screen_documents(docs, deps.prompt_guard)
+            entry: dict[str, Any] = {"tool": "retriever", "docs": docs}
+            if dropped:
+                # Report the count, never the flagged content.
+                entry["screened_out"] = dropped
+                errs.append(f"retriever: {dropped} document(s) withheld by prompt guard")
+            tool_results.append(entry)
         except Exception as exc:
             errs.append(f"retriever: {type(exc).__name__}")
 

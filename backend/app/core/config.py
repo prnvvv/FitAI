@@ -150,6 +150,23 @@ class Settings(BaseSettings):
     guardrails_enabled: bool = True
     guardrails_mode: str = "enforce"  # "enforce" | "monitor" | "disabled"
     guard_model: str | None = None  # model for LLM classifier (defaults to groq_model)
+    #: Prompt-injection guard model (``meta-llama/llama-prompt-guard-2-86m``).
+    #: It scores untrusted text (user messages and retrieved documents) safe or
+    #: unsafe and never answers the user. Optional: when unset or disabled the
+    #: deterministic safety rules remain the only gate and chat is unaffected.
+    prompt_guard_enabled: bool = True
+    prompt_guard_model: str = Field(
+        default="meta-llama/llama-prompt-guard-2-86m",
+        validation_alias=AliasChoices("PROMPT_GUARD_MODEL", "GUARD_MODEL"),
+    )
+    #: Key for the guard model. Empty means "reuse the primary Groq key".
+    prompt_guard_api_key: str | None = Field(
+        default=None, validation_alias=AliasChoices("PROMPT_GUARD_API_KEY", "GUARD_API_KEY")
+    )
+    #: Score at or above which text is treated as a prompt-injection attempt.
+    prompt_guard_threshold: float = 0.5
+    #: Hard timeout for one screening call; on error the guard fails open.
+    prompt_guard_timeout_s: float = 2.0
     guard_canary: str | None = None  # canary token for output guard
     #: Run the LLM intent classifier as the decision layer on top of the
     #: deterministic rules. Disable to fall back to deterministic-only gating.

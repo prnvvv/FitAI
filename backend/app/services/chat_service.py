@@ -41,6 +41,7 @@ from app.rag.retriever import Retriever
 from app.rag.vector_store import VectorStore
 from app.repositories.conversation_summary_repository import ConversationSummaryRepository
 from app.safety import run_safety_rules
+from app.safety.prompt_guard import build_prompt_guard
 from app.services.conversation_service import ConversationService
 from app.services.memory_service import MemoryService
 from app.services.profile_service import ProfileService
@@ -542,6 +543,7 @@ class ChatService:
             retriever=retriever,
             continuity=continuity,
             fitness_reader=_FitnessReaderAdapter(self._db, user_id),
+            prompt_guard=build_prompt_guard(),
             tools={"web_search": web_search, "nearby_gyms": nearby_gyms},
             db_session=self._db,
         )

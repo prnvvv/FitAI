@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from app.core.config import settings
 from app.guardrails.classifier import Intent, IntentClassifier
 from app.safety import get_safe_reply, run_safety_rules
+from app.safety.prompt_guard import PromptGuard, build_prompt_guard
 
 log = logging.getLogger(__name__)
 
@@ -135,6 +136,7 @@ def classify_and_decide(
     classifier: IntentClassifier | None = None,
     *,
     conf_threshold: float | None = None,
+    prompt_guard: PromptGuard | None = None,
 ) -> GuardDecision:
     """Gate one message and return the decision. Never raises."""
     threshold = settings.guard_conf_threshold if conf_threshold is None else conf_threshold
@@ -151,6 +153,23 @@ def classify_and_decide(
             source="deterministic",
             reason="deterministic rule match",
         )
+
+    # 1b. Prompt-injection guard model. The dedicated classifier scores the
+    #     message itself, so novel injections the regexes do not know about are
+    #     still caught. It fails open: an error means "not screened", and the
+    #     deterministic rules above remain in force.
+    guard = prompt_guard if prompt_guard is not None else build_prompt_guard()
+    if guard is not None:
+        verdict = guard.screen(message)
+        if verdict.unsafe:
+            return GuardDecision(
+                blocked=True,
+                category="prompt_injection",
+                response=get_safe_reply("prompt_injection"),
+                wants_tool=False,
+                source="prompt_guard",
+                reason=f"prompt_guard score {verdict.score:.2f}",
+            )
 
     # 2. No classifier wired -> deterministic allow (current behaviour).
     if classifier is None:
@@ -202,6 +221,7 @@ def guarded_run(
     classifier: IntentClassifier | None = None,
     *,
     conf_threshold: float | None = None,
+    prompt_guard: PromptGuard | None = None,
 ) -> GuardDecision:
     """Single choke point: gate a message, log the turn, return the decision.
 
@@ -210,7 +230,13 @@ def guarded_run(
     tools, memory extraction, or persistence.
     """
     start = time.monotonic()
-    decision = classify_and_decide(message, user_id, classifier, conf_threshold=conf_threshold)
+    decision = classify_and_decide(
+        message,
+        user_id,
+        classifier,
+        conf_threshold=conf_threshold,
+        prompt_guard=prompt_guard,
+    )
     latency_ms = (time.monotonic() - start) * 1000
     log_guard_turn(user_id, decision, latency_ms=latency_ms, mode=settings.guardrails_mode)
     return decision
