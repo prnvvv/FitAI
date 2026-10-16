@@ -35,7 +35,12 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from app.extraction.schemas import InsightStatus, MemoryInsight, ProposedAction
+from app.extraction.schemas import (
+    InsightStatus,
+    MemoryInsight,
+    ProposedAction,
+    normalize_fact_text,
+)
 
 INSIGHTS_KEY = "memory_insights"
 HISTORY_KEY = "memory_insight_history"
@@ -423,7 +428,7 @@ def apply_decision(
 
     record: dict[str, Any] = {
         "key": decision.key,
-        "text": decision.text,
+        "text": normalize_fact_text(decision.text),
         "category": candidate.category,
         "status": decision.status.value,
         "confidence": float(candidate.confidence),

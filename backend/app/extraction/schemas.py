@@ -35,6 +35,32 @@ _UNCERTAIN_RE = re.compile(
 )
 
 
+#: Models frequently echo the user's own words ("I like cycling every day.").
+#: A remembered fact is stored normalized so it reads as a statement about the
+#: user in the assistant's context.
+_LEADING_PRONOUN_RE = re.compile(r"^(?:i\s*(?:'m|’m|\s+am|\s+ve|\s+have)?|im|my|mine)\s+", re.I)
+
+
+def normalize_fact_text(text: str) -> str:
+    """Turn an echoed first-person sentence into a normalized fact.
+
+    "I like cycling every day." -> "like cycling every day"
+
+    Deliberately conservative: it only strips a leading first-person pronoun,
+    trailing sentence punctuation, and lower-cases the first character. Nothing
+    is reworded, so the stored fact still means exactly what the user said.
+    """
+    cleaned = " ".join((text or "").split()).strip()
+    cleaned = cleaned.rstrip(" .!?,;:")
+    cleaned = _LEADING_PRONOUN_RE.sub("", cleaned)
+    if not cleaned:
+        return cleaned
+    first = cleaned.split(" ", 1)[0]
+    if cleaned[0].isupper() and not first.isupper():
+        cleaned = cleaned[0].lower() + cleaned[1:]
+    return cleaned
+
+
 class _Candidate(BaseModel):
     """Fields shared by every extraction candidate."""
 
@@ -170,7 +196,8 @@ class MemoryInsight(_Candidate):
             raise ValueError("insight text is too short to be useful")
         if _INJECTION_RE.search(cleaned):
             raise ValueError("insight text looks like an instruction, not a user fact")
-        return cleaned
+        # Normalize echoed first-person sentences into a stored fact.
+        return normalize_fact_text(cleaned)
 
     @model_validator(mode="after")
     def _reconcile_temporal(self) -> MemoryInsight:
