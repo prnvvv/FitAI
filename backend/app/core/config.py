@@ -120,6 +120,11 @@ class Settings(BaseSettings):
     #: True, the extractor no-ops (and chat proceeds normally) if no
     #: ``GROQ_EXTRACTION_API_KEY`` is configured.
     agent_activity_extraction: bool = True
+    #: Hard cap on one extraction call. Extraction runs inline, before the reply,
+    #: so a slow or hanging provider must not hold the user's response open
+    #: indefinitely. On timeout extraction is skipped for that turn (chat
+    #: continues, nothing is claimed as saved) and the next message retries.
+    extraction_timeout_s: float = 10.0
 
     # Web search provider chain (comma-separated priority list).
     # Supported: tavily, brave, serper, ddgs. Missing/empty defaults to "ddgs".

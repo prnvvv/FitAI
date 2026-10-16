@@ -57,16 +57,28 @@ class GroqActivityExtractor:
     separate from the primary assistant's credentials.
     """
 
-    def __init__(self, api_key: str, model: str, *, llm: TextCompleter | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        llm: TextCompleter | None = None,
+        timeout: float | None = None,
+    ) -> None:
         # A completer can be injected (tests / alternate providers). Otherwise a
-        # dedicated Groq client is built from this component's OWN key + model.
+        # dedicated Groq client is built from this component's OWN key + model,
+        # with a bounded timeout because extraction runs inline in the request.
         if llm is not None:
             self._llm = llm
         else:
             # Imported lazily so constructing the class never requires groq.
             from app.llm.client import GroqClient
 
-            self._llm = GroqClient(api_key=api_key, model=model)
+            self._llm = (
+                GroqClient(api_key=api_key, model=model)
+                if timeout is None
+                else GroqClient(api_key=api_key, model=model, timeout=timeout)
+            )
 
     def extract(self, message: str, now: datetime | None = None) -> ExtractionResult:
         now = now or datetime.now(timezone.utc)
