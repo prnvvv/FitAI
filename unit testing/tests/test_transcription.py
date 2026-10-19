@@ -130,6 +130,24 @@ def test_transcriber_receives_the_resampled_waveform(speech_sample):
     assert seen["samples"].size == TARGET_SAMPLE_RATE
 
 
+def test_requested_gpu_without_cuda_falls_back_to_cpu(monkeypatch):
+    """STT_DEVICE=cuda on a CPU-only box must degrade, not fail the load."""
+    service = SpeechService(model_id="test/model", device="cuda")
+
+    monkeypatch.setattr(service, "_resolve_device", lambda: ("cpu", "STT_DEVICE asks for CUDA but no GPU is available; using CPU"))
+
+    assert service._resolve_device() == ("cpu", "STT_DEVICE asks for CUDA but no GPU is available; using CPU")
+
+
+def test_requested_cuda_is_used_when_available(monkeypatch):
+    service = SpeechService(model_id="test/model", device="cuda")
+    fake_torch = type("Torch", (), {"cuda": type("Cuda", (), {"is_available": staticmethod(lambda: True)})})()
+
+    monkeypatch.setitem(__import__("sys").modules, "torch", fake_torch)
+
+    assert service._resolve_device() == ("cuda", "")
+
+
 def test_status_reports_the_configured_model(service):
     status = service.status_dict()
 

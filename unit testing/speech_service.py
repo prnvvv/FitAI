@@ -129,6 +129,7 @@ class SpeechService:
         self._processor: object | None = None
         self._model: object | None = None
         self._device = "not loaded"
+        self.device_note = ""
         self._lock = threading.Lock()
         self._load_seconds = 0.0
         self._last_seconds = 0.0
@@ -154,6 +155,22 @@ class SpeechService:
             return "\nFix: set STT_DEVICE=cpu, or close memory-hungry applications and retry."
         return ""
 
+    def _resolve_device(self) -> tuple[str, str]:
+        """Return (device_map value, note). A requested GPU that is not there
+        falls back to CPU instead of failing the whole load."""
+        request = (self.device_request or "auto").strip().lower()
+        try:
+            import torch
+        except ImportError:
+            return "cpu", "torch is not installed; using CPU"
+
+        has_cuda = bool(getattr(torch, "cuda", None)) and torch.cuda.is_available()
+        if request.startswith("cuda") and not has_cuda:
+            return "cpu", "STT_DEVICE asks for CUDA but no GPU is available; using CPU"
+        if request == "auto" and not has_cuda:
+            return "cpu", "no GPU detected; using CPU"
+        return request, ""
+
     def _default_loader(self) -> tuple[object, object]:
         """Follow the model card: AutoProcessor + AutoModelForCTC, device_map auto."""
         try:
@@ -178,10 +195,12 @@ class SpeechService:
             except Exception as exc:
                 raise ModelLoadError(f"Could not load the processor: {exc} (native: {native_error}){hint}") from exc
 
+        device_map, note = self._resolve_device()
+        self.device_note = note
         try:
-            model = AutoModelForCTC.from_pretrained(self.model_id, device_map=self.device_request, **common)
+            model = AutoModelForCTC.from_pretrained(self.model_id, device_map=device_map, **common)
         except Exception as exc:
-            raise ModelLoadError(f"Could not load the model: {exc}") from exc
+            raise ModelLoadError(f"Could not load the model: {exc}{self._dependency_hint(exc)}") from exc
 
         model.eval()
         return processor, model
@@ -212,7 +231,7 @@ class SpeechService:
             self._load_seconds = time.perf_counter() - started
             self.status.state = "ready"
             self.status.device = str(self._device)
-            self.status.detail = "Ready"
+            self.status.detail = self.device_note or "Ready"
             self.status.load_seconds = self._load_seconds
 
     def warmup(self) -> None:
@@ -276,6 +295,7 @@ class SpeechService:
         payload = self.status.as_dict()
         payload["requests"] = self._requests
         payload["device_request"] = self.device_request
+        payload["device_note"] = self.device_note
         payload["last_request_seconds"] = round(self._last_seconds, 2)
         return payload
 

@@ -116,6 +116,40 @@ Useful switches (env vars): `STT_DEVICE=cpu|cuda|auto`, `STT_MODEL_ID=...`,
 `STT_EAGER_LOAD=0` (skip the background download and load on the first request
 instead), `STT_PORT`.
 
+### GPU (CUDA)
+
+CPU wheels work out of the box. For an NVIDIA GPU, install the CUDA build of the
+same pinned pair **into the same virtual environment**:
+
+```bash
+.venv/Scripts/python -m pip install --upgrade --force-reinstall torch==2.9.1 torchaudio==2.9.1 \
+  --index-url https://download.pytorch.org/whl/cu128
+```
+
+`--force-reinstall` matters: an already-installed `2.9.1+cpu` satisfies
+`torch==2.9.1`, so a plain `pip install` silently keeps the CPU build and
+`torch.cuda.is_available()` stays `False`. Use `cu126` or `cu121` instead of
+`cu128` if your driver is older, and check with:
+
+```bash
+.venv/Scripts/python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+Then set the device in `.env` (`STT_DEVICE=cuda`) or per run
+(`STT_DEVICE=cpu .venv/Scripts/python -m uvicorn app:app`). If CUDA is requested
+but no GPU is present, the service falls back to CPU and says so in
+`/api/status` (`device_note`) instead of failing to load.
+
+Measured on this machine (RTX 2050, 4 GB, CUDA 12.8, same 33.6 s clip):
+
+| | CPU | GPU (`cuda:0`) |
+|---|---|---|
+| model load (cached weights) | 13.6 s | 12.3 s |
+| transcription | 7.1 s | **1.7 s** first, **0.13–0.17 s** warm |
+| VRAM after load | – | ~1.1 GB of 4 GB |
+
+The transcript is identical on both devices.
+
 ### First run
 
 The first start downloads ~900 MB of weights in a background thread. The page
