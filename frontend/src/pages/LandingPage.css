@@ -22,7 +22,7 @@
 }
 
 /* ==========================================================================
-   Page Layout — Clean Flow-Based Structure
+   Page Layout — Flow-Based Structure
    ========================================================================== */
 
 .landing-page {
@@ -37,7 +37,7 @@
   position: relative;
 }
 
-/* Header — Fixed but with placeholder for flow */
+/* Header — Fixed with placeholder to reserve space in flow */
 .landing-header-placeholder {
   height: var(--fitai-header-height);
 }
@@ -132,19 +132,19 @@
   border-radius: 999px;
 }
 
-/* Hero Section — Grid-Based Two-Column Layout */
+/* Hero Section — Grid-Based Two-Column Layout with Natural Flow */
 .landing-hero {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: calc(100vh - var(--fitai-header-height));
   width: 100%;
+  min-height: calc(100vh - var(--fitai-header-height));
   position: relative;
 }
 
+/* Left column: content flows from top with generous padding */
 .landing-hero__content {
   display: flex;
   flex-direction: column;
-  justify-content: center;
   padding: 80px var(--fitai-container-pad) 100px;
   max-width: 680px;
   margin-left: auto;
@@ -307,7 +307,7 @@
   line-height: 1;
 }
 
-/* Hero Visual — Architectural Pillar */
+/* Hero Visual — Right Column: Architectural Pillar */
 .landing-hero__visual {
   position: relative;
   display: flex;
@@ -346,7 +346,7 @@
   pointer-events: none;
 }
 
-/* Feature Strip — Clean Four-Column Row */
+/* Feature Strip — Clean Four-Column Row, flows after hero */
 .landing-features {
   display: flex;
   align-items: center;
@@ -355,6 +355,7 @@
   border-top: 1px solid var(--fitai-divider);
   background-color: var(--fitai-bg);
   width: 100%;
+  flex-shrink: 0;
 }
 
 .landing-features__item {
@@ -567,7 +568,7 @@
   }
 
   .landing-hero {
-    padding-top: 0;
+    min-height: auto;
   }
 
   .landing-hero__content {
