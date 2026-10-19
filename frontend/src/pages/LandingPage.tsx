@@ -42,37 +42,27 @@ export function LandingPage() {
     <div className="landing">
       {/* Header / Nav */}
       <header className={`nav ${scrolled ? 'is-scrolled' : ''}`} role="banner">
-        <div className="nav__inner">
-          {/* Logo: waveform + wordmark */}
-          <div className="nav__logo" aria-label="FitAI home">
-            <div className="nav__waveform" aria-hidden="true">
-              <div className="nav__bar" />
-              <div className="nav__bar" />
-              <div className="nav__bar" />
-              <div className="nav__bar" />
-              <div className="nav__bar" />
-            </div>
-            <span className="nav__wordmark">FitAI</span>
+        {/* Logo: waveform + wordmark */}
+        <div className="nav__logo" aria-label="FitAI home">
+          <div className="nav__waveform" aria-hidden="true">
+            <div className="nav__bar" />
+            <div className="nav__bar" />
+            <div className="nav__bar" />
+            <div className="nav__bar" />
+            <div className="nav__bar" />
           </div>
+          <span className="nav__wordmark">FitAI</span>
+        </div>
 
-          {/* Centered Links */}
-          <nav className="nav__links" aria-label="Main navigation">
-            <a className="nav__link" href="#product">Product</a>
-            <a className="nav__link" href="#how-it-works">How it works</a>
-            <a className="nav__link" href="#science">Science</a>
-            <a className="nav__link" href="#pricing">Pricing</a>
-          </nav>
-
-          {/* Right Actions */}
-          <div className="nav__actions">
-            <button className="nav__login" onClick={handleLogIn} type="button">
-              Log in
-            </button>
-            <a className="nav__cta" href="/login?mode=signup">
-              <span>Get started</span>
-              <ArrowRight size={18} aria-hidden="true" />
-            </a>
-          </div>
+        {/* Right Actions */}
+        <div className="nav__actions">
+          <button className="nav__login" onClick={handleLogIn} type="button">
+            Log in
+          </button>
+          <a className="nav__cta" href="/login?mode=signup">
+            <span>Get started</span>
+            <ArrowRight size={18} aria-hidden="true" />
+          </a>
         </div>
       </header>
 
@@ -90,6 +80,7 @@ export function LandingPage() {
           <div className="hero__overlay hero__overlay--left" />
           <div className="hero__overlay hero__overlay--top" />
           <div className="hero__overlay hero__overlay--bottom" />
+          <div className="hero__overlay hero__overlay--glow" />
           <div className="hero__arc" />
         </div>
 
@@ -100,7 +91,7 @@ export function LandingPage() {
           </p>
           <h1 id="hero-heading" className="hero__heading">
             <span className="hero__heading-line">Train with</span>
-            <span className="hero__heading-line hero__heading-line--gold">intelligence.</span>
+            <span className="hero__heading-line hero__heading-line--gold">Intelligence.</span>
           </h1>
           <p className="hero__copy">
             Personalized fitness plans, nutrition guidance and progress insights — powered by AI.

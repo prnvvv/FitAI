@@ -12,8 +12,8 @@
   --hairline: rgba(255, 255, 255, 0.09);
   --gold-hairline: rgba(226, 162, 79, 0.18);
   --gutter: clamp(20px, 5.8vw, 110px);
-  --header-h: 104px;
-  --strip-h: 164px;
+  --header-h: clamp(76px, 10svh, 104px);
+  --strip-h: clamp(84px, 10.5svh, 108px);
 }
 
 *, *::before, *::after {
@@ -124,14 +124,8 @@ input[type='number'] {
 .landing .hero__content .hero__copy { animation-delay: 0.2s; }
 .landing .hero__content .hero__cta { animation-delay: 0.3s; }
 
-.landing .hero__media {
-  animation: fadeIn 1s ease 0.2s forwards;
-  opacity: 0;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .landing .hero__content > *,
-  .landing .hero__media {
+  .landing .hero__content > * {
     animation: none !important;
     opacity: 1 !important;
   }
