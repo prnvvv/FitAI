@@ -2774,6 +2774,9 @@
 }
 
 .plan__calendar {
+  /* Content-sized: the card must never become a tall empty box again. */
+  align-self: start;
+  max-height: 100%;
   border: 1px solid var(--divider);
   border-radius: 12px;
   background-color: var(--bg-composer);
@@ -4061,7 +4064,29 @@
 }
 
 .plan__year-month {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   min-height: 0;
+  padding: 8px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background-color: var(--bg-main);
+}
+
+.plan__year-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.plan__year-day {
+  aspect-ratio: 1;
+  height: auto;
+  min-height: 8px;
 }
 
 .plan__year-days {
@@ -5483,6 +5508,9 @@
 }
 
 .plan__calendar {
+  /* Content-sized: the card must never become a tall empty box again. */
+  align-self: start;
+  max-height: 100%;
   border: 1px solid var(--divider);
   border-radius: 12px;
   background-color: var(--bg-composer);
@@ -5777,6 +5805,7 @@
 }
 
 .workspace {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -5922,6 +5951,20 @@
 .composer__submit {
   grid-column: 1 / -1;
   justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.composer__submit:hover {
+  background-color: var(--bg-hover);
 }
 
 /* Logged sessions and planned sessions share one slim-row language. */
@@ -6097,10 +6140,28 @@
   flex: none;
 }
 
+/* The editor labels each control in its column header, so the stepper keeps
+   only its accessible name here. */
+.editor__field .stepper__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 /* Templates */
+.workspace__templates {
+  /* Anchored under the toolbar row that holds the Template button. */
+  position: absolute;
+  inset: 62px 0 auto auto;
+  z-index: 40;
+}
+
 .templates {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% - 4px);
   right: 0;
   z-index: 40;
   width: min(420px, calc(100vw - 32px));
@@ -6224,6 +6285,11 @@
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+  /* Stays reachable however long the template list is. */
+  position: sticky;
+  bottom: -14px;
+  padding: 10px 0 4px;
+  background-color: var(--bg-popover);
 }
 
 .templates__confirm {

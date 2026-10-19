@@ -254,18 +254,20 @@ export function DayPanel(props: DayPanelProps) {
         </footer>
       )}
 
-      <TemplatePopover
-        open={templateOpen}
-        templates={props.templates}
-        templateKey={props.templateKey}
-        templateDate={props.templateDate}
-        applying={props.applyingTemplate}
-        plannedDays={props.plannedDays}
-        onKeyChange={props.onTemplateKey}
-        onDateChange={props.onTemplateDate}
-        onApply={props.onApplyTemplate}
-        onClose={() => setTemplateOpen(false)}
-      />
+      <div className="workspace__templates">
+        <TemplatePopover
+          open={templateOpen}
+          templates={props.templates}
+          templateKey={props.templateKey}
+          templateDate={props.templateDate}
+          applying={props.applyingTemplate}
+          plannedDays={props.plannedDays}
+          onKeyChange={props.onTemplateKey}
+          onDateChange={props.onTemplateDate}
+          onApply={props.onApplyTemplate}
+          onClose={() => setTemplateOpen(false)}
+        />
+      </div>
     </section>
   )
 }
@@ -322,7 +324,7 @@ function PlanBody({
         {split && (
           <button
             type="button"
-            className="profile__save composer__submit"
+            className="composer__submit"
             onClick={onCreatePlan}
             disabled={planning}
           >
