@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import './App.css'
 import { AppShell } from './components/layout/AppShell'
@@ -23,10 +23,62 @@ function RootLayout({ children }: { children: ReactNode }) {
     <>
       <SiteBackdrop />
       <PersistentHeader />
-      <div className="page-transition">
-        {children}
-      </div>
+      {children}
     </>
+  )
+}
+
+/* Keep in sync with .page-transition.is-exit in backdrop.css */
+const PAGE_EXIT_MS = 150
+
+/**
+ * Renders the public routes with a coordinated exit/enter sequence.
+ *
+ * The backdrop, header and amber atmosphere are rendered once by RootLayout and
+ * never remount, so only the page foreground animates: the outgoing page fades
+ * out with a slight rise, then the incoming page mounts and plays its own
+ * entrance animation. The exiting page is rendered from the last location so it
+ * cannot disappear mid-animation, and it never covers the new page (no overlap).
+ */
+function PublicRoutes() {
+  const location = useLocation()
+  const [renderedLocation, setRenderedLocation] = useState(location)
+  const [isExiting, setIsExiting] = useState(false)
+
+  useEffect(() => {
+    if (location.key === renderedLocation.key) return
+
+    // Query-only changes (e.g. /login -> /login?mode=signup) render the same
+    // page, so swap immediately instead of flashing an exit/enter animation.
+    if (location.pathname !== renderedLocation.pathname) {
+      const prefersReducedMotion =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      setIsExiting(true)
+      const timer = window.setTimeout(() => {
+        setRenderedLocation(location)
+        setIsExiting(false)
+      }, prefersReducedMotion ? 0 : PAGE_EXIT_MS)
+
+      return () => window.clearTimeout(timer)
+    }
+
+    setRenderedLocation(location)
+    setIsExiting(false)
+  }, [location, renderedLocation.key, renderedLocation.pathname])
+
+  return (
+    <div
+      key={renderedLocation.key}
+      className={`page-transition${isExiting ? ' is-exit' : ''}`}
+    >
+      <Routes location={renderedLocation}>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
   )
 }
 
@@ -185,11 +237,7 @@ function PublicApp() {
 
   return (
     <RootLayout>
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <PublicRoutes />
     </RootLayout>
   )
 }

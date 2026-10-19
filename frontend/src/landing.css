@@ -450,7 +450,7 @@
 @keyframes landingFadeIn {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(14px);
   }
   to {
     opacity: 1;
@@ -459,13 +459,11 @@
 }
 
 .landing-fade-in {
-  animation: landingFadeIn 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  opacity: 0;
+  animation: landingFadeIn 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .landing-fade-in-delayed {
-  animation: landingFadeIn 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.15s forwards;
-  opacity: 0;
+  animation: landingFadeIn 300ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
 }
 
 /* ==========================================================================
