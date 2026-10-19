@@ -5551,21 +5551,31 @@
   padding: 5px 4px;
   border: 1px solid transparent;
   border-radius: 10px;
-  background-color: var(--bg-main);
+  /* Normal day: one step above the page so cells read as surfaces, not holes. */
+  background-color: var(--bg-composer);
   color: var(--text-secondary);
   cursor: pointer;
   font-variant-numeric: tabular-nums;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.plan__month-day:hover {
+/* Hover must never mask Today or Selected, so it only targets plain days. */
+.plan__month-day:not(.plan__month-day--selected):not(.plan__month-day--today):hover {
   background-color: var(--bg-hover);
   border-color: var(--divider);
 }
 
+/* Outside the month: subdued surface and muted number, still selectable. */
 .plan__month-day--outside {
-  background-color: transparent;
+  background-color: rgba(255, 255, 255, 0.03);
   border-color: var(--divider);
+  color: var(--text-muted);
+}
+
+/* Today: a restrained blue tint plus the ring around the number. */
+.plan__month-day--today {
+  background-color: rgba(47, 107, 255, 0.1);
+  color: var(--text-primary);
 }
 
 .plan__month-date {
@@ -5587,10 +5597,18 @@
   font-weight: 600;
 }
 
+/* Selected wins over Today: accent border, restrained tint, strong text. */
 .plan__month-day--selected {
   border-color: var(--accent);
-  background-color: rgba(47, 107, 255, 0.12);
+  background-color: rgba(47, 107, 255, 0.18);
   color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px rgba(47, 107, 255, 0.25);
+}
+
+/* Focus composes with every state instead of replacing it. */
+.plan__month-day:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* Indicators: at most two dots and a rest dash, never text. */
@@ -5673,15 +5691,20 @@
   min-width: 0;
   height: 64px;
   padding: 6px 4px;
-  border: 1px solid var(--divider);
+  border: 1px solid transparent;
   border-radius: 10px;
-  background-color: var(--bg-main);
+  background-color: var(--bg-composer);
   color: var(--text-secondary);
   cursor: pointer;
 }
 
-.plan__day:hover {
+.plan__day:not(.plan__day--selected):not(.plan__day--today):hover {
   background-color: var(--bg-hover);
+  border-color: var(--divider);
+}
+
+.plan__day--today {
+  background-color: rgba(47, 107, 255, 0.1);
 }
 
 .plan__day--today .plan__day-date {
@@ -5691,8 +5714,13 @@
 
 .plan__day--selected {
   border-color: var(--accent);
-  background-color: rgba(47, 107, 255, 0.12);
+  background-color: rgba(47, 107, 255, 0.18);
   color: var(--text-primary);
+}
+
+.plan__day:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .plan__day-weekday {
