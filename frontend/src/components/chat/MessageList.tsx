@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { BrandMark } from '../BrandMark'
 import type { Message } from '../../types'
 import { MessageBubble } from './MessageBubble'
 
@@ -55,7 +56,9 @@ export function MessageList({ messages, loading, activity = [] }: MessageListPro
         ))}
         {loading && (
           <div className="message message--assistant">
-            <div className="message__avatar">F</div>
+            <span className="message__avatar">
+              <BrandMark className="message__avatar-mark" />
+            </span>
             <div className="message__bubble message__bubble--assistant">
               <div className="message__thinking" aria-label={activityLabel(activity)}>
                 <span className="message__thinking-label">{activityLabel(activity)}</span>

@@ -2,7 +2,9 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy, Database, History, Sparkles, Wrench, X, AlertCircle, ExternalLink } from 'lucide-react'
+import { BrandMark } from '../BrandMark'
 import { api } from '../../services/api'
+import { formatMessageTime } from '../../utils/dates'
 import type { ActionItem, Message, Source, ToolEvent } from '../../types'
 
 interface MessageBubbleProps {
@@ -14,6 +16,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const [resolvedActions, setResolvedActions] = useState<Set<string>>(new Set())
   const [actionError, setActionError] = useState<string | null>(null)
   const isUser = message.role === 'user'
+  const timestamp = formatMessageTime(message.created_at)
 
   const sources = (message.metadata?.sources as Source[] | undefined) ?? []
   const actions = (message.metadata?.actions as ActionItem[] | undefined) ?? []
@@ -101,10 +104,21 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   return (
     <div className={`message ${isUser ? 'message--user' : 'message--assistant'}`}>
-      {!isUser && <div className="message__avatar">F</div>}
-      <div className={`message__bubble ${isUser ? 'message__bubble--user' : ''}`}>
+      {!isUser && (
+        <span className="message__avatar">
+          <BrandMark className="message__avatar-mark" />
+        </span>
+      )}
+      <div className={`message__bubble ${isUser ? 'message__bubble--user' : 'message__bubble--assistant'}`}>
         {isUser ? (
-          <div className="message__text">{message.content}</div>
+          <>
+            <div className="message__text">{message.content}</div>
+            {timestamp && (
+              <time className="message__time" dateTime={message.created_at}>
+                {timestamp}
+              </time>
+            )}
+          </>
         ) : (
           <div className="message__markdown">
             <ReactMarkdown
@@ -176,6 +190,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
           </button>
+          {timestamp && (
+            <time className="message__time" dateTime={message.created_at}>
+              {timestamp}
+            </time>
+          )}
         </div>
       )}
       {!isUser && actions.length > 0 && (

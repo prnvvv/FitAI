@@ -1,5 +1,5 @@
-import { Sparkles } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { BrandMark } from '../BrandMark'
 import { SuggestionList } from './SuggestionList'
 
 interface WelcomeScreenProps {
@@ -12,10 +12,13 @@ export function WelcomeScreen({ onSuggestion }: WelcomeScreenProps) {
 
   return (
     <div className="welcome-screen">
-      <div className="welcome-screen__icon">
-        <Sparkles size={40} />
+      <div className="welcome-screen__mark">
+        <BrandMark className="welcome-screen__mark-icon" />
       </div>
       <h1 className="welcome-screen__title">Hey, {firstName}. Ready to dive in?</h1>
+      <p className="welcome-screen__subtitle">
+        Ask about training, nutrition or recovery — or start from a suggestion.
+      </p>
       <SuggestionList onSelect={onSuggestion} />
     </div>
   )
