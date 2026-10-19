@@ -20,12 +20,12 @@ interface ProgressChartProps {
 }
 
 /** Measures the container so every coordinate is a real pixel value. */
-function useMeasuredWidth(ref: React.RefObject<HTMLElement | null>): number {
-  const [width, setWidth] = useState(0)
+function useMeasuredBox(ref: React.RefObject<HTMLElement | null>): { width: number; height: number } {
+  const [box, setBox] = useState({ width: 0, height: 0 })
   useLayoutEffect(() => {
     const node = ref.current
     if (!node) return
-    const measure = () => setWidth(node.clientWidth)
+    const measure = () => setBox({ width: node.clientWidth, height: node.clientHeight })
     measure()
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', measure)
@@ -35,7 +35,7 @@ function useMeasuredWidth(ref: React.RefObject<HTMLElement | null>): number {
     observer.observe(node)
     return () => observer.disconnect()
   }, [ref])
-  return width
+  return box
 }
 
 const time = (point: SeriesPoint) => new Date(point.measured_at).getTime()
@@ -129,7 +129,7 @@ export function ProgressChart({
   onLog,
 }: ProgressChartProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
-  const width = useMeasuredWidth(wrapRef)
+  const box = useMeasuredBox(wrapRef)
   const [active, setActive] = useState<number | null>(null)
 
   const sorted = useMemo(() => [...points].sort((a, b) => time(a) - time(b)), [points])
@@ -160,7 +160,10 @@ export function ProgressChart({
   }
 
   const single = sorted.length === 1
-  const boxHeight = single ? SINGLE_HEIGHT : height
+  // The container height comes from CSS (240px desktop, 200px mobile); the prop
+  // is only a fallback for environments without layout.
+  const width = box.width
+  const boxHeight = single ? SINGLE_HEIGHT : box.height || height
   const times = sorted.map(time)
   const domain = yDomain(sorted.map((point) => point.value))
   const from = times[0]
@@ -206,13 +209,13 @@ export function ProgressChart({
 
   if (width === 0) {
     // Nothing is drawn until the container has a real width; never guess pixels.
-    return <div className="chart" ref={wrapRef} style={{ height: boxHeight }} />
+    return <div className="chart" ref={wrapRef} />
   }
 
   if (single) {
     const point = sorted[0]
     return (
-      <div className="chart chart--single" ref={wrapRef} style={{ height: SINGLE_HEIGHT }}>
+      <div className="chart chart--single" ref={wrapRef}>
         <svg
           width={width}
           height={SINGLE_HEIGHT}
@@ -251,7 +254,6 @@ export function ProgressChart({
     <div
       className="chart"
       ref={wrapRef}
-      style={{ height }}
       tabIndex={0}
       onKeyDown={handleKeyDown}
       onBlur={() => setActive(null)}

@@ -115,8 +115,9 @@ describe('ProgressPage network baseline', () => {
     for (const name of ['7D', '90D', '1Y', 'All', '30D']) {
       await user.click(screen.getByRole('tab', { name }))
     }
-    await user.click(screen.getByRole('button', { name: 'Toggle units' }))
-    await user.click(screen.getByRole('button', { name: 'Toggle units' }))
+    const unitToggle = screen.getAllByRole('button', { name: 'Toggle units' })[0]
+    await user.click(unitToggle)
+    await user.click(unitToggle)
 
     expect(readCalls(spies)).toBe(before)
     expect(writeCalls(spies)).toBe(0)

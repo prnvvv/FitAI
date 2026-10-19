@@ -4496,6 +4496,7 @@
   flex: 0 0 auto;
   height: 32px;
   padding: 0 12px;
+  white-space: nowrap;
   border: 1px solid transparent;
   border-radius: 8px;
   background-color: transparent;
@@ -4608,6 +4609,11 @@
   gap: 8px;
 }
 
+/* The toolbar copy of the unit toggle only exists below 768px. */
+.progress__unit-toggle--toolbar {
+  display: none;
+}
+
 .segmented {
   display: inline-flex;
   align-items: center;
@@ -4655,6 +4661,8 @@
 .chart {
   position: relative;
   width: 100%;
+  /* Height comes from CSS so the drawing can be measured, never scaled. */
+  height: 240px;
 }
 
 .chart__svg {
@@ -5014,6 +5022,9 @@
 }
 
 .log__body {
+  /* Body takes the remaining sheet height so the footer stays pinned. */
+  flex: 1 1 auto;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -5196,22 +5207,42 @@
   }
 
   .chart-toolbar {
-    flex-direction: column-reverse;
-    align-items: stretch;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
   }
 
+  .progress__unit-toggle--header {
+    display: none;
+  }
+
+  .progress__unit-toggle--toolbar {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .chart-toolbar__caption {
+    flex: 1 1 auto;
+  }
+
   .chart-toolbar__controls {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
     justify-content: space-between;
   }
 
   .progress__range {
-    flex: 1;
+    flex: 1 1 100%;
+    display: flex;
   }
 
   .progress__range button {
-    flex: 1;
+    flex: 1 1 0;
     padding: 0 4px;
+  }
+
+  .chart-toolbar__controls .segmented--view {
+    margin-left: auto;
   }
 
   .training-grid {
@@ -5232,6 +5263,14 @@
 
   .skeleton--chart {
     height: 200px;
+  }
+
+  .chart {
+    height: 200px;
+  }
+
+  .chart--single {
+    height: 160px;
   }
 
   .history__delete {

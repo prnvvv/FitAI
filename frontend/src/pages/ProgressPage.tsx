@@ -228,7 +228,7 @@ export function ProgressPage() {
         <div className="progress__header-actions">
           <button
             type="button"
-            className="progress__unit-toggle"
+            className="progress__unit-toggle progress__unit-toggle--header"
             onClick={() => setUnits((value) => (value === 'metric' ? 'imperial' : 'metric'))}
             aria-label="Toggle units"
           >
@@ -297,6 +297,15 @@ export function ProgressPage() {
 
             <div className="chart-toolbar">
               <span className="chart-toolbar__caption">{rangeCaption(range)}</span>
+              {/* Below 768px the header drops the unit toggle and it lives here. */}
+              <button
+                type="button"
+                className="progress__unit-toggle progress__unit-toggle--toolbar"
+                onClick={() => setUnits((value) => (value === 'metric' ? 'imperial' : 'metric'))}
+                aria-label="Toggle units"
+              >
+                {units === 'metric' ? 'kg / cm' : 'lb / in'}
+              </button>
               <div className="chart-toolbar__controls">
                 <div className="progress__range" role="tablist" aria-label="Range">
                   {RANGE_OPTIONS.map((option) => (

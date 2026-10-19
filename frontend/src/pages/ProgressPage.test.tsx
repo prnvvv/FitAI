@@ -208,7 +208,9 @@ describe('ProgressPage', () => {
 
   it('toggles units for display', async () => {
     const { user } = await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, '2026-10-01')]) })
-    await user.click(screen.getByRole('button', { name: 'Toggle units' }))
+    // Two responsive copies exist (header on desktop, toolbar below 768px);
+    // CSS hides whichever does not apply.
+    await user.click(screen.getAllByRole('button', { name: 'Toggle units' })[0])
     await waitFor(() => expect(screen.getAllByText(/lb/).length).toBeGreaterThan(0))
   })
 
