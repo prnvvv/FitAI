@@ -1,22 +1,29 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
-import type { Range, SeriesPoint } from './metrics'
-import { chartVariantFor, formatMetricValue, metricLabel } from './metrics'
+import { gapFactor } from './analytics'
+import { formatMetricValue, metricLabel } from './metrics'
+import type { ChartKind, Range, SeriesPoint } from './metrics'
 
 const PAD = { top: 18, right: 14, bottom: 22, left: 46 }
+/** Sparse data gets a shorter plot so a few points do not float in empty space. */
 const SINGLE_HEIGHT = 160
-const GAP_FACTOR = 3
+const SPARSE_HEIGHT = 180
 
 interface ProgressChartProps {
   points: SeriesPoint[]
   metric: Parameters<typeof formatMetricValue>[0]
   units: 'metric' | 'imperial'
   range: Range
-  height: number
+  /** Line, discrete points or daily bars — driven by the metric, not the page. */
+  kind: ChartKind
+  /** Metrics that cannot go negative are drawn from zero. */
+  zeroBased: boolean
   /** True when entries exist outside the selected range (enables "Show all"). */
   showAllAvailable: boolean
   onShowAll: () => void
   onLog: () => void
+  /** Copy shown under a single reading, e.g. height's slower explanation. */
+  singleEntryNote?: string
 }
 
 /** Measures the container so every coordinate is a real pixel value. */
@@ -50,20 +57,17 @@ export function xTicks(range: Range, from: number, to: number): Tick[] {
   const start = new Date(from)
   const end = new Date(to)
   const days = (to - from) / 86_400_000
+  const ticks: Tick[] = []
   const push = (date: Date, label: string) => {
     const at = date.getTime()
     if (at < from || at > to) return
     ticks.push({ at, label })
   }
-  const ticks: Tick[] = []
 
   if (range === '7d' || days <= 10) {
     const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate())
     while (cursor.getTime() <= to && ticks.length < 8) {
-      push(
-        new Date(cursor),
-        cursor.toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 3),
-      )
+      push(new Date(cursor), cursor.toLocaleDateString(undefined, { weekday: 'short' }).slice(0, 3))
       cursor.setDate(cursor.getDate() + 1)
     }
     return ticks
@@ -94,21 +98,21 @@ export function xTicks(range: Range, from: number, to: number): Tick[] {
   return ticks
 }
 
-/** Median gap between entries; segments longer than 3x it signal missing data. */
-export function gapThreshold(times: number[]): number {
-  if (times.length < 2) return Number.POSITIVE_INFINITY
-  const deltas: number[] = []
-  for (let i = 1; i < times.length; i += 1) deltas.push(times[i] - times[i - 1])
-  const sorted = [...deltas].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
-  return median > 0 ? median * GAP_FACTOR : Number.POSITIVE_INFINITY
-}
-
-/** Pads the data by 10% of its span, with a floor so flat series stay centred. */
-export function yDomain(values: number[]): { min: number; max: number } {
+/**
+ * Vertical domain for the data.
+ *
+ * Bars always start at zero, otherwise a bar would misrepresent its size. Lines
+ * get 10% padding, and a flat series falls back to a 5% window so a constant
+ * metric is drawn flat in the middle instead of looking like a huge jump.
+ */
+export function yDomain(values: number[], zeroBased = false): { min: number; max: number } {
+  if (values.length === 0) return { min: 0, max: 1 }
   const min = Math.min(...values)
   const max = Math.max(...values)
+  if (zeroBased) {
+    const top = max > 0 ? max * 1.08 : 1
+    return { min: 0, max: top }
+  }
   const span = max - min
   if (span === 0) {
     const pad = Math.abs(max) * 0.05 || 1
@@ -123,17 +127,19 @@ export function ProgressChart({
   metric,
   units,
   range,
-  height,
+  kind,
+  zeroBased,
   showAllAvailable,
   onShowAll,
   onLog,
+  singleEntryNote,
 }: ProgressChartProps) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const box = useMeasuredBox(wrapRef)
   const [active, setActive] = useState<number | null>(null)
 
   const sorted = useMemo(() => [...points].sort((a, b) => time(a) - time(b)), [points])
-  const format = useCallback((value: number) => formatMetricValue(metric, value, units), [metric, units])
+  const format = useCallbackValue(metric, units)
   const label = metricLabel(metric)
 
   useEffect(() => {
@@ -142,7 +148,7 @@ export function ProgressChart({
 
   if (sorted.length === 0) {
     return (
-      <div className="chart chart--empty" role="status" style={{ height: 140 }}>
+      <div className="chart chart--empty" role="status" ref={wrapRef} style={{ height: 140 }}>
         <p className="chart__empty-text">No {label.toLowerCase()} entries in this range.</p>
         <div className="chart__empty-actions">
           {showAllAvailable ? (
@@ -160,12 +166,13 @@ export function ProgressChart({
   }
 
   const single = sorted.length === 1
-  // The container height comes from CSS (240px desktop, 200px mobile); the prop
-  // is only a fallback for environments without layout.
+  const sparse = !single && sorted.length <= 3
+  // The container height comes from CSS (220px desktop, 200px mobile); the
+  // measured value wins, and these are the fallbacks without layout.
   const width = box.width
-  const boxHeight = single ? SINGLE_HEIGHT : box.height || height
+  const boxHeight = single ? SINGLE_HEIGHT : sparse ? SPARSE_HEIGHT : box.height || 220
   const times = sorted.map(time)
-  const domain = yDomain(sorted.map((point) => point.value))
+  const domain = yDomain(sorted.map((point) => point.value), zeroBased)
   const from = times[0]
   const to = times[times.length - 1]
   const span = to - from
@@ -174,7 +181,7 @@ export function ProgressChart({
   const x = (at: number) => (span === 0 ? PAD.left + plotWidth / 2 : PAD.left + ((at - from) / span) * plotWidth)
   const y = (value: number) => PAD.top + (1 - (value - domain.min) / (domain.max - domain.min)) * plotHeight
   const ticks = xTicks(range, from, to)
-  const threshold = gapThreshold(times)
+  const threshold = gapFactor(times)
   const unit = sorted[0].unit === 'BMI' ? '' : sorted[0].unit
 
   const description = single
@@ -182,7 +189,6 @@ export function ProgressChart({
     : `${sorted.length} entries from ${format(sorted[0].value)} to ${format(sorted[sorted.length - 1].value)} ${unit}`
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (sorted.length === 0) return
     const last = sorted.length - 1
     if (event.key === 'ArrowRight') {
       event.preventDefault()
@@ -239,20 +245,22 @@ export function ProgressChart({
             {new Date(point.measured_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
           </text>
         </svg>
-        <p className="chart__caption">Log one more entry to see a trend.</p>
+        <p className="chart__caption">
+          {singleEntryNote ?? 'Log one more entry to see a trend.'}
+        </p>
       </div>
     )
   }
 
-  const variant = chartVariantFor(metric, sorted.length)
   const showMarkers = sorted.length <= 40
   const gridValues = [0, 1, 2, 3].map((step) => domain.min + ((domain.max - domain.min) * step) / 3)
   const latest = sorted.length - 1
   const activePoint = active === null ? null : sorted[active]
+  const baseline = y(domain.min)
 
   return (
     <div
-      className="chart"
+      className={`chart${sparse ? ' chart--sparse' : ''}`}
       ref={wrapRef}
       tabIndex={0}
       onKeyDown={handleKeyDown}
@@ -260,16 +268,10 @@ export function ProgressChart({
       role="img"
       aria-label={`${label} chart. ${description}`}
     >
-      <svg width={width} height={height} className="chart__svg" aria-hidden="true">
+      <svg width={width} height={boxHeight} className="chart__svg" aria-hidden="true">
         {gridValues.map((value, index) => (
           <g key={value}>
-            <line
-              className="chart__grid"
-              x1={PAD.left}
-              x2={PAD.left + plotWidth}
-              y1={y(value)}
-              y2={y(value)}
-            />
+            <line className="chart__grid" x1={PAD.left} x2={PAD.left + plotWidth} y1={y(value)} y2={y(value)} />
             <text className="chart__axis-label" x={PAD.left - 8} y={y(value) + 4} textAnchor="end">
               {format(value)}
               {index === 0 && unit ? ` ${unit}` : ''}
@@ -277,20 +279,25 @@ export function ProgressChart({
           </g>
         ))}
 
-        {variant === 'bar' ? (
+        {kind === 'bars' ? (
           sorted.map((point, index) => {
-            const slot = plotWidth / sorted.length
-            const barWidth = Math.max(Math.min(slot * 0.6, 24), 2)
-            const zero = y(domain.min)
+            const neighbours =
+              index === 0
+                ? times[1] - times[0]
+                : index === sorted.length - 1
+                  ? times[index] - times[index - 1]
+                  : Math.min(times[index + 1] - times[index], times[index] - times[index - 1])
+            const slot = span === 0 ? plotWidth : (neighbours / span) * plotWidth
+            const barWidth = Math.max(Math.min(slot * 0.6, 24), 3)
             const top = y(point.value)
             return (
               <rect
                 key={point.id}
                 className={`chart__bar${active === index ? ' chart__bar--active' : ''}`}
                 x={x(time(point)) - barWidth / 2}
-                y={Math.min(top, zero)}
+                y={Math.min(top, baseline)}
                 width={barWidth}
-                height={Math.max(Math.abs(zero - top), 1)}
+                height={Math.max(Math.abs(baseline - top), 1)}
                 rx={2}
                 onMouseEnter={() => setActive(index)}
               />
@@ -298,21 +305,22 @@ export function ProgressChart({
           })
         ) : (
           <>
-            {sorted.map((point, index) => {
-              if (index === 0) return null
-              const gap = times[index] - times[index - 1]
-              const dashed = gap > threshold
-              return (
-                <line
-                  key={`seg-${point.id}`}
-                  className={dashed ? 'chart__line chart__line--dashed' : 'chart__line'}
-                  x1={x(times[index - 1])}
-                  y1={y(sorted[index - 1].value)}
-                  x2={x(times[index])}
-                  y2={y(point.value)}
-                />
-              )
-            })}
+            {kind === 'line' &&
+              sorted.map((point, index) => {
+                if (index === 0) return null
+                const dashed = times[index] - times[index - 1] > threshold
+                return (
+                  <line
+                    key={`seg-${point.id}`}
+                    className={dashed ? 'chart__line chart__line--dashed' : 'chart__line'}
+                    x1={x(times[index - 1])}
+                    y1={y(sorted[index - 1].value)}
+                    x2={x(times[index])}
+                    y2={y(point.value)}
+                  />
+                )
+              })}
+            {/* Dense series keep only the latest point, so the plot stays readable. */}
             {(showMarkers ? sorted : [sorted[latest]]).map((point) => {
               const index = sorted.indexOf(point)
               const isLatest = index === latest
@@ -324,7 +332,7 @@ export function ProgressChart({
                   }`}
                   cx={x(time(point))}
                   cy={y(point.value)}
-                  r={isLatest ? 4 : 3}
+                  r={isLatest ? 4.5 : 3.5}
                   onMouseEnter={() => setActive(index)}
                 />
               )
@@ -347,7 +355,7 @@ export function ProgressChart({
         )}
 
         {ticks.map((tick) => (
-          <text key={tick.at} className="chart__tick-label" x={x(tick.at)} y={height - 6} textAnchor="middle">
+          <text key={tick.at} className="chart__tick-label" x={x(tick.at)} y={boxHeight - 6} textAnchor="middle">
             {tick.label}
           </text>
         ))}
@@ -359,7 +367,7 @@ export function ProgressChart({
           role="status"
           style={{
             left: Math.min(Math.max(x(time(activePoint)), 70), Math.max(width - 70, 70)),
-            top: Math.max(y(activePoint.value) - 54, 0),
+            top: Math.max(y(activePoint.value) - 56, 0),
           }}
         >
           <span className="chart__tooltip-date">
@@ -377,4 +385,9 @@ export function ProgressChart({
       )}
     </div>
   )
+}
+
+/** Formatter bound to one metric + unit pair, recreated only when they change. */
+function useCallbackValue(metric: Parameters<typeof formatMetricValue>[0], units: 'metric' | 'imperial') {
+  return useMemo(() => (value: number) => formatMetricValue(metric, value, units), [metric, units])
 }
