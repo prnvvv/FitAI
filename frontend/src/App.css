@@ -5565,6 +5565,25 @@
   border-color: var(--divider);
 }
 
+/* The legacy `:hover` rule above is unscoped, so Today and Selected restate
+   their own surface on hover instead of being washed out by it. */
+.plan__month-day--outside:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-color: var(--divider);
+}
+
+.plan__month-day--today:hover {
+  background-color: rgba(47, 107, 255, 0.16);
+  border-color: transparent;
+  color: var(--text-primary);
+}
+
+.plan__month-day--selected:hover {
+  background-color: rgba(47, 107, 255, 0.24);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
 /* Outside the month: subdued surface and muted number, still selectable. */
 .plan__month-day--outside {
   background-color: rgba(255, 255, 255, 0.03);
@@ -5593,6 +5612,8 @@
   height: 24px;
   border: 1px solid var(--accent);
   border-radius: 999px;
+  /* The legacy rule filled the marker with the accent, which hid the number. */
+  background-color: transparent;
   color: var(--accent-hover);
   font-weight: 600;
 }
@@ -5716,6 +5737,15 @@
   border-color: var(--accent);
   background-color: rgba(47, 107, 255, 0.18);
   color: var(--text-primary);
+}
+
+.plan__day--today:hover {
+  background-color: rgba(47, 107, 255, 0.16);
+}
+
+.plan__day--selected:hover {
+  background-color: rgba(47, 107, 255, 0.24);
+  border-color: var(--accent);
 }
 
 .plan__day:focus-visible {
