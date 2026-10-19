@@ -5801,7 +5801,13 @@
   border: 1px solid var(--divider);
   border-radius: 12px;
   background-color: var(--bg-sidebar);
-  overflow: hidden;
+  /* Visible: the template panel is anchored inside this card and must not be
+     clipped by it. The scrollable body below keeps its own rounded corners. */
+  overflow: visible;
+}
+
+.plan__panel .workspace__header {
+  border-radius: 11px 11px 0 0;
 }
 
 .workspace {
@@ -5842,6 +5848,7 @@
 }
 
 .workspace__modes {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -6182,24 +6189,20 @@
 
 /* Templates */
 .workspace__templates {
-  /* Anchored under the toolbar row that holds the Template button. */
+  /* Directly below the toolbar row, spanning the workspace it belongs to. */
   position: absolute;
-  inset: 62px 0 auto auto;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
   z-index: 40;
 }
 
 .templates {
-  position: absolute;
-  top: calc(100% - 4px);
-  right: 0;
-  z-index: 40;
-  width: min(420px, calc(100vw - 32px));
-  max-height: 82dvh;
-  overflow-y: auto;
-  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
+  max-height: min(520px, 64dvh);
   padding: 14px;
   border: 1px solid var(--popover-border);
   border-radius: 12px;
@@ -6209,6 +6212,7 @@
 
 .templates__head {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 8px;
   color: var(--text-primary);
@@ -6219,35 +6223,58 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* The one intentional scroll area, sized so the panel itself never scrolls. */
+  max-height: 232px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: 2px;
 }
 
 .templates__row {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 12px;
   border: 1px solid var(--divider);
-  border-radius: 8px;
+  border-radius: 10px;
   background-color: var(--bg-main);
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
 }
 
+.templates__row:hover {
+  border-color: var(--text-muted);
+  background-color: var(--bg-hover);
+}
+
 .templates__row--active {
   border-color: var(--accent);
-  background-color: rgba(47, 107, 255, 0.12);
+  background-color: rgba(47, 107, 255, 0.14);
 }
 
 .templates__name {
+  min-width: 0;
   font-size: 0.875rem;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .templates__meta {
+  justify-self: end;
   font-size: 0.75rem;
   color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.templates__row--active .templates__name {
+  color: var(--accent-hover);
 }
 
 .templates__preview {
@@ -6314,11 +6341,8 @@
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  /* Stays reachable however long the template list is. */
-  position: sticky;
-  bottom: -14px;
-  padding: 10px 0 4px;
-  background-color: var(--bg-popover);
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
 }
 
 .templates__confirm {
@@ -6414,15 +6438,20 @@
     gap: 0;
   }
 
-  .templates {
+  .workspace__templates {
     position: fixed;
     top: auto;
     bottom: 0;
     left: 0;
     right: 0;
+    z-index: 70;
+  }
+
+  .templates {
     width: 100%;
     max-height: 88dvh;
     border-radius: 14px 14px 0 0;
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    overflow-y: auto;
   }
 }

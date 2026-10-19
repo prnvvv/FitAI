@@ -230,6 +230,22 @@ export function DayPanel(props: DayPanelProps) {
               Template
             </button>
           </div>
+          {/* Anchored to the toolbar row, so the panel opens directly under the
+              control that opened it and spans the workspace width. */}
+          <div className="workspace__templates">
+            <TemplatePopover
+              open={templateOpen}
+              templates={props.templates}
+              templateKey={props.templateKey}
+              templateDate={props.templateDate}
+              applying={props.applyingTemplate}
+              plannedDays={props.plannedDays}
+              onKeyChange={props.onTemplateKey}
+              onDateChange={props.onTemplateDate}
+              onApply={props.onApplyTemplate}
+              onClose={() => setTemplateOpen(false)}
+            />
+          </div>
         </div>
       )}
 
@@ -286,21 +302,6 @@ export function DayPanel(props: DayPanelProps) {
           )}
         </footer>
       )}
-
-      <div className="workspace__templates">
-        <TemplatePopover
-          open={templateOpen}
-          templates={props.templates}
-          templateKey={props.templateKey}
-          templateDate={props.templateDate}
-          applying={props.applyingTemplate}
-          plannedDays={props.plannedDays}
-          onKeyChange={props.onTemplateKey}
-          onDateChange={props.onTemplateDate}
-          onApply={props.onApplyTemplate}
-          onClose={() => setTemplateOpen(false)}
-        />
-      </div>
     </section>
   )
 }
