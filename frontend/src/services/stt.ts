@@ -1,14 +1,17 @@
 /**
- * Client for the standalone Granite speech-to-text service.
+ * Client for the Granite speech-to-text endpoint.
  *
- * The model runs in a separate local process (heavy ML dependencies stay out of
- * the FitAI backend), so the chat composer reaches it over its own configurable
- * base URL. Nothing about the model, its credentials or its environment is
- * exposed to the browser: this module only uploads audio and reads text back.
+ * The model now lives inside the FitAI backend, so the default base URL is a
+ * relative path served by the same origin (`/api/v1/stt`). Override it with
+ * `VITE_STT_URL` only if you are running a separate transcription service.
+ *
+ * Nothing about the model, its credentials or its environment is exposed to the
+ * browser: this module only uploads audio and reads text back.
  */
+import { getToken } from './supabase'
 
-/** Where the transcription service listens. Override with VITE_STT_URL. */
-export const STT_BASE_URL: string = (import.meta.env.VITE_STT_URL ?? 'http://127.0.0.1:8077').replace(
+/** Base path for the STT routes. Override with VITE_STT_URL. */
+export const STT_BASE_URL: string = (import.meta.env.VITE_STT_URL ?? '/api/v1/stt').replace(
   /\/+$/,
   '',
 )
@@ -38,6 +41,13 @@ export interface TranscribeOptions {
 
 const DEFAULT_TIMEOUT_MS = 60_000
 
+function serviceHint(): string {
+  if (STT_BASE_URL.startsWith('http')) {
+    return `Is the transcription service running at ${STT_BASE_URL}?`
+  }
+  return 'Is the FitAI backend running? The microphone uses the same backend as chat.'
+}
+
 /**
  * Uploads a recorded clip and returns the recognised text.
  *
@@ -59,9 +69,16 @@ export async function transcribeAudio(
     const body = new FormData()
     body.append('file', blob, filename)
 
-    const response = await fetch(`${STT_BASE_URL}/api/transcribe`, {
+    const headers = new Headers()
+    const token = await getToken()
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
+
+    const response = await fetch(`${STT_BASE_URL}/transcribe`, {
       method: 'POST',
       body,
+      headers,
       signal: controller.signal,
     })
 
@@ -87,8 +104,7 @@ export async function transcribeAudio(
       throw new TranscriptionError('The transcription service did not respond in time.', true)
     }
     throw new TranscriptionError(
-      'Could not reach the speech-to-text service. Is it running? Start it with ' +
-        `"python -m uvicorn app:app --port ${new URL(STT_BASE_URL).port || '8077'}" in the local speech-to-text folder.`,
+      `Could not reach the speech-to-text service. ${serviceHint()}`,
       true,
     )
   } finally {
@@ -101,7 +117,13 @@ export async function transcribeAudio(
 export async function fetchTranscriptionStatus(
   signal?: AbortSignal,
 ): Promise<{ state: string; modelId: string; device: string }> {
-  const response = await fetch(`${STT_BASE_URL}/api/status`, { signal })
+  const headers = new Headers()
+  const token = await getToken()
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+
+  const response = await fetch(`${STT_BASE_URL}/status`, { signal, headers })
   if (!response.ok) throw new TranscriptionError(`Service status unavailable (HTTP ${response.status})`, true)
   const payload = (await response.json()) as { state?: string; model_id?: string; device?: string }
   return {

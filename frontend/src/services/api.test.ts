@@ -17,6 +17,7 @@ vi.mock('./supabase', () => ({
       getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
     },
   },
+  getToken: vi.fn().mockResolvedValue(null),
 }))
 
 describe('ApiError', () => {

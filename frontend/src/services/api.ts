@@ -28,12 +28,7 @@ export interface UploadResult {
   duplicate: boolean
 }
 
-import { supabase } from './supabase'
-
-async function getToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession()
-  return data.session?.access_token ?? null
-}
+import { getToken } from './supabase'
 
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 300

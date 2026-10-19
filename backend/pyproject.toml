@@ -34,7 +34,7 @@ dependencies = [
     "langgraph>=0.2.45,<0.3",
     "langchain-core>=0.3.0,<0.4",
     "groq>=0.11.0,<0.12",
-    "chromadb>=0.5.20,<0.6",
+    "chromadb>=0.5.20,<0.7",
     # Pin posthog so chromadb's telemetry call (positional capture API) keeps working.
     "posthog>=2.4,<3.0",
     "pypdf>=5.1.0,<6",
@@ -46,6 +46,15 @@ dependencies = [
     "python-dotenv>=1.0.1,<2",
     "structlog>=24.4.0,<25",
     "ddgs>=9.0.0",
+    # Speech-to-text: IBM Granite Speech 5.0 TurboCTC (local inference).
+    "numpy>=1.26.0,<2",
+    "scipy>=1.13.0,<2",
+    "soundfile>=0.12.0,<1",
+    "av==17.1.0",
+    "torch==2.9.1",
+    "torchaudio==2.9.1",
+    "transformers>=5.16.0",
+    "accelerate>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -144,6 +153,12 @@ module = [
 ]
 ignore_errors = true
 follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+# The STT module wraps the untyped transformers/torch API and numpy heavy
+# arrays; type-checking it adds more noise than value.
+module = ["app.stt", "app.stt.*"]
+ignore_errors = true
 
 [tool.pydantic-mypy]
 init_forbid_extra = true

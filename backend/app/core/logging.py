@@ -6,6 +6,7 @@ passed to the logger; call sites are responsible for redacting sensitive values.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import sys
 
@@ -41,6 +42,10 @@ def _redact_sensitive_fields(
 
 def configure_logging() -> None:
     """Configure structlog and the standard library root logger."""
+    if sys.platform == "win32":
+        with contextlib.suppress(Exception):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
 
     logging.basicConfig(format="%(message)s", stream=sys.stdout, level=log_level)

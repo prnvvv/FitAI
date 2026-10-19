@@ -136,7 +136,7 @@ describe('composer microphone', () => {
     await waitFor(() => expect(input).toHaveValue(`${TRANSCRIPT}my draft`))
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toBe('http://127.0.0.1:8077/api/transcribe')
+    expect(url).toBe('/api/v1/stt/transcribe')
     expect(init.method).toBe('POST')
     const form = init.body as FormData
     expect(form.get('file')).toBeInstanceOf(Blob)

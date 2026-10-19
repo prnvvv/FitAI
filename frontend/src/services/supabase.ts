@@ -14,6 +14,12 @@ export const supabase = createClient(supabaseUrl ?? '', supabaseAnonKey ?? '', {
   },
 })
 
+/** Return the current Supabase access token, if any. */
+export async function getToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession()
+  return data.session?.access_token ?? null
+}
+
 export function toAppUser(user: User | null) {
   if (!user) return null
   return {

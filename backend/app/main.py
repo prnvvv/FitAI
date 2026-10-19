@@ -7,6 +7,7 @@ developed; it should be registered in the marked section below.
 
 from __future__ import annotations
 
+import threading
 import uuid
 
 from fastapi import FastAPI, Request
@@ -36,6 +37,7 @@ from app.api.routers import (
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
+from app.stt import router as stt_router
 
 logger = get_logger(__name__)
 
@@ -52,6 +54,7 @@ ROUTERS = (
     location.router,
     plan.router,
     exercises.router,
+    stt_router,
 )
 
 
@@ -151,6 +154,20 @@ def _register_startup_tasks(app: FastAPI) -> None:
         elif not settings.guardrails_enabled:
             logger.warning("GUARDRAILS_ENABLED=false: all guardrails are DISABLED.")
 
+    @app.on_event("startup")
+    def _warm_stt_model() -> None:
+        """Start loading the Granite STT model in the background if eager load is on.
+
+        Loading ~900 MB of weights can take several seconds; doing it lazily on the
+        first request would make the first dictation feel broken. A background
+        thread keeps startup fast and never blocks health checks.
+        """
+        from app.stt.speech_service import get_service
+
+        service = get_service()
+        if service.eager_load and service.status.state == "idle":
+            threading.Thread(target=service.warmup, name="stt-warmup", daemon=True).start()
+
 
 def _register_error_handlers(app: FastAPI) -> None:
     def _request_id(request: Request) -> str:
@@ -160,7 +177,7 @@ def _register_error_handlers(app: FastAPI) -> None:
             return existing
         return uuid.uuid4().hex[:16]
 
-    def _error_body(code: str, message: str, details: dict, request_id: str) -> dict:
+    def _error_body(code: str, message: str, details: dict[str, object], request_id: str) -> dict[str, object]:
         return {
             "error": {
                 "code": code,
