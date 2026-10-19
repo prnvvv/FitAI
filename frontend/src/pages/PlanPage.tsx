@@ -886,6 +886,7 @@ const cellStatus = (key: string): string => {
                         key={cell.key}
                         type="button"
                         role="gridcell"
+                        data-key={cell.key}
                         tabIndex={cell.key === focused ? 0 : -1}
                         className={`plan__month-day ${cell.inMonth ? '' : 'plan__month-day--outside'} ${
                           cell.key === selected ? 'plan__month-day--selected' : ''
