@@ -1,0 +1,31 @@
+/* FitAI waveform mark — scales with the host font-size. */
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.14em;
+  height: 1em;
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.brand-mark__bar {
+  width: 0.12em;
+  min-width: 2px;
+  border-radius: 999px;
+  background-color: currentColor;
+}
+
+.brand-mark__bar:nth-child(1),
+.brand-mark__bar:nth-child(5) {
+  height: 38%;
+}
+
+.brand-mark__bar:nth-child(2),
+.brand-mark__bar:nth-child(4) {
+  height: 68%;
+}
+
+.brand-mark__bar:nth-child(3) {
+  height: 100%;
+}

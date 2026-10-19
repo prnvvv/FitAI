@@ -38,6 +38,8 @@ export function AppShell({
     onCloseSidebar()
   }
 
+  const activeTitle = conversations.find((c) => c.id === selectedId)?.title ?? null
+
   return (
     <div className="app-shell">
       <Sidebar
@@ -63,7 +65,7 @@ export function AppShell({
         onDelete={onDelete}
       />
       <div className="app-shell__content">
-        <TopBar />
+        <TopBar title={activeTitle} />
         <main className="app-shell__main">
           <Outlet />
         </main>

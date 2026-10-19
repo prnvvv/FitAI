@@ -1,20 +1,29 @@
 import {
-  BookOpen,
+  Brain,
   CalendarDays,
   MessageSquarePlus,
   PanelLeftClose,
   PanelRightOpen,
   Search,
+  Settings,
   TrendingUp,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
 import type { Conversation } from '../../types'
-import { AccountMenu } from './AccountMenu'
+import { BrandMark } from '../BrandMark'
 import { ConversationList } from './ConversationList'
 import { SidebarNavItem } from './SidebarNavItem'
+
+/** Footer navigation, in the order the workspace presents it. */
+const NAV_ITEMS = [
+  { label: 'Plan', icon: <CalendarDays size={20} />, paths: ['/plan'] },
+  { label: 'Progress', icon: <TrendingUp size={20} />, paths: ['/progress'] },
+  { label: 'Memory', icon: <Brain size={20} />, paths: ['/memory'] },
+  // Settings and Profile render the same page; both highlight the entry.
+  { label: 'Settings', icon: <Settings size={20} />, paths: ['/settings', '/profile'] },
+]
 
 interface SidebarProps {
   id?: string
@@ -49,10 +58,8 @@ export function Sidebar({
   onRename,
   onDelete,
 }: SidebarProps) {
-  const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [accountOpen, setAccountOpen] = useState(false)
   const isChat = location.pathname === '/' || location.pathname.startsWith('/chat/')
 
   useEffect(() => {
@@ -64,8 +71,9 @@ export function Sidebar({
     return () => document.removeEventListener('keydown', handleKey)
   }, [open, onClose])
 
-  const handleNewChat = () => {
-    onNewChat()
+  const go = (path: string) => {
+    onClose()
+    navigate(path)
   }
 
   return (
@@ -76,27 +84,35 @@ export function Sidebar({
       aria-expanded={open}
     >
       <div className="sidebar__header">
-        {open && <span className="sidebar__brand">FitAI</span>}
-        <div className="sidebar__header-actions">
-          <button
-            type="button"
-            className="sidebar__icon-btn"
-            aria-label={open ? 'Collapse sidebar' : 'Open sidebar'}
-            aria-controls={id}
-            onClick={onToggle}
-          >
-            {open ? <PanelLeftClose size={20} /> : <PanelRightOpen size={20} />}
-          </button>
-        </div>
+        {open && (
+          <span className="sidebar__brand">
+            <BrandMark className="sidebar__brand-mark" />
+            <span className="sidebar__brand-wordmark">FitAI</span>
+          </span>
+        )}
+        <button
+          type="button"
+          className="sidebar__icon-btn"
+          aria-label={open ? 'Collapse sidebar' : 'Open sidebar'}
+          aria-controls={id}
+          onClick={onToggle}
+        >
+          {open ? <PanelLeftClose size={18} /> : <PanelRightOpen size={18} />}
+        </button>
       </div>
 
-      {open && (
+      {open ? (
         <>
+          <button type="button" className="sidebar__new-chat" onClick={onNewChat}>
+            <MessageSquarePlus size={18} aria-hidden="true" />
+            <span>New chat</span>
+          </button>
+
           <div className="sidebar__search">
-            <Search size={18} className="sidebar__search-icon" />
+            <Search size={16} className="sidebar__search-icon" aria-hidden="true" />
             <input
               type="text"
-              placeholder="Search chats"
+              placeholder="Search conversations..."
               value={searchQuery}
               onChange={(e) => onSearchQueryChange(e.target.value)}
               onKeyDown={(e) => {
@@ -117,43 +133,6 @@ export function Sidebar({
             )}
           </div>
 
-          <div className="sidebar__nav">
-            <SidebarNavItem
-              icon={<MessageSquarePlus size={20} />}
-              label="New chat"
-              active={isChat && !selectedId}
-              onClick={handleNewChat}
-            />
-            <SidebarNavItem
-              icon={<CalendarDays size={20} />}
-              label="Plan"
-              active={location.pathname === '/plan'}
-              onClick={() => {
-                onClose()
-                navigate('/plan')
-              }}
-            />
-            <SidebarNavItem
-              icon={<TrendingUp size={20} />}
-              label="Progress"
-              active={location.pathname === '/progress'}
-              onClick={() => {
-                onClose()
-                navigate('/progress')
-              }}
-            />
-            <SidebarNavItem
-              icon={<BookOpen size={20} />}
-              label="Library"
-              active={location.pathname === '/library'}
-              onClick={() => {
-                onClose()
-                navigate('/library')
-              }}
-            />
-          </div>
-
-          <div className="sidebar__section-label">Chat history</div>
           <ConversationList
             conversations={conversations}
             selectedId={selectedId}
@@ -165,24 +144,40 @@ export function Sidebar({
           />
 
           <div className="sidebar__footer">
-            <button
-              type="button"
-              className="sidebar__account"
-              onClick={() => setAccountOpen((v) => !v)}
-              aria-expanded={accountOpen}
-              aria-haspopup="menu"
-            >
-              <div className="sidebar__avatar">
-                {(user?.displayName ?? user?.email ?? 'U').slice(0, 2).toUpperCase()}
-              </div>
-              <div className="sidebar__account-info">
-                <div className="sidebar__account-name">{user?.displayName ?? 'User'}</div>
-                <div className="sidebar__account-email">{user?.email}</div>
-              </div>
-            </button>
-            <AccountMenu open={accountOpen} onClose={() => setAccountOpen(false)} />
+            <div className="sidebar__nav">
+              {NAV_ITEMS.map((item) => (
+                <SidebarNavItem
+                  key={item.label}
+                  icon={item.icon}
+                  label={item.label}
+                  active={item.paths.includes(location.pathname)}
+                  onClick={() => go(item.paths[0])}
+                />
+              ))}
+            </div>
           </div>
         </>
+      ) : (
+        /* Collapsed rail: icon-only, no text nodes (see Sidebar.test). */
+        <div className="sidebar__rail">
+          <SidebarNavItem
+            compact
+            icon={<MessageSquarePlus size={20} />}
+            label="New chat"
+            active={isChat && !selectedId}
+            onClick={onNewChat}
+          />
+          {NAV_ITEMS.map((item) => (
+            <SidebarNavItem
+              key={item.label}
+              compact
+              icon={item.icon}
+              label={item.label}
+              active={item.paths.includes(location.pathname)}
+              onClick={() => go(item.paths[0])}
+            />
+          ))}
+        </div>
       )}
     </nav>
   )

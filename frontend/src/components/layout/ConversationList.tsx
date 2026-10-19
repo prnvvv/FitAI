@@ -1,6 +1,7 @@
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Conversation } from '../../types'
+import { CONVERSATION_GROUPS, conversationDateGroup } from '../../utils/dates'
 
 interface ConversationListProps {
   conversations: Conversation[]
@@ -10,6 +11,31 @@ interface ConversationListProps {
   onSelect: (id: string) => void
   onRename: (id: string, title: string) => void
   onDelete: (id: string) => void
+}
+
+interface ConversationBucket {
+  label: string
+  items: Conversation[]
+}
+
+/**
+ * Buckets the (already newest-first) conversation list by last activity, so the
+ * sidebar can label each section. Empty buckets are dropped and the surviving
+ * buckets keep CONTRIBUTION_GROUPS order even if the server order changes.
+ */
+function groupConversations(conversations: Conversation[]): ConversationBucket[] {
+  const buckets = new Map<string, Conversation[]>()
+  for (const conversation of conversations) {
+    const label = conversationDateGroup(conversation.updated_at || conversation.created_at)
+    const bucket = buckets.get(label)
+    if (bucket) bucket.push(conversation)
+    else buckets.set(label, [conversation])
+  }
+
+  return CONVERSATION_GROUPS.filter((label) => buckets.has(label)).map((label) => ({
+    label,
+    items: buckets.get(label) as Conversation[],
+  }))
 }
 
 function ConversationItem({
@@ -81,6 +107,7 @@ function ConversationItem({
           onClick={() => onSelect(conversation.id)}
           title={conversation.title ?? 'Untitled'}
         >
+          <MessageSquare size={15} className="conversation-item__icon" aria-hidden="true" />
           <span className="conversation-item__title">
             {conversation.title || 'New chat'}
           </span>
@@ -169,18 +196,33 @@ export function ConversationList({
     )
   }
 
+  const groups = groupConversations(conversations)
+
   return (
-    <div className="conversation-list" role="list">
-      {conversations.map((conversation) => (
-        <ConversationItem
-          key={conversation.id}
-          conversation={conversation}
-          selected={selectedId === conversation.id}
-          onSelect={onSelect}
-          onRename={onRename}
-          onDelete={onDelete}
-        />
-      ))}
+    <div className="conversation-list">
+      {groups.map((group) => {
+        const labelId = `conversation-group-${group.label.replace(/\s+/g, '-').toLowerCase()}`
+        return (
+          <section className="conversation-group" key={group.label} aria-labelledby={labelId}>
+            <h2 className="conversation-group__label" id={labelId}>
+              {group.label}
+            </h2>
+            <ul className="conversation-group__items">
+              {group.items.map((conversation) => (
+                <li key={conversation.id}>
+                  <ConversationItem
+                    conversation={conversation}
+                    selected={selectedId === conversation.id}
+                    onSelect={onSelect}
+                    onRename={onRename}
+                    onDelete={onDelete}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      })}
     </div>
   )
 }

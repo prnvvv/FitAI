@@ -1,4 +1,4 @@
-import { Brain, LogOut, User } from 'lucide-react'
+import { BookOpen, Brain, LogOut, User } from 'lucide-react'
 import { useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -49,6 +49,18 @@ export function AccountMenu({ open, onClose }: AccountMenuProps) {
         </div>
       </div>
       <div className="account-menu__divider" />
+      <button
+        type="button"
+        className="account-menu__item"
+        role="menuitem"
+        onClick={() => {
+          onClose()
+          navigate('/library')
+        }}
+      >
+        <BookOpen size={20} />
+        <span>Library</span>
+      </button>
       <button
         type="button"
         className="account-menu__item"

@@ -221,7 +221,7 @@ input[type='number'] {
   --shadow-popover: 0 18px 44px rgba(0, 0, 0, 0.55);
 
   /* Layout */
-  --sidebar-width: clamp(312px, 21.5vw, 360px);
+  --sidebar-width: clamp(320px, 22vw, 360px);
   --sidebar-collapsed: 64px;
   --max-content-width: 1120px;
   --topbar-h: 70px;
