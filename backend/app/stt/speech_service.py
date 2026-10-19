@@ -100,10 +100,10 @@ def resolve_config() -> dict[str, str]:
         "hf_token": os.environ.get(
             "HUGGINGFACE_API_KEY", file_values.get("HUGGINGFACE_API_KEY", "")
         ),
-        # Defaults to 0 so CI and unit tests do not download weights. Set
-        # STT_EAGER_LOAD=1 (in backend/.env or run-all.sh) to warm the model on
-        # startup in production / local development.
-        "eager_load": os.environ.get("STT_EAGER_LOAD", file_values.get("STT_EAGER_LOAD", "0")),
+        # Defaults to 1 so local development / production warm the model on
+        # startup and the first dictation feels instant. Set STT_EAGER_LOAD=0
+        # (e.g. in CI) to skip the download and load lazily on first request.
+        "eager_load": os.environ.get("STT_EAGER_LOAD", file_values.get("STT_EAGER_LOAD", "1")),
     }
     return config
 
