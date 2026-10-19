@@ -134,7 +134,7 @@ describe('PlanPage network baseline', () => {
 
     await user.click(within(grid).getAllByRole('gridcell')[10])
 
-    await waitFor(() => expect(screen.getByText(/Nothing logged for this day yet/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/Nothing logged yet/)).toBeInTheDocument())
     expect(totalCalls(spies)).toBe(before)
   })
 
@@ -256,9 +256,8 @@ describe('PlanPage network baseline', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Day options' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Start from a template…' }))
-    const select = screen.getByLabelText('Template') as HTMLSelectElement
-    await user.selectOptions(select, 'upper_lower')
-    await user.click(screen.getByRole('button', { name: 'Apply' }))
+    await user.click(await screen.findByRole('radio', { name: /Upper Lower/ }))
+    await user.click(screen.getByRole('button', { name: 'Apply template' }))
 
     await waitFor(() => expect(callsOf(spies, 'applyPlanTemplate').length).toBe(1))
     expect(callsOf(spies, 'applyPlanTemplate')[0]).toEqual(['upper_lower', todayKey])

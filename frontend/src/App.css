@@ -5425,4 +5425,909 @@
   .log__add {
     min-height: 44px;
   }
+}/* ------------------------------------------------------------------ */
+/* Plan redesign: compact calendar left, day workspace right             */
+/* ------------------------------------------------------------------ */
+
+.page--plan {
+  max-width: 1280px;
+  padding: 16px 24px 24px;
+}
+
+/* The page fills the main area and never scrolls; only the workspace body does. */
+.page--plan,
+.page--plan .plan__content,
+.page--plan .plan__calendar,
+.page--plan .plan__panel {
+  min-height: 0;
+}
+
+@media (min-width: 1100px) {
+  .page--plan {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+}
+
+/* Header */
+.plan__period {
+  min-width: 132px;
+  text-align: center;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.plan__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Master-detail: compact calendar, roomy workspace. */
+.plan__content {
+  display: grid;
+  grid-template-columns: clamp(380px, 34%, 460px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: stretch;
+  flex: 1 1 auto;
+}
+
+.plan__content--year,
+.plan__content--week {
+  grid-template-columns: clamp(380px, 34%, 460px) minmax(0, 1fr);
+}
+
+.plan__calendar {
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  background-color: var(--bg-composer);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.plan__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.plan__month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  /* Only the rows the month needs; cells stay capped instead of stretching. */
+  grid-template-rows: repeat(var(--rows, 6), minmax(40px, 56px));
+  gap: 4px;
+  flex: 1 1 auto;
+  align-content: center;
+  min-height: 0;
+}
+
+.plan__month-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  min-width: 0;
+  min-height: 40px;
+  max-height: 56px;
+  aspect-ratio: 1 / 1;
+  padding: 5px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background-color: var(--bg-main);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.plan__month-day:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--divider);
+}
+
+.plan__month-day--outside {
+  background-color: transparent;
+  border-color: var(--divider);
+}
+
+.plan__month-date {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+/* Today reads as an accent ring around the number, so it stacks with Selected. */
+.plan__month-day--today .plan__month-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.plan__month-day--selected {
+  border-color: var(--accent);
+  background-color: rgba(47, 107, 255, 0.12);
+  color: var(--text-primary);
+}
+
+/* Indicators: at most two dots and a rest dash, never text. */
+.plan__cell-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 6px;
+}
+
+.plan__cell-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background-color: transparent;
+}
+
+.plan__cell-dot--done,
+.plan__cell-dot--filled {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.plan__cell-rest {
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+  background-color: var(--text-muted);
+}
+
+.plan__calendar-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+}
+
+.plan__legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+
+.plan__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.plan__month-totals {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan__month-totals strong {
+  color: var(--text-primary);
+}
+
+/* Week view: strip on top, day list underneath. */
+.plan__week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.plan__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 64px;
+  padding: 6px 4px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background-color: var(--bg-main);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.plan__day:hover {
+  background-color: var(--bg-hover);
+}
+
+.plan__day--today .plan__day-date {
+  color: var(--accent-hover);
+  font-weight: 600;
+}
+
+.plan__day--selected {
+  border-color: var(--accent);
+  background-color: rgba(47, 107, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.plan__day-weekday {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.plan__day-date {
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan__day-marks {
+  display: flex;
+  gap: 3px;
+  min-height: 6px;
+}
+
+.plan__day-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+}
+
+.plan__day-mark--done {
+  background-color: var(--accent);
+}
+
+.plan__week-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  min-height: 0;
+}
+
+.plan__week-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: none;
+  border-bottom: 1px solid var(--divider);
+  background: none;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan__week-row:hover {
+  background-color: var(--bg-hover);
+}
+
+.plan__week-row--selected {
+  color: var(--text-primary);
+  background-color: rgba(47, 107, 255, 0.12);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.plan__week-row-date {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan__week-row-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan__week-row-status {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+/* Year view: mini months inside the same narrow column. */
+.plan__year-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  min-height: 0;
+}
+
+@media (min-width: 1100px) {
+  .plan__year-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Day workspace */
+.plan__panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  background-color: var(--bg-sidebar);
+  overflow: hidden;
+}
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.workspace__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 14px 16px 10px;
+}
+
+.workspace__headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.workspace__date {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.workspace__today-chip {
+  background-color: rgba(47, 107, 255, 0.15);
+  color: var(--accent-hover);
+}
+
+.workspace__modes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.workspace__tabs {
+  display: inline-flex;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.workspace__tab {
+  min-width: 88px;
+  height: 32px;
+  padding: 0 16px;
+  border: none;
+  border-right: 1px solid var(--divider);
+  background-color: var(--bg-composer);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.workspace__tab:last-child {
+  border-right: none;
+}
+
+.workspace__tab--active {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.workspace__hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.workspace__tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-self: end;
+}
+
+.workspace__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 14px 16px;
+  /* `clip` keeps the vertical scrollbar while making a horizontal one impossible. */
+  overflow-y: auto;
+  overflow-x: clip;
+  scrollbar-width: thin;
+}
+
+.workspace__cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.workspace__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-top: 1px solid var(--divider);
+  background-color: var(--bg-sidebar);
+}
+
+.workspace__primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 160px;
+  justify-content: center;
+}
+
+/* Plan mode */
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.composer__title {
+  min-width: 0;
+}
+
+.composer__type {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.composer__submit {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+/* Logged sessions and planned sessions share one slim-row language. */
+.plan__session--slim + .plan__session--slim {
+  border-top: 1px solid var(--divider);
+}
+
+.plan__session-toggle,
+.plan__session-header {
+  min-width: 0;
+}
+
+/* Definition list for planned-session details: never a scrolling table. */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.detail__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.detail__key {
+  min-width: 0;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail__value {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Session editor */
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.editor__name {
+  min-width: 0;
+}
+
+.editor__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.editor__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background-color: var(--bg-main);
+  min-width: 0;
+}
+
+.editor__row-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+}
+
+.editor__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.editor__remove:hover {
+  background-color: var(--error-bg);
+  color: var(--error);
+}
+
+/* Wrapping control line: `minmax(0, …)` stops any track from being pushed
+   wider than the card, which is what produced the horizontal scrollbar. */
+.editor__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.editor__field-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Reserved validation line: the message never moves the rows. */
+.editor__error {
+  min-height: 16px;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 16px;
+  color: var(--error);
+}
+
+.editor__add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 40px;
+  border: 1px dashed var(--divider);
+  border-radius: 10px;
+  background-color: transparent;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.editor__add:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+/* The combobox may never impose a minimum width on its card. */
+.combobox {
+  min-width: 0;
+}
+
+.combobox__list {
+  max-height: 280px;
+}
+
+.stepper {
+  min-width: 0;
+  min-height: 40px;
+}
+
+.stepper__input {
+  min-width: 0;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.stepper__btn {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+/* Templates */
+.templates {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: min(420px, calc(100vw - 32px));
+  max-height: 82dvh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--popover-border);
+  border-radius: 12px;
+  background-color: var(--bg-popover);
+  box-shadow: var(--shadow-popover);
+}
+
+.templates__head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.templates__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.templates__row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.templates__row--active {
+  border-color: var(--accent);
+  background-color: rgba(47, 107, 255, 0.12);
+}
+
+.templates__name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.templates__meta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.templates__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+}
+
+.templates__preview-label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.templates__days {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.templates__days li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.templates__day-name {
+  color: var(--text-primary);
+}
+
+.templates__date {
+  color-scheme: dark;
+}
+
+.templates__date::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
+.templates__warn,
+.templates__note {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.templates__warn {
+  color: var(--text-primary);
+}
+
+.templates__actions,
+.templates__confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.templates__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background-color: var(--bg-composer);
+  font-size: 0.8125rem;
+}
+
+/* Tablet: single column, the page scrolls as one container. */
+@media (max-width: 1099px) {
+  .page--plan {
+    height: auto;
+    overflow: visible;
+  }
+
+  .plan__content,
+  .plan__content--year,
+  .plan__content--week {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plan__header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .plan__period {
+    order: -1;
+    width: 100%;
+  }
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .plan__month-grid {
+    grid-template-rows: repeat(var(--rows, 6), minmax(44px, 1fr));
+  }
+
+  .plan__month-day {
+    min-height: 44px;
+    aspect-ratio: auto;
+  }
+
+  .plan__week {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .plan__week::-webkit-scrollbar {
+    display: none;
+  }
+
+  .plan__day {
+    flex: 0 0 64px;
+    scroll-snap-align: center;
+  }
+
+  .workspace__tabs {
+    width: 100%;
+  }
+
+  .workspace__tab {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  .workspace__primary {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+  }
+
+  .editor__fields {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  }
+
+  .stepper__btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .detail__pair {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .templates {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 88dvh;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
 }

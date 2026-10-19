@@ -130,7 +130,7 @@ describe('PlanPage', () => {
     await user.click(screen.getByRole('tab', { name: 'Plan' }))
     expect(screen.getByRole('button', { name: /Plan session/ })).toBeInTheDocument()
     await user.click(screen.getByRole('tab', { name: 'Log' }))
-    expect(screen.getByText('Nothing logged for this day yet.')).toBeInTheDocument()
+    expect(screen.getByText('Nothing logged yet.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('tab', { name: 'Week' }))
     expect(screen.getByRole('group', { name: 'Week' })).toBeInTheDocument()
@@ -456,7 +456,7 @@ describe('PlanPage redesign', () => {
     expect(screen.getByRole('dialog', { name: 'Start from a template' })).toBeInTheDocument()
     expect(screen.getByLabelText('Template')).toBeInTheDocument()
     expect(screen.getByLabelText('Template start date')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Apply template' })).toBeInTheDocument()
   })
 
   it('sends one request for a double-clicked Plan session', async () => {

@@ -566,7 +566,15 @@ export function PlanPage() {
     }
   }
 
-  const cellStatus = (key: string): string => {
+  /** "Today" resets the period to the current one and selects today. */
+  const goToToday = useCallback(() => {
+    const now = new Date()
+    setAnchor(view === 'year' ? new Date(now.getFullYear(), 0, 1) : startOfMonth(now))
+    setSelected(today)
+    setFocused(today)
+  }, [view, today])
+
+const cellStatus = (key: string): string => {
     const day = summaryByDate[key]
     if (day?.day_type === 'rest') return 'rest'
     if ((day?.completed_count ?? 0) > 0) return 'logged'
@@ -574,25 +582,51 @@ export function PlanPage() {
     return 'no plan'
   }
 
+  /**
+   * Cell indicators: at most one outlined dot (planned), one filled dot
+   * (completed) and a rest dash. No text inside a cell, so rows stay uniform.
+   */
   const cellBadges = (key: string) => {
     const day = summaryByDate[key]
     const plannedCount = day?.planned_count ?? 0
     const completed = day?.completed_count ?? 0
     const isRest = day?.day_type === 'rest'
-    if (plannedCount === 0 && !isRest && !day?.has_meals) return null
+    if (plannedCount === 0 && completed === 0 && !isRest) return null
+    const bits: string[] = [cellStatus(key)]
+    if (day?.has_meals) bits.push('nutrition logged')
     return (
-      <span className="plan__cell-badges">
+      <span className="plan__cell-dots" title={bits.join(', ')}>
         {plannedCount > 0 && (
           <span
             className={`plan__cell-dot ${completed >= plannedCount ? 'plan__cell-dot--done' : ''}`}
-            title={`${completed} of ${plannedCount} sessions completed`}
           />
         )}
-        {isRest && <span className="plan__cell-rest">Rest</span>}
-        {day?.has_meals && <span className="plan__cell-meal" title="Nutrition logged" />}
+        {completed > 0 && <span className="plan__cell-dot plan__cell-dot--filled" />}
+        {isRest && <span className="plan__cell-rest" />}
       </span>
     )
   }
+
+  const monthTotals = useMemo(() => {
+    const monthPrefix = `${anchor.getFullYear()}-${String(anchor.getMonth() + 1).padStart(2, '0')}`
+    let planned = 0
+    let logged = 0
+    for (const [key, day] of Object.entries(summaryByDate)) {
+      if (!key.startsWith(monthPrefix)) continue
+      planned += day.planned_count ?? 0
+      logged += day.completed_count ?? 0
+    }
+    return { planned, logged }
+  }, [anchor, summaryByDate])
+
+  const plannedDays = useMemo(() => planned.map((session) => session.planned_date), [planned])
+
+  const clearLogDraft = useCallback(() => {
+    // Local editor state only: no request is sent by clearing the draft.
+    setLoggedName('')
+    setLoggedSets([emptyLoggedSet()])
+    setLogError(null)
+  }, [])
 
   const weeks = useMemo(() => (view === 'month' ? monthWeeks(anchor) : []), [view, anchor])
   const weekStripDays = useMemo(() => (view === 'week' ? weekDays(anchor) : []), [view, anchor])
@@ -655,6 +689,7 @@ export function PlanPage() {
       saving={savingSession}
       logError={logError}
       onLogSession={() => void handleLogSession()}
+      onClearLogDraft={clearLogDraft}
       onDeleteWorkout={(session) => void handleDeleteWorkout(session)}
       library={library}
       recent={recentExercises}
@@ -663,6 +698,7 @@ export function PlanPage() {
       templateKey={templateKey}
       templateDate={templateDate}
       applyingTemplate={applyingTemplate}
+      plannedDays={plannedDays}
       onTemplateKey={setTemplateKey}
       onTemplateDate={setTemplateDate}
       onApplyTemplate={() => void applyTemplate()}
@@ -673,8 +709,8 @@ export function PlanPage() {
     <div className="page page--plan">
       <header className="page__header page__header--row plan__page-header">
         <div className="plan__title-block">
-          <h1>{periodTitle(view, anchor)}</h1>
-          <p className="plan__subtitle">Plan sessions and log what you did</p>
+          <h1>Plan</h1>
+          <p>Plan sessions and log what you did</p>
         </div>
         {view === 'year' && (
           <div className="plan__year-totals">
@@ -709,16 +745,10 @@ export function PlanPage() {
           >
             <ChevronLeft size={18} />
           </button>
-          <button
-            type="button"
-            className="plan__today-btn"
-            onClick={() => {
-              const now = new Date()
-              setAnchor(view === 'year' ? new Date(now.getFullYear(), 0, 1) : startOfMonth(now))
-              setSelected(today)
-              setFocused(today)
-            }}
-          >
+          <span className="plan__period" aria-live="polite">
+            {periodTitle(view, anchor)}
+          </span>
+          <button type="button" className="plan__today-btn" onClick={goToToday}>
             Today
           </button>
           <button
@@ -756,39 +786,76 @@ export function PlanPage() {
       >
         <section className="plan__calendar" aria-label={periodTitle(view, anchor)}>
           {view === 'week' && (
-            <div className="plan__week" role="group" aria-label="Week" onKeyDown={handleWeekKeyDown}>
-              {weekStripDays.map((day) => {
-                const key = toDateKey(day)
-                const info = summaryByDate[key]
-                const completed = info?.completed_count ?? 0
-                const plannedCount = info?.planned_count ?? 0
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    tabIndex={key === stripTabbable ? 0 : -1}
-                    className={`plan__day ${key === selected ? 'plan__day--selected' : ''} ${
-                      key === today ? 'plan__day--today' : ''
-                    }`}
-                    onClick={() => selectDay(key)}
-                    onFocus={() => setFocused(key)}
-                    aria-pressed={key === selected}
-                    aria-label={`${formatDayLabel(key)}, ${cellStatus(key)}`}
-                  >
-                    <span className="plan__day-weekday">
-                      {day.toLocaleDateString(undefined, { weekday: 'short' })}
-                    </span>
-                    <span className="plan__day-date">{day.getDate()}</span>
-                    <span className="plan__day-marks">
-                      {plannedCount > 0 && (
-                        <span className={`plan__day-mark ${completed >= plannedCount ? 'plan__day-mark--done' : ''}`} />
-                      )}
-                      {completed > 0 && plannedCount === 0 && <span className="plan__day-mark plan__day-mark--done" />}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+            <>
+              <div className="plan__week" role="group" aria-label="Week" onKeyDown={handleWeekKeyDown}>
+                {weekStripDays.map((day) => {
+                  const key = toDateKey(day)
+                  const info = summaryByDate[key]
+                  const completed = info?.completed_count ?? 0
+                  const plannedCount = info?.planned_count ?? 0
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      tabIndex={key === stripTabbable ? 0 : -1}
+                      className={`plan__day ${key === selected ? 'plan__day--selected' : ''} ${
+                        key === today ? 'plan__day--today' : ''
+                      }`}
+                      onClick={() => selectDay(key)}
+                      onFocus={() => setFocused(key)}
+                      aria-pressed={key === selected}
+                      aria-label={`${formatDayLabel(key)}, ${cellStatus(key)}`}
+                    >
+                      <span className="plan__day-weekday">
+                        {day.toLocaleDateString(undefined, { weekday: 'short' })}
+                      </span>
+                      <span className="plan__day-date">{day.getDate()}</span>
+                      <span className="plan__day-marks">
+                        {plannedCount > 0 && (
+                          <span className={`plan__day-mark ${completed >= plannedCount ? 'plan__day-mark--done' : ''}`} />
+                        )}
+                        {completed > 0 && plannedCount === 0 && <span className="plan__day-mark plan__day-mark--done" />}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+              <ul className="plan__week-list">
+                {weekStripDays.map((day) => {
+                  const key = toDateKey(day)
+                  const info = summaryByDate[key]
+                  const titles = (planned.filter((session) => session.planned_date === key) ?? [])
+                    .map((session) => session.title ?? 'Session')
+                    .filter(Boolean)
+                  const firstTitle = titles[0]
+                  const extra = titles.length - 1
+                  const label = info?.day_type && info.day_type !== 'none'
+                    ? info.day_type.replace('_', ' ')
+                    : firstTitle
+                      ? firstTitle
+                      : 'No plan'
+                  return (
+                    <li key={key}>
+                      <button
+                        type="button"
+                        className={`plan__week-row${key === selected ? ' plan__week-row--selected' : ''}`}
+                        onClick={() => selectDay(key)}
+                        aria-label={`${formatDayLabel(key)}, ${label}, ${cellStatus(key)}`}
+                      >
+                        <span className="plan__week-row-date">
+                          {day.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}
+                        </span>
+                        <span className="plan__week-row-label">
+                          {label}
+                          {extra > 0 ? ` +${extra}` : ''}
+                        </span>
+                        <span className="plan__week-row-status">{cellStatus(key)}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </>
           )}
 
           {view === 'month' && (
@@ -827,7 +894,6 @@ export function PlanPage() {
                         aria-label={`${formatDayLabel(cell.key)}, ${cellStatus(cell.key)}`}
                         aria-selected={cell.key === selected}
                         aria-current={cell.key === today ? 'date' : undefined}
-                        aria-pressed={cell.key === selected}
                       >
                         <span className="plan__month-date">{cell.date.getDate()}</span>
                         {cell.inMonth && cellBadges(cell.key)}
@@ -835,6 +901,23 @@ export function PlanPage() {
                     ))}
                   </div>
                 ))}
+              </div>
+              <div className="plan__calendar-foot">
+                <p className="plan__legend">
+                  <span className="plan__legend-item">
+                    <span className="plan__cell-dot" /> Planned
+                  </span>
+                  <span className="plan__legend-item">
+                    <span className="plan__cell-dot plan__cell-dot--filled" /> Logged
+                  </span>
+                  <span className="plan__legend-item">
+                    <span className="plan__cell-rest" /> Rest
+                  </span>
+                </p>
+                <p className="plan__month-totals">
+                  This month: <strong>{monthTotals.planned}</strong> planned ·{' '}
+                  <strong>{monthTotals.logged}</strong> logged
+                </p>
               </div>
             </div>
           )}
