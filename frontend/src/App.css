@@ -3,6 +3,9 @@
   display: flex;
   height: 100%;
   width: 100%;
+  /* min-height: 0 keeps the percentage-height chain resolvable, so the rail
+     always paints the full app height instead of stopping at the first page. */
+  min-height: 0;
   background-color: var(--bg-main);
   overflow: hidden;
 }
@@ -74,9 +77,14 @@
 /* Sidebar */
 .sidebar {
   position: fixed;
+  inset: 0 auto 0 0;
   top: 0;
   left: 0;
+  /* Full app height on every scroll position: the element stretches inside the
+     app flex row and, on the drawer path, is pinned to the viewport. */
   height: 100%;
+  align-self: stretch;
+  min-height: 100%;
   width: var(--sidebar-width);
   background-color: var(--bg-sidebar);
   border-right: 1px solid var(--divider);
@@ -87,11 +95,12 @@
   visibility: visible;
 }
 
+/* Mobile drawer: closed means off-screen, not a 56px rail pinned to the left. */
 .sidebar--closed {
-  transform: translateX(0);
-  width: var(--sidebar-collapsed);
-  visibility: visible;
-  pointer-events: auto;
+  transform: translateX(-100%);
+  width: var(--sidebar-width);
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .sidebar--open {
@@ -113,6 +122,7 @@
 @media (min-width: 768px) {
   .sidebar {
     position: relative;
+    inset: auto;
     transform: none;
     visibility: visible;
     pointer-events: auto;
@@ -121,6 +131,7 @@
     transition: width 0.2s ease;
   }
 
+  /* Collapsed on desktop: a 56px rail that still spans the full app height. */
   .sidebar--closed {
     transform: none;
     visibility: visible;
@@ -4408,15 +4419,4 @@
   color: var(--text-primary);
   padding: 6px 8px;
   font-size: 0.875rem;
-}
-
-.library__rename-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.page__alert--info {
-  background-color: var(--bg-composer);
-  border-color: var(--divider);
-  color: var(--text-secondary);
 }
