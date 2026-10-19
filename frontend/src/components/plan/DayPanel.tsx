@@ -1,5 +1,5 @@
 import { CheckCircle2, LayoutTemplate, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Exercise, PlannedSession, Template, WorkoutSession } from '../../types'
 import { PanelMenu } from './PanelMenu'
@@ -121,6 +121,7 @@ export function DayPanel(props: DayPanelProps) {
     onTabChange,
     split,
   } = props
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const [templateOpen, setTemplateOpen] = useState(false)
   const [collapsedLog, setCollapsedLog] = useState<Record<string, boolean>>({})
   const [expandedPlan, setExpandedPlan] = useState<Record<string, boolean>>({})
@@ -198,11 +199,17 @@ export function DayPanel(props: DayPanelProps) {
                     aria-controls={`workspace-panel-${value}`}
                     tabIndex={tab === value ? 0 : -1}
                     className={`workspace__tab${tab === value ? ' workspace__tab--active' : ''}`}
+                    ref={(el) => {
+                      tabRefs.current[value] = el
+                    }}
                     onClick={() => onTabChange(value)}
                     onKeyDown={(event) => {
                       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
                       event.preventDefault()
-                      onTabChange(value === 'plan' ? 'log' : 'plan')
+                      const next = value === 'plan' ? 'log' : 'plan'
+                      onTabChange(next)
+                      // Arrow keys move focus with selection, as a tablist must.
+                      tabRefs.current[next]?.focus()
                     }}
                   >
                     {value === 'plan' ? 'Plan' : 'Log'}
