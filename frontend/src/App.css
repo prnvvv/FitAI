@@ -6492,3 +6492,127 @@
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 }
+/* Chat composer: microphone dictation */
+.composer__speech {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.composer__mic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.composer__mic:hover:not(:disabled) {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.composer__mic:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.composer__mic:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Recording: the control itself turns red so state is not colour-only — the
+   square stop icon and the timer text carry the meaning too. */
+.composer__mic--recording {
+  color: #ff6b6b;
+}
+
+.composer__mic--recording:hover:not(:disabled) {
+  background-color: rgba(255, 107, 107, 0.12);
+  color: #ff6b6b;
+}
+
+.composer__mic--cancel {
+  width: 26px;
+  height: 26px;
+  color: var(--text-muted);
+}
+
+.composer__mic--cancel:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.composer__recording {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.composer__recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  animation: composer-pulse 1.2s ease-in-out infinite;
+}
+
+.composer__transcribing {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.composer__speech-error,
+.composer__speech-note {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.composer__speech-error {
+  color: #ff6b6b;
+}
+
+.composer__speech-note {
+  color: var(--text-muted);
+}
+
+@keyframes composer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer__recording-dot {
+    animation: none;
+  }
+
+  .composer__mic {
+    transition: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .composer__recording,
+  .composer__transcribing {
+    font-size: 0.6875rem;
+  }
+}

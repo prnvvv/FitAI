@@ -135,7 +135,16 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
         </div>
       )}
       <div className="chat-page__composer">
-        <Composer onSend={handleSend} disabled={streaming} streaming={streaming} />
+        <Composer
+          // Keyed by conversation: switching conversations remounts the
+          // composer, which cancels any recording or transcription in flight so
+          // a transcript cannot land in another conversation.
+          key={conversationId ?? 'new'}
+          onSend={handleSend}
+          disabled={streaming}
+          streaming={streaming}
+          onSpeechError={setError}
+        />
         <div className="chat-page__disclaimer">
           FitAI can make mistakes. Always consult a professional for medical advice.
         </div>
