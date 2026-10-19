@@ -1,65 +1,42 @@
+/* ==========================================================================
+   Global Reset & Design Tokens — FitAI Landing
+   ========================================================================== */
+
 :root {
-  /* Backgrounds */
-  --bg-main: #000000;
-  --bg-sidebar: #0d0d0d;
-  --bg-hover: #1f1f1f;
-  --bg-active: #212121;
-  --bg-composer: #1a1a1a;
-  --bg-popover: #1f1f1f;
-  --bg-user-bubble: #2a2a2a;
-  --bg-code: #1a1a1a;
-
-  /* Text */
-  --text-primary: #f5f5f5;
-  --text-secondary: #a0a0a0;
-  --text-muted: #6b6b6b;
-
-  /* Accent */
-  --accent: #2f6bff;
-  --accent-hover: #3b82f6;
-  --accent-disabled: #1e4db3;
-
-  /* Borders / dividers */
-  --divider: rgba(255, 255, 255, 0.08);
-  --popover-border: rgba(255, 255, 255, 0.08);
-  --focus-ring: rgba(47, 107, 255, 0.4);
-
-  /* Semantic */
-  --error: #ef4444;
-  --error-bg: rgba(239, 68, 68, 0.1);
-  --success: #22c55e;
-  --success-bg: rgba(34, 197, 94, 0.1);
-
-  /* Shadows */
-  --shadow-popover: 0 8px 32px rgba(0, 0, 0, 0.5);
-
-  /* Layout */
-  --sidebar-width: 260px;
-  --sidebar-collapsed: 56px;
-  --max-content-width: 768px;
-
-  /* Type */
-  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, Helvetica, Arial,
-    sans-serif;
+  --bg: #0a0806;
+  --bg-strip: #0e0c0a;
+  --cream: #efe6d8;
+  --muted: #b3aa9d;
+  --gold: #e2a24f;
+  --gold-dark: #b9773f;
+  --hairline: rgba(255, 255, 255, 0.09);
+  --gold-hairline: rgba(226, 162, 79, 0.18);
+  --gutter: clamp(20px, 5.8vw, 110px);
+  --header-h: 104px;
+  --strip-h: 164px;
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-  height: 100%;
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
+  max-width: none;
+  text-align: left;
+  height: auto;
 }
 
 body {
-  margin: 0;
-  font-family: var(--font-family);
+  background: var(--bg);
+  color: var(--cream);
+  overflow-x: hidden;
+  font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-main);
-  color: var(--text-primary);
 }
 
 button {
@@ -98,9 +75,7 @@ input[type='number'] {
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
@@ -117,4 +92,47 @@ input[type='number'] {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+/* ==========================================================================
+   Landing Page Animations
+   ========================================================================== */
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.landing .hero__content > * {
+  animation: fadeUp 0.8s ease forwards;
+  opacity: 0;
+}
+
+.landing .hero__content .hero__eyebrow { animation-delay: 0.0s; }
+.landing .hero__content h1 { animation-delay: 0.1s; }
+.landing .hero__content .hero__copy { animation-delay: 0.2s; }
+.landing .hero__content .hero__cta { animation-delay: 0.3s; }
+
+.landing .hero__media {
+  animation: fadeIn 1s ease 0.2s forwards;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .hero__content > *,
+  .landing .hero__media {
+    animation: none !important;
+    opacity: 1 !important;
+  }
 }

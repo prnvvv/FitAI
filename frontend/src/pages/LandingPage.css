@@ -22,12 +22,12 @@
 }
 
 /* ==========================================================================
-   Page Layout — Flow-Based Structure
+   Page Layout — Natural Flow Structure
    ========================================================================== */
 
 .landing-page {
-  min-height: 100vh;
   width: 100%;
+  min-height: 100vh;
   background-color: var(--fitai-bg);
   color: var(--fitai-ivory);
   font-family: var(--font-family);
@@ -139,15 +139,21 @@
   width: 100%;
   min-height: calc(100vh - var(--fitai-header-height));
   position: relative;
+  align-items: stretch;
 }
 
-/* Left column: content flows from top with generous padding */
+/* Left column: content flows from top with generous padding.
+   Auto margins on the grid item center the content block vertically when
+   there's extra space, but collapse to 0 when content exceeds the hero height
+   (preventing clipping by the fixed header). */
 .landing-hero__content {
   display: flex;
   flex-direction: column;
-  padding: 80px var(--fitai-container-pad) 100px;
+  padding: var(--fitai-container-pad) var(--fitai-container-pad) 100px;
   max-width: 680px;
   margin-left: auto;
+  margin-top: auto;
+  margin-bottom: auto;
   position: relative;
   z-index: 10;
 }
@@ -314,12 +320,10 @@
   align-items: stretch;
   justify-content: flex-end;
   overflow: hidden;
-  min-height: calc(100vh - var(--fitai-header-height));
 }
 
 .landing-hero__pillar {
   width: 100%;
-  max-width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: right top;
@@ -423,7 +427,7 @@
 
   .landing-hero__content {
     max-width: 720px;
-    padding: 100px var(--fitai-container-pad) 120px;
+    padding: calc(var(--fitai-container-pad) * 1.5) var(--fitai-container-pad) 120px;
   }
 
   .landing-features {
@@ -435,7 +439,7 @@
 @media (max-width: 1399px) {
   .landing-hero__content {
     max-width: 640px;
-    padding: 70px var(--fitai-container-pad) 90px;
+    padding: calc(var(--fitai-container-pad) * 1.2) var(--fitai-container-pad) 100px;
   }
 }
 

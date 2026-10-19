@@ -1,16 +1,14 @@
-import { ArrowRight, LogIn, Dumbbell, Leaf, BarChart2, Sparkles } from 'lucide-react'
+import { ArrowRight, Dumbbell, Leaf, BarChart3, Sparkle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import './LandingPage.css'
+import { useEffect, useState } from 'react'
+import '../landing.css'
 
 export function LandingPage() {
   const { user, loading } = useAuth()
   const navigate = useNavigate()
-
-  const handleGetStarted = () => {
-    navigate('/login?mode=signup')
-  }
+  const [scrolled, setScrolled] = useState(false)
 
   const handleStartJourney = () => {
     navigate('/login?mode=signup')
@@ -19,6 +17,14 @@ export function LandingPage() {
   const handleLogIn = () => {
     navigate('/login')
   }
+
+  useEffect(() => {
+    const onScroll = () => {
+      setScrolled(window.scrollY > 24)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   if (loading) {
     return (
@@ -33,114 +39,118 @@ export function LandingPage() {
   }
 
   return (
-    <div className="landing-page">
-      {/* Header placeholder for fixed nav */}
-      <div className="landing-header-placeholder" aria-hidden="true" />
-      {/* Navigation */}
-      <header className="landing-nav" role="banner">
-        <nav aria-label="Main navigation">
-          <div className="landing-nav__brand">
-            <span className="landing-nav__logo" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 3v18" />
-                <path d="M7 3v14" />
-                <path d="M11 3v10" />
-                <path d="M15 3v6" />
-                <path d="M19 3v2" />
-              </svg>
-            </span>
-            <span className="landing-nav__wordmark">FitAI</span>
+    <div className="landing">
+      {/* Header / Nav */}
+      <header className={`nav ${scrolled ? 'is-scrolled' : ''}`} role="banner">
+        <div className="nav__inner">
+          {/* Logo: waveform + wordmark */}
+          <div className="nav__logo" aria-label="FitAI home">
+            <div className="nav__waveform" aria-hidden="true">
+              <div className="nav__bar" />
+              <div className="nav__bar" />
+              <div className="nav__bar" />
+              <div className="nav__bar" />
+              <div className="nav__bar" />
+            </div>
+            <span className="nav__wordmark">FitAI</span>
           </div>
-          <div className="landing-nav__actions">
-            <button className="landing-nav__login" onClick={handleLogIn} type="button">
-              <LogIn size={16} aria-hidden="true" />
-              <span>Log in</span>
+
+          {/* Centered Links */}
+          <nav className="nav__links" aria-label="Main navigation">
+            <a className="nav__link" href="#product">Product</a>
+            <a className="nav__link" href="#how-it-works">How it works</a>
+            <a className="nav__link" href="#science">Science</a>
+            <a className="nav__link" href="#pricing">Pricing</a>
+          </nav>
+
+          {/* Right Actions */}
+          <div className="nav__actions">
+            <button className="nav__login" onClick={handleLogIn} type="button">
+              Log in
             </button>
-            <button className="landing-nav__cta" onClick={handleGetStarted} type="button">
+            <a className="nav__cta" href="/login?mode=signup">
               <span>Get started</span>
-              <ArrowRight size={16} aria-hidden="true" />
-            </button>
+              <ArrowRight size={18} aria-hidden="true" />
+            </a>
           </div>
-        </nav>
+        </div>
       </header>
 
-      {/* Hero Section */}
-      <main className="landing-hero" role="main">
-        <div className="landing-hero__content">
-          <p className="landing-hero__eyebrow">DISCIPLINE × PROGRESS × LONGEVITY</p>
-          <h1 className="landing-hero__heading">
-            <span className="landing-hero__heading-line">Train with</span>
-            <span className="landing-hero__heading-line landing-hero__heading--gold">intelligence.</span>
-          </h1>
-          <p className="landing-hero__copy">
-            Personalized fitness plans, nutrition guidance<br />
-            and progress insights — powered by AI.
+      {/* Hero */}
+      <section className="hero" aria-labelledby="hero-heading">
+        {/* Media layer: image + overlays + arc */}
+        <div className="hero__media" aria-hidden="true">
+          <div className="hero__img-wrapper">
+            <img
+              src="/images/fitai-roman-pillar.png"
+              alt=""
+              className="hero__img"
+            />
+          </div>
+          <div className="hero__overlay hero__overlay--left" />
+          <div className="hero__overlay hero__overlay--top" />
+          <div className="hero__overlay hero__overlay--bottom" />
+          <div className="hero__arc" />
+        </div>
+
+        {/* Content */}
+        <div className="hero__content">
+          <p className="hero__eyebrow">
+            DISCIPLINE <span className="hero__cross" aria-hidden="true">&times;</span> PROGRESS <span className="hero__cross" aria-hidden="true">&times;</span> LONGEVITY
           </p>
-          <div className="landing-hero__cta-group">
-            <button className="landing-hero__cta" onClick={handleStartJourney} type="button">
+          <h1 id="hero-heading" className="hero__heading">
+            <span className="hero__heading-line">Train with</span>
+            <span className="hero__heading-line hero__heading-line--gold">intelligence.</span>
+          </h1>
+          <p className="hero__copy">
+            Personalized fitness plans, nutrition guidance and progress insights — powered by AI.
+          </p>
+          <div className="hero__cta">
+            <button className="hero__btn" onClick={handleStartJourney} type="button">
               <span>Start your journey</span>
-              <ArrowRight size={18} aria-hidden="true" />
+              <ArrowRight size={20} aria-hidden="true" />
             </button>
-            <div className="landing-hero__scroll-cue" aria-hidden="true">
-              <div className="landing-hero__scroll-line">
-                <span className="landing-hero__scroll-dot" />
-              </div>
-              <div className="landing-hero__scroll-label">
-                <span>SCROLL</span>
-                <span>TO EXPLORE</span>
-              </div>
-            </div>
+            <div className="hero__divider" aria-hidden="true" />
           </div>
         </div>
-        <div className="landing-hero__visual" aria-hidden="true">
-          <img
-            src="/images/fitai-roman-pillar.png"
-            alt=""
-            className="landing-hero__pillar"
-          />
-          <div className="landing-hero__amber-arc" aria-hidden="true" />
-        </div>
-      </main>
+      </section>
 
       {/* Feature Strip */}
-      <section className="landing-features" aria-label="Features">
-        <div className="landing-features__item">
-          <div className="landing-features__icon" aria-hidden="true">
-            <Dumbbell size={22} />
+      <section className="features" aria-label="Features">
+        <div className="feature">
+          <div className="feature__icon" aria-hidden="true">
+            <Dumbbell size={40} strokeWidth={1.25} />
           </div>
-          <div className="landing-features__text">
-            <span>Personalized</span>
-            <span>Training Plans</span>
-          </div>
-        </div>
-        <div className="landing-features__divider" aria-hidden="true" />
-        <div className="landing-features__item">
-          <div className="landing-features__icon" aria-hidden="true">
-            <Leaf size={22} />
-          </div>
-          <div className="landing-features__text">
-            <span>Nutrition</span>
-            <span>Guidance</span>
+          <div className="feature__text">
+            <span className="feature__title">Personalized</span>
+            <span className="feature__subtitle">Training Plans</span>
           </div>
         </div>
-        <div className="landing-features__divider" aria-hidden="true" />
-        <div className="landing-features__item">
-          <div className="landing-features__icon" aria-hidden="true">
-            <BarChart2 size={22} />
+        <div className="feature">
+          <div className="feature__icon" aria-hidden="true">
+            <Leaf size={40} strokeWidth={1.25} />
           </div>
-          <div className="landing-features__text">
-            <span>Progress</span>
-            <span>Tracking</span>
+          <div className="feature__text">
+            <span className="feature__title">Nutrition</span>
+            <span className="feature__subtitle">Guidance</span>
           </div>
         </div>
-        <div className="landing-features__divider" aria-hidden="true" />
-        <div className="landing-features__item">
-          <div className="landing-features__icon" aria-hidden="true">
-            <Sparkles size={22} />
+        <div className="feature">
+          <div className="feature__icon" aria-hidden="true">
+            <BarChart3 size={40} strokeWidth={1.25} />
           </div>
-          <div className="landing-features__text">
-            <span>Adaptive</span>
-            <span>Insights</span>
+          <div className="feature__text">
+            <span className="feature__title">Progress</span>
+            <span className="feature__subtitle">Tracking</span>
+          </div>
+        </div>
+        <div className="feature">
+          <div className="feature__icon" aria-hidden="true">
+            <Sparkle size={40} strokeWidth={1.25} />
+          </div>
+          <div className="feature__text">
+            <span className="feature__title">Adaptive</span>
+            <span className="feature__subtitle">Insights</span>
           </div>
         </div>
       </section>
