@@ -2,10 +2,30 @@ import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy, Database, History, Sparkles, Wrench, X, AlertCircle, ExternalLink } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { BrandMark } from '../BrandMark'
 import { api } from '../../services/api'
 import { formatMessageTime } from '../../utils/dates'
+import { normalizeMarkdown } from '../../utils/markdown'
 import type { ActionItem, Message, Source, ToolEvent } from '../../types'
+
+/**
+ * Markdown tables are rendered inside their own horizontal scroll container so a
+ * wide workout table scrolls instead of squeezing every column or pushing the
+ * whole conversation sideways. The wrapper is focusable for keyboard scrolling.
+ */
+function MarkdownTable({ children }: { children?: ReactNode }) {
+  return (
+    <div
+      className="message__table-scroll"
+      role="region"
+      aria-label="Table"
+      tabIndex={0}
+    >
+      <table>{children}</table>
+    </div>
+  )
+}
 
 interface MessageBubbleProps {
   message: Message
@@ -50,11 +70,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     }
   }
 
-  // Transform inline [1], [2] markers into markdown links that our custom
-  // renderer turns into compact citation chips.
+  // Normalise any presentational HTML the assistant emitted (for example a
+  // literal `<br>`), then turn inline [1] markers into markdown links that our
+  // custom renderer turns into compact citation chips.
+  const normalized = normalizeMarkdown(message.content)
   const contentWithCitations = sources.length
-    ? message.content.replace(/\[(\d+)\]/g, '[$1](#source-$1)')
-    : message.content
+    ? normalized.replace(/\[(\d+)\]/g, '[$1](#source-$1)')
+    : normalized
 
   const eventLabel = (event: ToolEvent): string => {
     const t = event.tool
@@ -150,6 +172,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     </a>
                   )
                 },
+                table: MarkdownTable,
               }}
             >
               {contentWithCitations}
