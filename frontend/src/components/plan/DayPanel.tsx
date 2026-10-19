@@ -1,22 +1,15 @@
-import { CheckCircle2, Dumbbell, LayoutTemplate, Loader2, Minus, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle2, LayoutTemplate, Loader2, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { Exercise, PlannedSession, Template, WorkoutSession } from '../../types'
-import { ExerciseCombobox } from './ExerciseCombobox'
 import { PanelMenu } from './PanelMenu'
 import { SegmentedControl } from './SegmentedControl'
+import { SessionEditor } from './SessionEditor'
+import type { LoggedSet } from './SessionEditor'
 import { TemplatePopover } from './TemplatePopover'
 
-export interface LoggedSet {
-  exercise_name: string
-  reps: number | ''
-  weight: number | ''
-  weight_unit: 'kg' | 'lb'
-}
-
-export function emptyLoggedSet(): LoggedSet {
-  return { exercise_name: '', reps: '', weight: '', weight_unit: 'kg' }
-}
+export type { LoggedSet } from './SessionEditor'
+export { emptyLoggedSet, Stepper } from './SessionEditor'
 
 export type PanelTab = 'plan' | 'log'
 
@@ -65,6 +58,7 @@ interface DayPanelProps {
   saving: boolean
   logError: string | null
   onLogSession: () => void
+  onClearLogDraft: () => void
   onDeleteWorkout: (session: WorkoutSession) => void
   library: Exercise[]
   recent: Exercise[]
@@ -76,6 +70,8 @@ interface DayPanelProps {
   onTemplateKey: (value: string) => void
   onTemplateDate: (value: string) => void
   onApplyTemplate: () => void
+  /** Days in the template window that already carry a plan, for the warning. */
+  plannedDays: string[]
 }
 
 /** Short "Wed, 14 Oct" label for the panel header. */
@@ -93,6 +89,19 @@ const DAY_TYPE_OPTIONS = [
   { value: 'active_recovery', label: 'Active recovery' },
 ]
 
+const MODE_HINTS: Record<PanelTab, string> = {
+  plan: 'Schedule a session for this day',
+  log: 'Record what you did',
+}
+
+/**
+ * Selected-day workspace: sticky header, scrollable body, sticky footer.
+ *
+ * Plan and Log are two mounted panels behind one explicit switch, so typed text,
+ * chosen exercises and counter values survive mode and day changes exactly as
+ * before. Only the footer action changes with the mode, so the user can never
+ * see a "Log session" button while planning.
+ */
 export function DayPanel(props: DayPanelProps) {
   const {
     selected,
@@ -125,89 +134,124 @@ export function DayPanel(props: DayPanelProps) {
     { label: 'Start from a template…', onSelect: () => setTemplateOpen(true) },
   ]
 
+  const body =
+    loading ? (
+      <div className="plan__skeleton" role="status" aria-busy="true" aria-live="polite">
+        <span className="visually-hidden">{loadingLabel}</span>
+        <div className="plan__skeleton-line" />
+        <div className="plan__skeleton-line" />
+        <div className="plan__skeleton-line" />
+        <div className="plan__skeleton-line" />
+      </div>
+    ) : error ? (
+      <div className="page__alert page__alert--error" role="alert">
+        {error}
+        <button type="button" className="page__alert-action" onClick={onRetry}>
+          Retry
+        </button>
+      </div>
+    ) : split ? (
+      <div className="workspace__cols">
+        <PlanBody {...props} expanded={expandedPlan} onToggleExpand={toggle(setExpandedPlan)} />
+        <LogBody
+          {...props}
+          collapsed={collapsedLog}
+          onToggleCollapse={toggle(setCollapsedLog)}
+        />
+      </div>
+    ) : (
+      <>
+        <div id="workspace-panel-plan" role="tabpanel" aria-labelledby="workspace-tab-plan" aria-label="Plan" hidden={tab !== 'plan'}>
+          <PlanBody {...props} expanded={expandedPlan} onToggleExpand={toggle(setExpandedPlan)} />
+        </div>
+        <div id="workspace-panel-log" role="tabpanel" aria-labelledby="workspace-tab-log" aria-label="Log" hidden={tab !== 'log'}>
+          <LogBody {...props} collapsed={collapsedLog} onToggleCollapse={toggle(setCollapsedLog)} />
+        </div>
+      </>
+    )
+
   return (
-    <>
-      <div className="daypanel__header">
-        <div className="daypanel__title">
-          <span className="daypanel__date">{shortDayLabel(selected)}</span>
-          {selected === today && <span className="plan__badge daypanel__today-chip">Today</span>}
+    <section className="workspace" aria-label="Day details">
+      <header className="workspace__header">
+        <div className="workspace__headline">
+          <span className="workspace__date">{shortDayLabel(selected)}</span>
+          {selected === today && <span className="plan__badge workspace__today-chip">Today</span>}
           <span className="plan__badge plan__badge--type">{statusText}</span>
         </div>
         <PanelMenu triggerLabel="Day options" trigger={<MoreHorizontal size={18} />} items={menuItems} />
-      </div>
+      </header>
 
-      {loading ? (
-        <div className="plan__skeleton" role="status" aria-busy="true" aria-live="polite">
-          <span className="visually-hidden">{loadingLabel}</span>
-          <div className="plan__skeleton-line" />
-          <div className="plan__skeleton-line" />
-          <div className="plan__skeleton-line" />
-          <div className="plan__skeleton-line" />
-        </div>
-      ) : error ? (
-        <div className="page__alert page__alert--error" role="alert">
-          {error}
-          <button type="button" className="page__alert-action" onClick={onRetry}>
-            Retry
-          </button>
-        </div>
-      ) : (
-        <>
-          <div className="daypanel__toolbar">
-            {!split && (
-              <div className="plan__tabs" role="tablist" aria-label="Day panel">
+      {!loading && !error && (
+        <div className="workspace__modes">
+          {split ? (
+            <p className="workspace__hint">{MODE_HINTS[tab]}</p>
+          ) : (
+            <>
+              <div className="workspace__tabs" role="tablist" aria-label="Day mode">
                 {(['plan', 'log'] as const).map((value) => (
                   <button
                     key={value}
                     type="button"
                     role="tab"
+                    id={`workspace-tab-${value}`}
                     aria-selected={tab === value}
-                    className={tab === value ? 'plan__tabs--active' : ''}
+                    aria-controls={`workspace-panel-${value}`}
+                    tabIndex={tab === value ? 0 : -1}
+                    className={`workspace__tab${tab === value ? ' workspace__tab--active' : ''}`}
                     onClick={() => onTabChange(value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+                      event.preventDefault()
+                      onTabChange(value === 'plan' ? 'log' : 'plan')
+                    }}
                   >
                     {value === 'plan' ? 'Plan' : 'Log'}
                   </button>
                 ))}
               </div>
-            )}
-            <div className="daypanel__toolbar-right">
-              {savedAt && <span className="plan__saved">Saved</span>}
-              <button type="button" className="plan__text-btn" onClick={() => setTemplateOpen(true)}>
-                <LayoutTemplate size={14} />
-                Template
-              </button>
-            </div>
-          </div>
-
-          <div className="daypanel__body">
-            {split ? (
-              <div className="daypanel__cols">
-                <PlanSection {...props} expanded={expandedPlan} onToggleExpand={toggleExpanded(setExpandedPlan)} />
-                <LogSection {...props} collapsed={collapsedLog} onToggleCollapse={toggleCollapsed(setCollapsedLog)} />
-              </div>
-            ) : (
-              <>
-                <div role="tabpanel" aria-label="Plan" hidden={tab !== 'plan'}>
-                  <PlanSection {...props} expanded={expandedPlan} onToggleExpand={toggleExpanded(setExpandedPlan)} />
-                </div>
-                <div role="tabpanel" aria-label="Log" hidden={tab !== 'log'}>
-                  <LogSection {...props} collapsed={collapsedLog} onToggleCollapse={toggleCollapsed(setCollapsedLog)} />
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="daypanel__footer">
-            <button
-              type="button"
-              className="profile__save daypanel__log-btn"
-              onClick={props.onLogSession}
-              disabled={props.saving}
-            >
-              {props.saving ? <Loader2 className="page__spinner" size={16} /> : 'Log session'}
+              <p className="workspace__hint">{MODE_HINTS[tab]}</p>
+            </>
+          )}
+          <div className="workspace__tools">
+            {savedAt && <span className="plan__saved">Saved</span>}
+            <button type="button" className="plan__text-btn" onClick={() => setTemplateOpen(true)}>
+              <LayoutTemplate size={14} />
+              Template
             </button>
           </div>
-        </>
+        </div>
+      )}
+
+      <div className="workspace__body">{body}</div>
+
+      {!loading && !error && (
+        <footer className="workspace__footer">
+          {split || tab === 'log' ? (
+            <>
+              <button type="button" className="plan__text-btn" onClick={props.onClearLogDraft}>
+                Clear
+              </button>
+              <button
+                type="button"
+                className="profile__save workspace__primary"
+                onClick={props.onLogSession}
+                disabled={props.saving}
+              >
+                {props.saving ? <Loader2 className="page__spinner" size={16} /> : 'Log session'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              className="profile__save workspace__primary"
+              onClick={props.onCreatePlan}
+              disabled={props.planning}
+            >
+              {props.planning ? <Loader2 className="page__spinner" size={16} /> : <Plus size={16} />}
+              Plan session
+            </button>
+          )}
+        </footer>
       )}
 
       <TemplatePopover
@@ -216,32 +260,29 @@ export function DayPanel(props: DayPanelProps) {
         templateKey={props.templateKey}
         templateDate={props.templateDate}
         applying={props.applyingTemplate}
+        plannedDays={props.plannedDays}
         onKeyChange={props.onTemplateKey}
         onDateChange={props.onTemplateDate}
         onApply={props.onApplyTemplate}
         onClose={() => setTemplateOpen(false)}
       />
-    </>
+    </section>
   )
 }
 
-function toggleCollapsed(setter: Dispatch<SetStateAction<Record<string, boolean>>>) {
-  return (id: string) =>
-    setter((prev) => ({ ...prev, [id]: !prev[id] }))
+/** Expand/collapse toggle factory, one per list. */
+function toggle(setter: Dispatch<SetStateAction<Record<string, boolean>>>) {
+  return (id: string) => setter((prev) => ({ ...prev, [id]: !prev[id] }))
 }
 
-function toggleExpanded(setter: Dispatch<SetStateAction<Record<string, boolean>>>) {
-  return (id: string) =>
-    setter((prev) => ({ ...prev, [id]: !prev[id] }))
-}
-
-function PlanSection({
+function PlanBody({
+  split,
+  planning,
+  onCreatePlan,
   planTitle,
   onPlanTitle,
   planDayType,
   onPlanDayType,
-  planning,
-  onCreatePlan,
   planned,
   draftFor,
   onDraft,
@@ -256,35 +297,43 @@ function PlanSection({
 }) {
   return (
     <section aria-label="Planned sessions">
-      <div className="daypanel__plan-row">
-        <input
-          type="text"
-          className="plan__input"
-          placeholder="Session title (optional)"
-          aria-label="Session title"
-          value={planTitle}
-          onChange={(event) => onPlanTitle(event.target.value)}
-        />
-        <SegmentedControl
-          label="Day type"
-          name="plan-day-type"
-          options={DAY_TYPE_OPTIONS}
-          value={planDayType}
-          onChange={onPlanDayType}
-        />
-        <button
-          type="button"
-          className="profile__save daypanel__plan-btn"
-          onClick={onCreatePlan}
-          disabled={planning}
-        >
-          <Plus size={16} />
-          Plan session
-        </button>
+      <div className="composer">
+        <label className="field composer__title">
+          <span className="field__label">Session title</span>
+          <input
+            type="text"
+            className="plan__input"
+            placeholder="Optional"
+            aria-label="Session title"
+            value={planTitle}
+            onChange={(event) => onPlanTitle(event.target.value)}
+          />
+        </label>
+        <div className="composer__type">
+          <span className="editor__field-label">Day type</span>
+          <SegmentedControl
+            label="Day type"
+            name="plan-day-type"
+            options={DAY_TYPE_OPTIONS}
+            value={planDayType}
+            onChange={onPlanDayType}
+          />
+        </div>
+        {split && (
+          <button
+            type="button"
+            className="profile__save composer__submit"
+            onClick={onCreatePlan}
+            disabled={planning}
+          >
+            <Plus size={16} />
+            Plan session
+          </button>
+        )}
       </div>
 
       {planned.length === 0 ? (
-        <p className="plan__hint">Nothing planned.</p>
+        <p className="plan__hint">Nothing planned for this day.</p>
       ) : (
         <ul className="plan__session-list">
           {planned.map((session) => (
@@ -323,52 +372,34 @@ function PlanSection({
               </div>
               {expanded[session.id] && (
                 <div className="plan__session-detail">
-                  <table className="plan__set-table">
-                    <caption className="visually-hidden">Exercises for {session.title ?? 'session'}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">#</th>
-                        <th scope="col">Exercise</th>
-                        <th scope="col">Sets</th>
-                        <th scope="col">Reps</th>
-                        <th scope="col">Target</th>
-                        <th scope="col">Done</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {session.exercises.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="plan__set-detail">
-                            No exercises yet.
-                          </td>
-                        </tr>
-                      )}
+                  {/* Definition list instead of a six-column table: it never needs
+                      horizontal scrolling, whatever the panel width is. */}
+                  {session.exercises.length === 0 ? (
+                    <p className="plan__hint">No exercises yet.</p>
+                  ) : (
+                    <dl className="detail">
                       {session.exercises.map((exercise) => (
-                        <tr key={exercise.id}>
-                          <td>{exercise.position + 1}</td>
-                          <td>{exercise.exercise_name}</td>
-                          <td>{exercise.target_sets ?? '—'}</td>
-                          <td>{exercise.target_reps ?? '—'}</td>
-                          <td>
-                            {exercise.target_weight != null
-                              ? `${exercise.target_weight} ${exercise.target_weight_unit ?? ''}`
-                              : exercise.duration_seconds != null
-                                ? `${exercise.duration_seconds}s`
-                                : '—'}
-                          </td>
-                          <td>
-                            <input
-                              type="checkbox"
-                              aria-label={`${exercise.exercise_name} done`}
-                              checked={session.status === 'completed'}
-                              disabled={session.status === 'completed'}
-                              onChange={() => onComplete(session)}
-                            />
-                          </td>
-                        </tr>
+                        <div className="detail__pair" key={exercise.id}>
+                          <dt className="detail__key">{exercise.exercise_name}</dt>
+                          <dd className="detail__value">
+                            {[
+                              exercise.target_sets != null ? `${exercise.target_sets} sets` : null,
+                              exercise.target_reps != null ? `${exercise.target_reps} reps` : null,
+                              exercise.target_weight != null
+                                ? `${exercise.target_weight} ${exercise.target_weight_unit ?? ''}`.trim()
+                                : exercise.duration_seconds != null
+                                  ? `${exercise.duration_seconds}s`
+                                  : exercise.distance_meters != null
+                                    ? `${exercise.distance_meters} m`
+                                    : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') || 'No target set'}
+                          </dd>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </dl>
+                  )}
                   <textarea
                     className="plan__input plan__input--textarea"
                     aria-label="Session notes"
@@ -409,7 +440,7 @@ function summarizeSets(session: WorkoutSession): string {
   return `${sets.length} ${sets.length === 1 ? 'exercise' : 'exercises'} — ${first}`
 }
 
-function LogSection({
+function LogBody({
   logged,
   loggedName,
   onLoggedName,
@@ -428,12 +459,8 @@ function LogSection({
 }) {
   return (
     <section aria-label="Logged sessions">
-      <h3 className="plan__section-label">
-        <Dumbbell size={14} />
-        Logged
-      </h3>
       {logged.length === 0 ? (
-        <p className="plan__hint">Nothing logged for this day yet.</p>
+        <p className="plan__hint">Nothing logged yet.</p>
       ) : (
         <ul className="plan__session-list">
           {logged.map((session) => (
@@ -475,130 +502,16 @@ function LogSection({
         </ul>
       )}
 
-      <div className="plan__add">
-        <h3 className="plan__section-label">Log a session</h3>
-        <input
-          type="text"
-          className="plan__input"
-          placeholder="Session name (optional)"
-          aria-label="Logged session name"
-          value={loggedName}
-          onChange={(event) => onLoggedName(event.target.value)}
-        />
-        {loggedSets.map((set, index) => (
-          <div key={index} className="plan__exercise-card">
-            <ExerciseCombobox
-              value={set.exercise_name}
-              library={library}
-              recent={recent}
-              onLibraryChange={onLibraryExercise}
-              onChange={(value) =>
-                setLoggedSets((prev) =>
-                  prev.map((item, i) => (i === index ? { ...item, exercise_name: value } : item)),
-                )
-              }
-            />
-            <div className="plan__exercise-grid">
-              <Stepper
-                label="Reps"
-                value={set.reps}
-                onChange={(value) =>
-                  setLoggedSets((prev) =>
-                    prev.map((item, i) => (i === index ? { ...item, reps: value } : item)),
-                  )
-                }
-              />
-              <Stepper
-                label="Weight"
-                value={set.weight}
-                step={2.5}
-                onChange={(value) =>
-                  setLoggedSets((prev) =>
-                    prev.map((item, i) => (i === index ? { ...item, weight: value } : item)),
-                  )
-                }
-              />
-              <SegmentedControl
-                label="Weight unit"
-                name={`weight-unit-${index}`}
-                options={[
-                  { value: 'kg', label: 'kg' },
-                  { value: 'lb', label: 'lb' },
-                ]}
-                value={set.weight_unit}
-                onChange={(value) =>
-                  setLoggedSets((prev) =>
-                    prev.map((item, i) =>
-                      i === index ? { ...item, weight_unit: value as 'kg' | 'lb' } : item,
-                    ),
-                  )
-                }
-              />
-              <button
-                type="button"
-                className="plan__icon-btn"
-                onClick={() => setLoggedSets((prev) => prev.filter((_, i) => i !== index))}
-                aria-label="Remove set"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          </div>
-        ))}
-        {logError && (
-          <p className="field__error" role="alert">
-            {logError}
-          </p>
-        )}
-        <button
-          type="button"
-          className="plan__text-btn"
-          onClick={() => setLoggedSets((prev) => [...prev, emptyLoggedSet()])}
-        >
-          <Plus size={14} />
-          Add exercise
-        </button>
-      </div>
-    </section>
-  )
-}
-
-export function Stepper({
-  label,
-  value,
-  step = 1,
-  onChange,
-}: {
-  label: string
-  value: number | ''
-  step?: number
-  onChange: (value: number | '') => void
-}) {
-  const decrement = () => {
-    const current = value === '' ? 0 : Number(value)
-    onChange(Math.max(0, current - step))
-  }
-  const increment = () => onChange((value === '' ? 0 : Number(value)) + step)
-  return (
-    <div className="stepper">
-      <span className="stepper__label">{label}</span>
-      <button type="button" className="stepper__btn" onClick={decrement} aria-label={`Decrease ${label}`}>
-        <Minus size={14} />
-      </button>
-      <input
-        type="number"
-        className="stepper__input"
-        aria-label={label}
-        value={value}
-        min={0}
-        step={step}
-        onChange={(event) =>
-          onChange(event.target.value === '' ? '' : Number(event.target.value))
-        }
+      <SessionEditor
+        loggedName={loggedName}
+        onLoggedName={onLoggedName}
+        loggedSets={loggedSets}
+        setLoggedSets={setLoggedSets}
+        library={library}
+        recent={recent}
+        onLibraryExercise={onLibraryExercise}
+        error={logError}
       />
-      <button type="button" className="stepper__btn" onClick={increment} aria-label={`Increase ${label}`}>
-        <Plus size={14} />
-      </button>
-    </div>
+    </section>
   )
 }

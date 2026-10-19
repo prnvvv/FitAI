@@ -114,8 +114,8 @@ describe('TemplatePopover', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled()
-    await user.selectOptions(screen.getByLabelText('Template'), 'upper_lower')
+    expect(screen.getByRole('button', { name: 'Apply template' })).toBeDisabled()
+    await user.click(screen.getByRole('radio', { name: /Upper Lower/ }))
     expect(onKeyChange).toHaveBeenCalledWith('upper_lower')
 
     rerender(
@@ -131,7 +131,7 @@ describe('TemplatePopover', () => {
         onClose={() => {}}
       />,
     )
-    await user.click(screen.getByRole('button', { name: 'Apply' }))
+    await user.click(screen.getByRole('button', { name: 'Apply template' }))
     expect(onApply).toHaveBeenCalledTimes(1)
   })
 
