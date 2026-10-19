@@ -1,0 +1,20 @@
+# Runtime dependencies for the isolated speech-to-text proof of concept.
+# Installed only inside this folder's virtual environment; the FitAI frontend
+# and backend manifests are untouched.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+numpy==1.26.4
+scipy==1.13.1
+soundfile==0.12.1
+
+# Model inference (only needed for real transcription, not for the unit tests).
+# Granite Speech 5.0 TurboCTC requires transformers>=5.16.0.
+torch>=2.6.0
+transformers>=5.16.0
+accelerate>=1.0.0
+
+# Test tooling.
+pytest==8.3.4
+httpx==0.28.1
