@@ -25,18 +25,55 @@ const state = { stream: null, recorder: null, chunks: [], startedAt: 0, tick: nu
 const TARGET_SAMPLE_RATE = 16000
 
 async function blobToWav(blob) {
-  const decoded = await new AudioContext().decodeAudioData(await blob.arrayBuffer())
-  const frames = Math.max(1, Math.round((decoded.duration * TARGET_SAMPLE_RATE)))
-  const offline = new OfflineAudioContext(1, frames, TARGET_SAMPLE_RATE)
-  const source = offline.createBufferSource()
-  source.buffer = decoded
-  source.connect(offline.destination)
-  source.start()
-  const rendered = await offline.startRendering()
+  const AudioCtx = window.AudioContext || window.webkitAudioContext
+  if (!AudioCtx) throw new Error('Web Audio API is not available in this browser')
+  const ctx = new AudioCtx()
+  // Autoplay policies can leave the context suspended, which makes decoding fail.
+  if (ctx.state === 'suspended') {
+    try {
+      await ctx.resume()
+    } catch {
+      /* decoding still works on a suspended context in most browsers */
+    }
+  }
+  const buffer = await blob.arrayBuffer()
+  let decoded
+  try {
+    const pending = ctx.decodeAudioData(buffer)
+    // Older Safari resolves through callbacks and returns undefined.
+    decoded =
+      pending && typeof pending.then === 'function'
+        ? await pending
+        : await new Promise((resolve, reject) => ctx.decodeAudioData(buffer, resolve, reject))
+  } catch (error) {
+    throw new Error(`this browser could not decode ${blob.type || 'the recording'} (${error?.message || error})`)
+  } finally {
+    try {
+      ctx.close()
+    } catch {
+      /* ignore */
+    }
+  }
 
-  const mono = rendered.getChannelData(0)
-  const buffer = new ArrayBuffer(44 + mono.length * 2)
-  const view = new DataView(buffer)
+  const targetLength = Math.max(1, Math.round(decoded.duration * TARGET_SAMPLE_RATE))
+  let mono
+  if (window.OfflineAudioContext) {
+    const offline = new OfflineAudioContext(1, targetLength, TARGET_SAMPLE_RATE)
+    const source = offline.createBufferSource()
+    source.buffer = decoded
+    source.connect(offline.destination)
+    source.start()
+    mono = (await offline.startRendering()).getChannelData(0)
+  } else {
+    // Fallback: nearest-neighbour resample of the first channel.
+    const data = decoded.getChannelData(0)
+    mono = new Float32Array(targetLength)
+    for (let i = 0; i < targetLength; i += 1) {
+      mono[i] = data[Math.min(data.length - 1, Math.round((i / targetLength) * data.length))]
+    }
+  }
+  const wavBuffer = new ArrayBuffer(44 + mono.length * 2)
+  const view = new DataView(wavBuffer)
   const ascii = (offset, text) => [...text].forEach((char, i) => view.setUint8(offset + i, char.charCodeAt(0)))
   ascii(0, 'RIFF')
   view.setUint32(4, 36 + mono.length * 2, true)
@@ -54,7 +91,7 @@ async function blobToWav(blob) {
     const clamped = Math.max(-1, Math.min(1, mono[i]))
     view.setInt16(44 + i * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true)
   }
-  return { blob: new Blob([buffer], { type: 'audio/wav' }), duration: rendered.duration }
+  return { blob: new Blob([wavBuffer], { type: 'audio/wav' }), duration: decoded.duration }
 }
 
 function setError(message) {
@@ -178,18 +215,19 @@ async function handleRecordingStopped() {
   setBusy(true)
   const startedAt = Date.now()
   try {
-    // Normalise to 16 kHz mono WAV in the browser; fall back to the raw clip
-    // (the server then needs ffmpeg) if the browser cannot decode it.
+    // Normalise to 16 kHz mono WAV in the browser; if this browser cannot decode
+    // its own recording, fall back to the raw clip (the server then needs PyAV
+    // or ffmpeg) and say why in the UI.
     let payloadBlob = blob
     let filename = `recording.${blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm'}`
-    let sourceFormat = 'webm/opus'
+    let sourceFormat = 'compressed clip (browser could not convert it)'
     try {
       const wav = await blobToWav(blob)
       payloadBlob = wav.blob
       filename = 'recording.wav'
       sourceFormat = 'wav 16 kHz mono (browser)'
     } catch (decodeError) {
-      console.warn('Browser-side WAV conversion failed, uploading the raw clip.', decodeError)
+      els.meta.textContent = `Browser could not convert the clip (${decodeError?.message || decodeError}); sending the original ${filename}.`
     }
 
     const body = new FormData()

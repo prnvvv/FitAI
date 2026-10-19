@@ -80,11 +80,45 @@ def test_rejects_an_unsupported_container(wav_upload):
         decode_audio(b"\x00\x01\x02\x03not-audio", "clip.aiff")
 
 
-def test_reports_a_missing_ffmpeg_decoder_for_opus(monkeypatch):
+def test_reports_a_missing_decoder_for_opus(monkeypatch):
+    """With neither PyAV nor ffmpeg, the message must say how to fix it."""
     monkeypatch.setattr("audio_utils.shutil.which", lambda _: None)
+    monkeypatch.setitem(__import__("sys").modules, "av", None)
 
-    with pytest.raises(UnsupportedAudioError, match="ffmpeg was not found"):
+    with pytest.raises(UnsupportedAudioError, match="pip install av"):
         decode_audio(b"OggS" + b"\x00" * 64, "clip.webm")
+
+
+def _webm_opus_bytes(speech_sample: np.ndarray, sample_rate: int = 48000) -> bytes:
+    """Encode a clip to webm/opus the way a browser's MediaRecorder does."""
+    av = pytest.importorskip("av")
+    buffer = io.BytesIO()
+    with av.open(buffer, mode="w", format="webm") as container:
+        stream = container.add_stream("libopus", rate=sample_rate)
+        stream.layout = "mono"
+        frame = av.AudioFrame.from_ndarray(speech_sample.reshape(1, -1), format="flt", layout="mono")
+        frame.sample_rate = sample_rate
+        for packet in stream.encode(frame):
+            container.mux(packet)
+        for packet in stream.encode(None):
+            container.mux(packet)
+    return buffer.getvalue()
+
+
+def test_decodes_browser_webm_opus_without_a_system_ffmpeg(monkeypatch):
+    """The page normally uploads WAV, but a browser that cannot convert must
+    still work: PyAV decodes webm/opus with no ffmpeg on PATH."""
+    monkeypatch.setattr("audio_utils.shutil.which", lambda _: None)
+    tone = (0.4 * np.sin(2 * np.pi * 440 * np.arange(48000) / 48000)).astype(np.float32)
+    webm = _webm_opus_bytes(tone)
+
+    decoded = decode_audio(webm, "recording.webm")
+
+    assert decoded.sample_rate == TARGET_SAMPLE_RATE
+    assert decoded.source_format == "webm"
+    assert decoded.duration_s == pytest.approx(1.0, abs=0.05)
+    assert rms(decoded.samples) == pytest.approx(0.28, abs=0.05)
+    assert is_silent(decoded.samples) is False
 
 
 def test_silence_is_detected_and_a_tone_is_not(silent_sample, speech_sample):

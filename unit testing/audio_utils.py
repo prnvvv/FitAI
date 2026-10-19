@@ -114,12 +114,51 @@ def _decode_wav(data: bytes) -> tuple[np.ndarray, int]:
     return np.asarray(samples), int(sample_rate)
 
 
+def _decode_with_pyav(data: bytes) -> tuple[np.ndarray, int]:
+    """Decode any container PyAV supports (webm/opus, mp4, m4a, mp3) to 16 kHz mono.
+
+    PyAV ships its own FFmpeg libraries, so this needs no system install.
+    """
+    try:
+        import av
+    except ImportError as exc:
+        raise UnsupportedAudioError(
+            "This audio format needs a decoder. Install one of: "
+            "`pip install av` (bundles FFmpeg, recommended) or install ffmpeg on PATH."
+        ) from exc
+
+    try:
+        decoded: list[np.ndarray] = []
+        with av.open(io.BytesIO(data)) as container:
+            resampler = av.AudioResampler(format="fltp", layout="mono", rate=TARGET_SAMPLE_RATE)
+            for frame in container.decode(audio=0):
+                for resampled in resampler.resample(frame):
+                    decoded.append(_frame_to_mono(resampled))
+            # Flush the resampler's tail.
+            for resampled in resampler.resample(None):
+                decoded.append(_frame_to_mono(resampled))
+    except UnsupportedAudioError:
+        raise
+    except Exception as exc:
+        raise UnsupportedAudioError(f"Could not decode the audio: {exc}") from exc
+
+    if not decoded:
+        raise AudioValidationError("The uploaded file contained no audio frames.")
+    samples = np.concatenate(decoded).astype(np.float32, copy=False)
+    return samples, TARGET_SAMPLE_RATE
+
+
+def _frame_to_mono(frame) -> np.ndarray:
+    array = frame.to_ndarray()
+    return array.mean(axis=0, dtype=np.float32) if array.ndim > 1 else array.astype(np.float32)
+
+
 def _decode_with_ffmpeg(data: bytes, source_format: str) -> tuple[np.ndarray, int]:
     binary = shutil.which("ffmpeg")
     if not binary:
         raise UnsupportedAudioError(
-            f"Cannot decode '{source_format}' audio: ffmpeg was not found on PATH. "
-            "Install ffmpeg, or record/send 16 kHz mono WAV instead."
+            f"Cannot decode '{source_format}' audio: neither PyAV nor ffmpeg is available. "
+            "Install one of: `pip install av` (recommended) or ffmpeg on PATH."
         )
     command = [
         binary,
@@ -183,7 +222,14 @@ def decode_audio(
     if source_format == "wav":
         raw, sample_rate = _decode_wav(data)
     elif source_format in FFMPEG_FORMATS:
-        raw, sample_rate = _decode_with_ffmpeg(data, source_format)
+        # PyAV first (self-contained), then a system ffmpeg if one is installed.
+        try:
+            raw, sample_rate = _decode_with_pyav(data)
+        except UnsupportedAudioError as pyav_error:
+            try:
+                raw, sample_rate = _decode_with_ffmpeg(data, source_format)
+            except UnsupportedAudioError:
+                raise pyav_error from None
     else:
         raise UnsupportedAudioError(
             f"Unsupported audio format '{source_format}'. Record with the browser "

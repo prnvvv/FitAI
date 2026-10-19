@@ -75,7 +75,7 @@ task conversation in plaintext, so it should be rotated.
 | RAM | ~3 GB free for weights + activations (16 kHz audio is held in one piece) |
 | GPU | optional. `device_map="auto"` uses CUDA when present; CPU-only works |
 | Disk | ~0.9 GB for `model.safetensors` in the Hugging Face cache + ~2.5 GB for the CUDA torch wheel |
-| ffmpeg | **optional.** Only needed if you upload a compressed file from outside the browser. The page converts recordings to 16 kHz mono WAV in the browser, so the normal flow needs no ffmpeg |
+| Compressed audio | handled by **PyAV** (`av`), which bundles its own FFmpeg, so no system install is needed. A system `ffmpeg` is used only as a fallback |
 
 **`torchaudio` is required, and it must match your `torch` exactly.**
 `GraniteSpeech5FeatureExtractor` builds its log-mel front-end with
@@ -115,6 +115,20 @@ Then open <http://127.0.0.1:8077>.
 Useful switches (env vars): `STT_DEVICE=cpu|cuda|auto`, `STT_MODEL_ID=...`,
 `STT_EAGER_LOAD=0` (skip the background download and load on the first request
 instead), `STT_PORT`.
+
+### Audio decoding
+
+The page converts its recording to 16 kHz mono WAV in the browser, which is
+exactly what the model expects. Some browsers refuse to decode their own
+MediaRecorder output (or block the Web Audio API without a user gesture); when
+that happens the page says so under the composer and uploads the original clip
+instead. The server then handles it anyway:
+
+1. WAV → soundfile
+2. webm/opus, ogg, mp4/m4a, mp3 → PyAV (`pip install av`), which bundles FFmpeg
+3. a system `ffmpeg` if one happens to be installed
+
+So no external install is required for the normal flow *or* the fallback.
 
 ### GPU (CUDA)
 
@@ -219,8 +233,9 @@ Git.
   "device": "cuda:0", "sample_rate": 16000, "error": "", "requests": 3 }
 ```
 
-`POST /api/transcribe` — `multipart/form-data`, field `file` (WAV preferred,
-webm/ogg/mp4/mp3 also accepted when ffmpeg is installed).
+`POST /api/transcribe` — `multipart/form-data`, field `file`. WAV is decoded
+with soundfile; webm/opus, ogg, mp4/m4a and mp3 are decoded and resampled by
+PyAV, which carries its own FFmpeg build.
 
 ```json
 { "text": "how many protein shakes should I drink after training",

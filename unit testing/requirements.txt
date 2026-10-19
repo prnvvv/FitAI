@@ -8,6 +8,9 @@ python-multipart==0.0.20
 numpy==1.26.4
 scipy==1.13.1
 soundfile==0.12.1
+# PyAV bundles its own FFmpeg, so webm/opus or mp4 uploads decode without a
+# system-wide ffmpeg install (relevant when the browser cannot convert).
+av==17.1.0
 
 # Model inference (only needed for real transcription, not for the unit tests).
 # Granite Speech 5.0 TurboCTC requires transformers>=5.16.0.
