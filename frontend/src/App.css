@@ -4246,6 +4246,7 @@
 }
 
 .progress__unit-toggle {
+  white-space: nowrap;
   border: 1px solid var(--divider);
   border-radius: 8px;
   background-color: var(--bg-composer);
@@ -5268,9 +5269,22 @@
     min-height: 44px;
   }
 
+  /* Header stacks: title, then a full-width range control, then unit + Log. */
   .progress__header-actions {
     gap: 8px;
-    flex-wrap: nowrap;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .progress__range {
+    flex: 1 1 100%;
+    display: flex;
+  }
+
+  .progress__range button {
+    flex: 1 1 0;
+    height: 44px;
+    padding: 0 4px;
   }
 
   .stat-strip {
