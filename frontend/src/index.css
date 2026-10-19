@@ -171,3 +171,74 @@ input[type='number'] {
     opacity: 1 !important;
   }
 }
+
+/* ==========================================================================
+   Authenticated app tokens — FitAI chat workspace
+
+   The signed-in surface is a near-black, warm-neutral workspace: amber is
+   reserved for the brand, primary actions and the selected navigation item,
+   while everything else stays ivory / muted gray. Values are tuned to sit
+   next to the landing palette (--bg / --cream / --gold) so the workspace reads
+   as the same product. Component CSS must only use these tokens.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --bg-main: #0b0b0a;
+  --bg-sidebar: #0d0c0b;
+  --bg-hover: #1c1a17;
+  --bg-active: #29241d;
+  --bg-composer: #151413;
+  --bg-popover: #161514;
+  --bg-user-bubble: #1b1b1a;
+  --bg-code: #1c1a17;
+
+  /* Text */
+  --text-primary: #f0ece5;
+  --text-secondary: #aaa49b;
+  --text-muted: #77736d;
+
+  /* Accent (brand amber) */
+  --accent: #e9a447;
+  --accent-hover: #f2b65f;
+  --accent-disabled: #6b5636;
+  --accent-contrast: #1a1209;
+
+  /* Borders */
+  --divider: #2a2824;
+  --divider-strong: #44392b;
+  --popover-border: #44392b;
+  --focus-ring: rgba(233, 164, 71, 0.32);
+
+  /* Semantic */
+  --error: #e05c5c;
+  --error-bg: rgba(224, 92, 92, 0.12);
+  --color-error: #e05c5c;
+  --success: #6fbf73;
+  --success-bg: rgba(111, 191, 115, 0.12);
+
+  /* Elevation */
+  --shadow-popover: 0 18px 44px rgba(0, 0, 0, 0.55);
+
+  /* Layout */
+  --sidebar-width: clamp(312px, 21.5vw, 360px);
+  --sidebar-collapsed: 64px;
+  --max-content-width: 1120px;
+  --topbar-h: 70px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Type */
+  --font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+}
