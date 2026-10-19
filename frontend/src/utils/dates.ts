@@ -199,3 +199,54 @@ export function formatWeight(kg: number, units: 'metric' | 'imperial'): string {
 export function formatHeight(cm: number, units: 'metric' | 'imperial'): string {
   return units === 'imperial' ? cmToFeetInches(cm) : `${Math.round(cm)} cm`
 }
+
+/* ---------------------------------------------------------------------------
+   Chat timestamps
+   --------------------------------------------------------------------------- */
+
+/** Midnight of the calendar day the date falls on, in local time. */
+function startOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+
+/** Oldest first: used to keep conversation groups in a stable display order. */
+export const CONVERSATION_GROUPS = ['Today', 'Yesterday', 'Previous 7 days', 'Earlier'] as const
+
+export type ConversationGroup = (typeof CONVERSATION_GROUPS)[number]
+
+/**
+ * Bucket label for a conversation's last activity.
+ *
+ * Buckets follow the local calendar day rather than a rolling 24-hour window,
+ * so a chat opened at 23:50 still reads "Today" the next morning. Timestamps
+ * that cannot be parsed fall into "Earlier" instead of being dropped.
+ */
+export function conversationDateGroup(
+  value: string | null | undefined,
+  now: Date = new Date(),
+): ConversationGroup {
+  const date = new Date(value ?? '')
+  if (Number.isNaN(date.getTime())) return 'Earlier'
+  const days = Math.round(
+    (startOfLocalDay(now).getTime() - startOfLocalDay(date).getTime()) / 86_400_000,
+  )
+  // Future timestamps (clock skew) read as the most recent bucket.
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return 'Previous 7 days'
+  return 'Earlier'
+}
+
+/**
+ * Short time label for a message: the clock time for today, "9 Oct, 14:05" for
+ * older messages. Returns an empty string when the timestamp is unparseable so
+ * callers can skip rendering it.
+ */
+export function formatMessageTime(value: string | null | undefined, now: Date = new Date()): string {
+  const date = new Date(value ?? '')
+  if (Number.isNaN(date.getTime())) return ''
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  if (toDateKey(date) === toDateKey(now)) return time
+  const day = date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+  return `${day}, ${time}`
+}

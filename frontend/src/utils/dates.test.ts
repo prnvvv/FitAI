@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   addDays,
   bmiCategory,
+  conversationDateGroup,
   dateFromKey,
+  formatMessageTime,
   isDateKey,
   cmToFeetInches,
   formatMonthTitle,
@@ -127,5 +129,49 @@ describe('local day keys (IST)', () => {
   it('round-trips an instant logged at local 23:45', () => {
     const logged = new Date(2026, 9, 14, 23, 45)
     expect(toDateKey(logged)).toBe('2026-10-14')
+  })
+})
+
+describe('conversationDateGroup', () => {
+  const now = new Date(2026, 9, 14, 9, 0)
+
+  it('groups by local calendar day, not a rolling 24-hour window', () => {
+    // 23:50 the previous evening is "Yesterday", not "Today".
+    expect(conversationDateGroup(new Date(2026, 9, 14, 8, 30).toISOString(), now)).toBe('Today')
+    expect(conversationDateGroup(new Date(2026, 9, 13, 23, 50).toISOString(), now)).toBe('Yesterday')
+    expect(conversationDateGroup(new Date(2026, 9, 13, 0, 5).toISOString(), now)).toBe('Yesterday')
+    expect(conversationDateGroup(new Date(2026, 9, 10, 12, 0).toISOString(), now)).toBe('Previous 7 days')
+    expect(conversationDateGroup(new Date(2026, 9, 1, 12, 0).toISOString(), now)).toBe('Earlier')
+  })
+
+  it('keeps unparseable timestamps visible under "Earlier"', () => {
+    expect(conversationDateGroup('', now)).toBe('Earlier')
+    expect(conversationDateGroup(null, now)).toBe('Earlier')
+    expect(conversationDateGroup('not-a-date', now)).toBe('Earlier')
+  })
+
+  it('treats a future timestamp as the most recent bucket', () => {
+    expect(conversationDateGroup(new Date(2026, 9, 15, 8, 0).toISOString(), now)).toBe('Today')
+  })
+})
+
+describe('formatMessageTime', () => {
+  const now = new Date(2026, 9, 14, 9, 0)
+
+  it('shows only the clock time for today', () => {
+    const label = formatMessageTime(new Date(2026, 9, 14, 14, 5).toISOString(), now)
+    expect(label).toMatch(/\d{1,2}[:.]05/)
+  })
+
+  it('prefixes the day for older messages', () => {
+    const label = formatMessageTime(new Date(2026, 8, 30, 14, 5).toISOString(), now)
+    expect(label).toMatch(/30/)
+    expect(label).toMatch(/05/)
+  })
+
+  it('returns an empty string for an unparseable timestamp', () => {
+    expect(formatMessageTime('', now)).toBe('')
+    expect(formatMessageTime(undefined, now)).toBe('')
+    expect(formatMessageTime('not-a-date', now)).toBe('')
   })
 })
