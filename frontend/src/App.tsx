@@ -6,6 +6,7 @@ import { PageErrorBoundary } from './components/layout/PageErrorBoundary'
 import { useAuth } from './context/AuthContext'
 import { useConversations } from './hooks/useConversations'
 import { ChatPage } from './pages/ChatPage'
+import { LandingPage } from './pages/LandingPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
 import { MemoryPage } from './pages/MemoryPage'
@@ -151,11 +152,34 @@ function AuthenticatedApp() {
   )
 }
 
+function PublicApp() {
+  const { user, loading: authLoading } = useAuth()
+
+  if (authLoading) {
+    return (
+      <div className="auth-loading">
+        <div className="auth-loading__spinner" />
+      </div>
+    )
+  }
+
+  if (user) {
+    return <AuthenticatedApp />
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/*" element={<AuthenticatedApp />} />
+      <Route path="/*" element={<PublicApp />} />
     </Routes>
   )
 }

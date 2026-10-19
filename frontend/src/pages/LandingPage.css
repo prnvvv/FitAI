@@ -1,0 +1,717 @@
+/* ==========================================================================
+   FitAI Landing Page — High-fidelity reference recreation
+   ========================================================================== */
+
+/* CSS Custom Properties — matched to reference screenshot */
+:root {
+  --fitai-bg: #0b0a08;
+  --fitai-bg-soft: #15110d;
+  --fitai-ivory: #f2e9da;
+  --fitai-muted: #b8aea1;
+  --fitai-gold: #e9a34a;
+  --fitai-bronze: #a86e32;
+  --fitai-border: rgba(233, 163, 74, 0.2);
+  --fitai-divider: rgba(242, 233, 218, 0.12);
+  --fitai-gold-soft: rgba(233, 163, 74, 0.15);
+  --fitai-gold-glow: rgba(233, 163, 74, 0.35);
+  --fitai-text-gold: #e9a34a;
+  --fitai-text-ivory: #f2e9da;
+  --fitai-text-muted: #a89a87;
+}
+
+/* ==========================================================================
+   Page Layout
+   ========================================================================== */
+
+.landing-page {
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--fitai-bg);
+  color: var(--fitai-ivory);
+  font-family: var(--font-family);
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.landing-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: var(--fitai-bg);
+}
+
+.landing-loading__spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--fitai-bg-soft);
+  border-top-color: var(--fitai-gold);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Navigation
+   ========================================================================== */
+
+.landing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 60px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: linear-gradient(
+    to bottom,
+    rgba(11, 10, 8, 0.95) 0%,
+    rgba(11, 10, 8, 0) 100%
+  );
+}
+
+.landing-nav__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.landing-nav__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--fitai-gold);
+  flex-shrink: 0;
+}
+
+.landing-nav__wordmark {
+  font-size: 1.125rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fitai-ivory);
+}
+
+.landing-nav__actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.landing-nav__login {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--fitai-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.landing-nav__login:hover {
+  color: var(--fitai-ivory);
+}
+
+.landing-nav__cta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1.5px solid var(--fitai-gold);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fitai-gold);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.landing-nav__cta:hover {
+  background-color: var(--fitai-gold);
+  color: var(--fitai-bg);
+}
+
+.landing-nav__cta:focus-visible,
+.landing-nav__login:focus-visible {
+  outline: 2px solid var(--fitai-gold);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+/* ==========================================================================
+   Hero Section
+   ========================================================================== */
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  padding-top: 80px; /* nav height */
+}
+
+.landing-hero__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 80px 60px 120px;
+  max-width: 720px;
+  margin-left: auto;
+  position: relative;
+  z-index: 10;
+}
+
+.landing-hero__eyebrow {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--fitai-gold);
+  margin: 0 0 32px;
+  line-height: 1;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+}
+
+.landing-hero__heading {
+  margin: 0 0 28px;
+  line-height: 1.1;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+}
+
+.landing-hero__heading-line {
+  display: block;
+  font-size: clamp(3rem, 6vw, 5.5rem);
+  font-weight: 400;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  letter-spacing: -0.02em;
+  color: var(--fitai-ivory);
+}
+
+.landing-hero__heading--gold {
+  color: var(--fitai-gold);
+}
+
+.landing-hero__copy {
+  font-size: 1.125rem;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--fitai-muted);
+  margin: 0 0 48px;
+  max-width: 480px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+}
+
+.landing-hero__cta-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 32px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+}
+
+.landing-hero__cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 32px;
+  border: none;
+  border-radius: 999px;
+  background-color: var(--fitai-gold);
+  color: var(--fitai-bg);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow:
+    0 4px 24px var(--fitai-gold-glow),
+    0 0 0 1px var(--fitai-border);
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.landing-hero__cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.landing-hero__cta:hover {
+  background-color: #f0b55e;
+  box-shadow:
+    0 6px 32px var(--fitai-gold-glow),
+    0 0 0 1px var(--fitai-gold);
+  transform: translateY(-2px);
+}
+
+.landing-hero__cta:hover::before {
+  opacity: 1;
+}
+
+.landing-hero__cta:active {
+  transform: translateY(0);
+}
+
+.landing-hero__cta:focus-visible {
+  outline: 2px solid var(--fitai-gold);
+  outline-offset: 4px;
+}
+
+.landing-hero__cta svg {
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.landing-hero__cta:hover svg {
+  transform: translateX(4px);
+}
+
+/* Scroll Cue */
+.landing-hero__scroll-cue {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.landing-hero__scroll-line {
+  width: 1px;
+  height: 48px;
+  background: linear-gradient(
+    to bottom,
+    var(--fitai-gold) 0%,
+    transparent 100%
+  );
+  position: relative;
+}
+
+.landing-hero__scroll-dot {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--fitai-gold);
+  animation: scrollDot 2s ease-in-out infinite;
+}
+
+@keyframes scrollDot {
+  0%, 100% {
+    top: 0;
+    opacity: 1;
+  }
+  50% {
+    top: 42px;
+    opacity: 0.4;
+  }
+}
+
+.landing-hero__scroll-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--fitai-text-muted);
+  line-height: 1;
+}
+
+/* ==========================================================================
+   Hero Visual — Architectural Pillar
+   ========================================================================== */
+
+.landing-hero__visual {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+.landing-hero__pillar {
+  width: 100%;
+  max-width: 900px;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  opacity: 0;
+  transform: translateX(30px);
+  animation: fadeSlideIn 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+}
+
+/* Amber arc — subtle decorative element */
+.landing-hero__amber-arc {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 60%;
+  height: 80%;
+  max-width: 500px;
+  max-height: 600px;
+  border-radius: 0 0 0 100%;
+  border: 1px solid transparent;
+  background:
+    radial-gradient(
+      ellipse at 100% 50%,
+      transparent 60%,
+      var(--fitai-gold-soft) 100%
+    );
+  opacity: 0;
+  transform: scale(0.95);
+  animation: arcReveal 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
+  pointer-events: none;
+}
+
+@keyframes arcReveal {
+  to {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeSlideUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeSlideIn {
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ==========================================================================
+   Feature Strip
+   ========================================================================== */
+
+.landing-features {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32px 60px;
+  border-top: 1px solid var(--fitai-divider);
+  background-color: var(--fitai-bg);
+  position: relative;
+  z-index: 20;
+}
+
+.landing-features__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  text-align: center;
+}
+
+.landing-features__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fitai-gold);
+  opacity: 0.9;
+}
+
+.landing-features__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.landing-features__text span:first-child {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--fitai-ivory);
+  letter-spacing: -0.01em;
+}
+
+.landing-features__text span:last-child {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--fitai-muted);
+  letter-spacing: 0.01em;
+}
+
+.landing-features__divider {
+  width: 1px;
+  height: 48px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--fitai-divider) 20%,
+    var(--fitai-divider) 80%,
+    transparent 100%
+  );
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .landing-nav {
+    padding: 16px 32px;
+  }
+
+  .landing-hero {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .landing-hero__content {
+    padding: 60px 32px 80px;
+    max-width: 100%;
+    margin-left: 0;
+    text-align: center;
+    align-items: center;
+  }
+
+  .landing-hero__heading-line {
+    font-size: clamp(2.5rem, 8vw, 4rem);
+  }
+
+  .landing-hero__copy {
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .landing-hero__cta-group {
+    align-items: center;
+    width: 100%;
+  }
+
+  .landing-hero__scroll-cue {
+    align-items: center;
+  }
+
+  .landing-hero__visual {
+    position: absolute;
+    inset: 0;
+    top: 80px;
+    min-height: auto;
+    height: 60vh;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .landing-hero__pillar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 20%;
+    transform: none;
+    opacity: 0.35;
+    animation: none;
+    filter: brightness(0.5);
+  }
+
+  .landing-hero__amber-arc {
+    display: none;
+  }
+
+  .landing-features {
+    flex-wrap: wrap;
+    padding: 24px 32px;
+    gap: 24px;
+  }
+
+  .landing-features__item {
+    flex: 0 0 calc(50% - 12px);
+    padding: 0 12px;
+  }
+
+  .landing-features__divider:nth-of-type(1),
+  .landing-features__divider:nth-of-type(3) {
+    display: none;
+  }
+
+  .landing-features__divider:nth-of-type(2) {
+    width: 100%;
+    height: 1px;
+    max-width: 200px;
+    margin: 8px auto 0;
+  }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .landing-nav {
+    padding: 14px 20px;
+  }
+
+  .landing-nav__wordmark {
+    font-size: 1rem;
+  }
+
+  .landing-nav__actions {
+    gap: 12px;
+  }
+
+  .landing-nav__login span {
+    display: none;
+  }
+
+  .landing-nav__login {
+    padding: 8px;
+  }
+
+  .landing-nav__cta {
+    padding: 8px 14px;
+    font-size: 0.75rem;
+  }
+
+  .landing-nav__cta span {
+    display: none;
+  }
+
+  .landing-hero {
+    padding-top: 64px;
+  }
+
+  .landing-hero__content {
+    padding: 40px 20px 60px;
+  }
+
+  .landing-hero__eyebrow {
+    font-size: 0.625rem;
+    letter-spacing: 0.2em;
+    margin-bottom: 24px;
+  }
+
+  .landing-hero__heading-line {
+    font-size: clamp(2rem, 10vw, 3rem);
+  }
+
+  .landing-hero__copy {
+    font-size: 1rem;
+    line-height: 1.5;
+    margin-bottom: 36px;
+  }
+
+  .landing-hero__cta-group {
+    gap: 24px;
+    width: 100%;
+  }
+
+  .landing-hero__cta {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 24px;
+  }
+
+  .landing-hero__scroll-cue {
+    display: none; /* Hide on mobile to save space */
+  }
+
+  .landing-hero__visual {
+    height: 50vh;
+    top: 64px;
+  }
+
+  .landing-features {
+    flex-direction: column;
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .landing-features__item {
+    flex-direction: row;
+    text-align: left;
+    width: 100%;
+    padding: 12px 16px;
+    background: var(--fitai-bg-soft);
+    border: 1px solid var(--fitai-border);
+    border-radius: 12px;
+    gap: 16px;
+  }
+
+  .landing-features__divider {
+    display: none;
+  }
+
+  .landing-features__icon {
+    flex-shrink: 0;
+  }
+
+  .landing-features__text {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .landing-features__text span:last-child {
+    font-size: 0.75rem;
+  }
+}
+
+/* Large Desktop */
+@media (min-width: 1440px) {
+  .landing-nav {
+    padding: 24px 80px;
+  }
+
+  .landing-hero__content {
+    padding: 100px 80px 140px;
+    max-width: 800px;
+  }
+
+  .landing-features {
+    padding: 40px 80px;
+  }
+}
+
+/* ==========================================================================
+   Reduced Motion
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-hero__eyebrow,
+  .landing-hero__heading,
+  .landing-hero__copy,
+  .landing-hero__cta-group,
+  .landing-hero__pillar,
+  .landing-hero__amber-arc,
+  .landing-hero__scroll-dot {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
