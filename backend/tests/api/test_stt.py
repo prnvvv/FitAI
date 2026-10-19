@@ -7,8 +7,10 @@ in for each test so the suite stays fast, deterministic and offline.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable, Iterator
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 from fastapi.testclient import TestClient
 
@@ -21,11 +23,13 @@ from app.stt.speech_service import (
     set_service,
 )
 
+Transcriber = Callable[[object, object, npt.NDArray[np.float32], int], str]
 
-def _make_service(transcriber=None) -> SpeechService:
+
+def _make_service(transcriber: Transcriber | None = None) -> SpeechService:
     """Build a SpeechService whose load/transcribe steps are fully controlled."""
 
-    def _loader():
+    def _loader() -> tuple[object, object]:
         return (object(), object())
 
     service = SpeechService(
@@ -40,7 +44,7 @@ def _make_service(transcriber=None) -> SpeechService:
 
 
 @pytest.fixture(autouse=True)
-def _reset_stt_service(monkeypatch) -> None:
+def _reset_stt_service(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Give every test a fresh fake service and clean up afterwards."""
     set_service(None)
     yield
@@ -68,8 +72,8 @@ def test_transcribe_requires_auth(anon_client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_transcribe_returns_text_for_valid_audio(client: TestClient, monkeypatch) -> None:
-    def _transcriber(_processor, _model, samples, sample_rate):
+def test_transcribe_returns_text_for_valid_audio(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _transcriber(_processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int) -> str:
         return "hello from granite"
 
     service = _make_service(_transcriber)
@@ -120,7 +124,7 @@ def test_transcribe_rejects_unsupported_format(client: TestClient) -> None:
 
 
 def test_transcribe_returns_503_when_model_will_not_load(client: TestClient) -> None:
-    def _broken(_processor, _model, _samples, _sample_rate):
+    def _broken(_processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int) -> str:
         raise ModelLoadError("GPU not available")
 
     service = _make_service(_broken)
@@ -135,7 +139,7 @@ def test_transcribe_returns_503_when_model_will_not_load(client: TestClient) -> 
 
 
 def test_transcribe_returns_500_on_inference_failure(client: TestClient) -> None:
-    def _broken(_processor, _model, _samples, _sample_rate):
+    def _broken(_processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int) -> str:
         raise TranscriptionError("inference exploded")
 
     service = _make_service(_broken)
@@ -160,7 +164,7 @@ def test_transcribe_rejects_oversized_upload(client: TestClient) -> None:
 def test_user_id_is_derived_from_token_not_request_body(client: TestClient) -> None:
     """The endpoint must never trust a user id supplied by the caller."""
 
-    def _transcriber(_processor, _model, _samples, _sample_rate):
+    def _transcriber(_processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int) -> str:
         return "ok"
 
     set_service(_make_service(_transcriber))
