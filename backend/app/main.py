@@ -34,10 +34,16 @@ from app.api.routers import (
     progress,
     workouts,
 )
+import logging
+
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
 from app.stt import router as stt_router
+
+# Quiet HuggingFace Hub "404 additional_chat_templates" probes — they're normal fallbacks
+logging.getLogger("huggingface_hub.file_download").setLevel(logging.WARNING)
+logging.getLogger("transformers.modeling_utils").setLevel(logging.WARNING)
 
 logger = get_logger(__name__)
 
