@@ -992,10 +992,20 @@
   overflow-wrap: break-word;
 }
 
-/* Assistant turns have no bubble: the serif response sits on the workspace. */
+/* Assistant turns have no bubble: the serif response sits on the workspace.
+   The bubble fills the conversation column so structured content (tables) can
+   use the full width; text is capped separately for a comfortable read. */
 .message__bubble--assistant {
-  max-width: 760px;
+  max-width: none;
   background-color: transparent;
+}
+
+/* Paragraphs and lists keep a comfortable reading width; tables and other
+   structured content use the full conversation width. */
+.message__markdown > p,
+.message__markdown > ul,
+.message__markdown > ol {
+  max-width: 760px;
 }
 
 .message__markdown {
