@@ -7,6 +7,7 @@ developed; it should be registered in the marked section below.
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 
@@ -34,8 +35,6 @@ from app.api.routers import (
     progress,
     workouts,
 )
-import logging
-
 from app.core.config import settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging, get_logger
