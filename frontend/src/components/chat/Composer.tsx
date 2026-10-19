@@ -1,12 +1,12 @@
-import { ArrowUp, Loader2, Mic, Square, X } from 'lucide-react'
+import { ArrowUp, Loader2, Mic, Paperclip, Square, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ChangeEvent } from 'react'
 import { useSpeechToText, type SpeechToText } from '../../hooks/useSpeechToText'
 
 interface ComposerProps {
   /**
    * Text-only: the model cannot parse documents or images inline yet, so there
-   * is no attachment picker. Files are still uploaded from the Documents page
-   * and used through the knowledge base.
+   * is no attachment picker. `onOpenDocuments` is the honest alternative — it
+   * hands the user to the documents workflow that feeds the knowledge base.
    */
   onSend: (message: string) => void
   disabled?: boolean
@@ -14,6 +14,8 @@ interface ComposerProps {
   onStop?: () => void
   placeholder?: string
   onSpeechError?: (message: string) => void
+  /** Opens the documents page. The control is hidden when not provided. */
+  onOpenDocuments?: () => void
 }
 
 export function Composer({
@@ -21,8 +23,9 @@ export function Composer({
   disabled,
   streaming,
   onStop,
-  placeholder = 'Ask anything',
+  placeholder = 'Message FitAI...',
   onSpeechError,
+  onOpenDocuments,
 }: ComposerProps) {
   const [text, setText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -80,6 +83,7 @@ export function Composer({
   // Sending while recording would lose the clip; transcription must finish first.
   const sendDisabled = !streaming && (!text.trim() || recording)
   const multiLine = text.split('\n').length > 1 || text.length > 60
+  const hasTools = Boolean(onOpenDocuments) || speech.isSupported
 
   const handleSend = () => {
     const trimmed = text.trim()
@@ -125,51 +129,70 @@ export function Composer({
   return (
     <div className="composer" onKeyDown={handleComposerKeyDown}>
       <div className={`composer__inner ${multiLine ? 'composer__inner--multi' : ''}`}>
-        {speech.isSupported && (
-          <div className="composer__speech">
-            {recording ? (
-              <>
+        {hasTools && (
+          <>
+            <div className="composer__tools">
+              {onOpenDocuments && (
                 <button
                   type="button"
-                  className="composer__mic composer__mic--recording"
-                  onClick={speech.stop}
-                  disabled={transcribing}
-                  aria-label="Stop recording and transcribe"
-                  title="Stop recording"
+                  className="composer__action"
+                  onClick={onOpenDocuments}
+                  disabled={disabled}
+                  aria-label="Add documents to the knowledge base"
+                  title="Manage documents"
                 >
-                  <Square size={16} />
+                  <Paperclip size={18} />
                 </button>
-                <span className="composer__recording" role="status">
-                  <span className="composer__recording-dot" aria-hidden="true" />
-                  {speech.elapsedSeconds}s
-                </span>
-                <button
-                  type="button"
-                  className="composer__mic composer__mic--cancel"
-                  onClick={() => {
-                    caretRef.current = null
-                    speech.cancel()
-                  }}
-                  aria-label="Cancel recording"
-                  title="Cancel recording"
-                >
-                  <X size={16} />
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="composer__mic"
-                onClick={beginRecording}
-                disabled={disabled || transcribing}
-                aria-label="Start recording"
-                title="Start recording (dictate a message)"
-              >
-                {transcribing ? <Loader2 className="page__spinner" size={18} /> : <Mic size={18} />}
-              </button>
-            )}
-            {transcribing && <span className="composer__transcribing">Transcribing…</span>}
-          </div>
+              )}
+              {speech.isSupported && (
+                <div className="composer__speech">
+                  {recording ? (
+                    <>
+                      <button
+                        type="button"
+                        className="composer__mic composer__mic--recording"
+                        onClick={speech.stop}
+                        disabled={transcribing}
+                        aria-label="Stop recording and transcribe"
+                        title="Stop recording"
+                      >
+                        <Square size={16} />
+                      </button>
+                      <span className="composer__recording" role="status">
+                        <span className="composer__recording-dot" aria-hidden="true" />
+                        {speech.elapsedSeconds}s
+                      </span>
+                      <button
+                        type="button"
+                        className="composer__mic composer__mic--cancel"
+                        onClick={() => {
+                          caretRef.current = null
+                          speech.cancel()
+                        }}
+                        aria-label="Cancel recording"
+                        title="Cancel recording"
+                      >
+                        <X size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="composer__mic"
+                      onClick={beginRecording}
+                      disabled={disabled || transcribing}
+                      aria-label="Start recording"
+                      title="Start recording (dictate a message)"
+                    >
+                      {transcribing ? <Loader2 className="page__spinner" size={18} /> : <Mic size={18} />}
+                    </button>
+                  )}
+                  {transcribing && <span className="composer__transcribing">Transcribing…</span>}
+                </div>
+              )}
+            </div>
+            <span className="composer__divider" aria-hidden="true" />
+          </>
         )}
         <textarea
           ref={textareaRef}

@@ -144,6 +144,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
           disabled={streaming}
           streaming={streaming}
           onSpeechError={setError}
+          onOpenDocuments={() => navigate('/library')}
         />
         <div className="chat-page__disclaimer">
           FitAI can make mistakes. Always consult a professional for medical advice.

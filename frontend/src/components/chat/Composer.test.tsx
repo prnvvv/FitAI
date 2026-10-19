@@ -7,7 +7,7 @@ describe('Composer', () => {
     const onSend = vi.fn()
     render(<Composer onSend={onSend} />)
 
-    const input = screen.getByPlaceholderText('Ask anything')
+    const input = screen.getByPlaceholderText('Message FitAI...')
     fireEvent.change(input, { target: { value: 'Hello' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
@@ -30,5 +30,19 @@ describe('Composer', () => {
 
     expect(screen.queryByLabelText('Attach document')).not.toBeInTheDocument()
     expect(document.querySelector('input[type="file"]')).toBeNull()
+    // Without a documents handler there is no paperclip either: the composer
+    // never offers an attachment the message cannot carry.
+    expect(
+      screen.queryByLabelText('Add documents to the knowledge base'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('opens the documents workflow through the paperclip when provided', () => {
+    const onOpenDocuments = vi.fn()
+    render(<Composer onSend={vi.fn()} onOpenDocuments={onOpenDocuments} />)
+
+    expect(document.querySelector('input[type="file"]')).toBeNull()
+    fireEvent.click(screen.getByLabelText('Add documents to the knowledge base'))
+    expect(onOpenDocuments).toHaveBeenCalledTimes(1)
   })
 })
