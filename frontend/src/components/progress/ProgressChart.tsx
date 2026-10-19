@@ -110,8 +110,11 @@ export function yDomain(values: number[]): { min: number; max: number } {
   const min = Math.min(...values)
   const max = Math.max(...values)
   const span = max - min
-  const floor = Math.abs(max || 1) * 0.05 || 1
-  const pad = Math.max(span * 0.1, floor)
+  if (span === 0) {
+    const pad = Math.abs(max) * 0.05 || 1
+    return { min: min - pad, max: max + pad }
+  }
+  const pad = span * 0.1
   return { min: min - pad, max: max + pad }
 }
 

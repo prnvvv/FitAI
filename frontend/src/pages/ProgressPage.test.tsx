@@ -1,6 +1,7 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { restoreChartWidth, stubChartWidth } from '../test/chartGeometry'
 import { summarise } from './ProgressPage'
 
 const derived = {
@@ -29,6 +30,7 @@ const profile = {
 }
 
 async function renderProgress(overrides: Record<string, unknown> = {}) {
+  stubChartWidth()
   const spies: Record<string, unknown> = {
     getProfile: vi.fn(async () => profile),
     weightSeries: vi.fn(async () => [] as unknown[]),
@@ -60,7 +62,20 @@ const measurement = (value: number, date: string) => ({
   created_at: new Date(date).toISOString(),
 })
 
+const daysAgo = (days: number) => {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return date
+}
+
+const statCell = (label: string) => screen.getByText(label).closest('.stat') as HTMLElement
+
+beforeEach(() => {
+  stubChartWidth()
+})
+
 afterEach(() => {
+  restoreChartWidth()
   vi.resetModules()
   vi.restoreAllMocks()
 })
@@ -140,31 +155,29 @@ describe('ProgressPage', () => {
     await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, '2026-10-01')]) })
     const chart = await screen.findByRole('img', { name: /Weight chart/ })
     expect(chart).toHaveAccessibleName(/One entry: 70.0 kg/)
+    expect(screen.getByText('Log one more entry to see a trend.')).toBeInTheDocument()
   })
 
-  it('renders a line and tooltip for several entries', async () => {
+  it('renders a line with gridlines for several entries', async () => {
     await renderProgress({
-      weightSeries: vi.fn(async () => {
-        const now = new Date()
-        const first = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 10)
-        const second = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2)
-        return [
-          { ...measurement(80, first.toISOString()), measured_at: first.toISOString() },
-          { ...measurement(70, second.toISOString()), measured_at: second.toISOString() },
-        ]
-      }),
+      weightSeries: vi.fn(async () => [
+        { ...measurement(80, daysAgo(10).toISOString()), measured_at: daysAgo(10).toISOString() },
+        { ...measurement(75, daysAgo(6).toISOString()), measured_at: daysAgo(6).toISOString() },
+        { ...measurement(70, daysAgo(2).toISOString()), measured_at: daysAgo(2).toISOString() },
+      ]),
     })
     const chart = await screen.findByRole('img', { name: /Weight chart/ })
-    expect(chart).toHaveAccessibleName(/2 entries from 80.0 to 70.0 kg/)
-    expect(await screen.findByText('View as table')).toBeInTheDocument()
+    expect(chart).toHaveAccessibleName(/3 entries from 80.0 to 70.0 kg/)
+    expect(document.querySelectorAll('.chart__grid')).toHaveLength(4)
   })
 
   it('shows an empty state with no entries', async () => {
     await renderProgress()
-    expect(await screen.findByText(/No weight entries yet/i)).toBeInTheDocument()
+    expect(await screen.findByText('No weight entries in this range.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Log weight' })).toBeInTheDocument()
   })
 
-  it('validates the log sheet before sending', async () => {
+  it('validates the log dialog before sending', async () => {
     const { spies, user } = await renderProgress()
     await user.click(screen.getByRole('button', { name: 'Log' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -182,6 +195,7 @@ describe('ProgressPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByText(/Weight must be between 20 and 500 kg/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Weight')).toHaveAttribute('aria-invalid', 'true')
 
     await user.clear(screen.getByLabelText('Weight'))
     await user.type(screen.getByLabelText('Weight'), '70')
@@ -196,5 +210,156 @@ describe('ProgressPage', () => {
     const { user } = await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, '2026-10-01')]) })
     await user.click(screen.getByRole('button', { name: 'Toggle units' }))
     await waitFor(() => expect(screen.getAllByText(/lb/).length).toBeGreaterThan(0))
+  })
+
+  it('moves between metric chips with the arrow keys', async () => {
+    const { user } = await renderProgress()
+    const weight = screen.getByRole('tab', { name: 'Weight' })
+    weight.focus()
+    await user.keyboard('{ArrowRight}')
+    expect(screen.getByRole('tab', { name: 'Height' })).toHaveAttribute('aria-selected', 'true')
+    await user.keyboard('{ArrowLeft}')
+    expect(screen.getByRole('tab', { name: 'Weight' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('filters by range from the chart toolbar', async () => {
+    await renderProgress({
+      weightSeries: vi.fn(async () => [
+        measurement(70, daysAgo(60).toISOString()),
+        measurement(71, daysAgo(1).toISOString()),
+      ]),
+    })
+    expect(statCell('Latest')).toHaveTextContent('71.0 kg')
+    await userEvent.click(screen.getByRole('tab', { name: '7D' }))
+    expect(statCell('Entries')).toHaveTextContent('1')
+    expect(screen.getByText('Last 7 days')).toBeInTheDocument()
+  })
+
+  it('swaps the chart for the table without changing the data', async () => {
+    await renderProgress({
+      weightSeries: vi.fn(async () => [measurement(70, daysAgo(1).toISOString()), measurement(71, daysAgo(2).toISOString())]),
+    })
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Table view' }))
+    const table = screen.getByRole('table')
+    expect(within(table).getAllByRole('row')).toHaveLength(3)
+    expect(within(table).getByText('70.0 kg')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Chart view' }))
+    expect(screen.getByRole('img', { name: /Weight chart/ })).toBeInTheDocument()
+  })
+
+  it('shows Change as a dash and Range as one value for a single entry', async () => {
+    await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, daysAgo(1).toISOString())]) })
+    const stat = statCell
+    expect(stat('Change')).toHaveTextContent('—')
+    expect(stat('Range')).toHaveTextContent('70.0 kg')
+    expect(stat('Entries')).toHaveTextContent('1')
+  })
+
+  it('shows the min–max range across many entries', async () => {
+    await renderProgress({
+      weightSeries: vi.fn(async () => [
+        measurement(80, daysAgo(20).toISOString()),
+        measurement(75, daysAgo(10).toISOString()),
+        measurement(70, daysAgo(1).toISOString()),
+      ]),
+    })
+    const range = statCell('Range')
+    expect(range).toHaveTextContent('70.0–80.0 kg')
+  })
+
+  it('lists only the metrics missing from the add-metric menu', async () => {
+    const { user } = await renderProgress()
+    await user.click(screen.getByRole('button', { name: 'Log' }))
+    await user.click(screen.getByRole('button', { name: 'Add metric' }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Body fat',
+      'Waist',
+      'Sleep',
+      'Steps',
+    ])
+
+    await user.click(within(menu).getByRole('menuitem', { name: 'Steps' }))
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Steps' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Add metric' }))
+    const reopened = await screen.findByRole('menu')
+    expect(within(reopened).queryByRole('menuitem', { name: 'Steps' })).not.toBeInTheDocument()
+    expect(within(reopened).queryByRole('menuitem', { name: 'BMI' })).not.toBeInTheDocument()
+  })
+
+  it('removes an added row without touching the default rows', async () => {
+    const { user } = await renderProgress()
+    await user.click(screen.getByRole('button', { name: 'Log' }))
+    await user.click(screen.getByRole('button', { name: 'Add metric' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Waist' }))
+    await user.click(screen.getByRole('button', { name: 'Remove Waist' }))
+    expect(screen.queryByLabelText('Waist')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Weight')).toBeInTheDocument()
+    expect(screen.getByLabelText('Height')).toBeInTheDocument()
+  })
+
+  it('switches the unit of a metric row from kg to lb', async () => {
+    const { spies, user } = await renderProgress()
+    await user.click(screen.getByRole('button', { name: 'Log' }))
+    const weightUnits = screen.getByRole('group', { name: 'Weight unit' })
+    await user.click(within(weightUnits).getByRole('button', { name: 'lb' }))
+    await user.type(screen.getByLabelText('Weight'), '154')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(spies.createMeasurement).toHaveBeenCalledTimes(1))
+    expect((spies.createMeasurement as ReturnType<typeof vi.fn>).mock.calls[0][0]).toMatchObject({
+      type: 'weight',
+      unit: 'kg',
+    })
+  })
+
+  it('asks before discarding a dirty form and keeps the values when editing', async () => {
+    const { user } = await renderProgress()
+    await user.click(screen.getByRole('button', { name: 'Log' }))
+    await user.type(screen.getByLabelText('Weight'), '70')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(await screen.findByText('Discard changes?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }))
+    expect(screen.getByLabelText('Weight')).toHaveValue('70')
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await user.click(await screen.findByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('closes on Escape when the form is pristine', async () => {
+    const { user } = await renderProgress()
+    await user.click(screen.getByRole('button', { name: 'Log' }))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('keeps the dialog and the values when saving fails, and retries', async () => {
+    const { spies, user } = await renderProgress({
+      createMeasurement: vi.fn(async () => {
+        throw new Error('boom')
+      }),
+    })
+    await user.click(screen.getByRole('button', { name: 'Log' }))
+    await user.type(screen.getByLabelText('Weight'), '70')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/boom/)
+    expect(screen.getByLabelText('Weight')).toHaveValue('70')
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(spies.createMeasurement).toHaveBeenCalledTimes(2))
+  })
+
+  it('deletes a history entry through the row button', async () => {
+    const { spies, user } = await renderProgress({
+      weightSeries: vi.fn(async () => [measurement(70, daysAgo(1).toISOString())]),
+    })
+    await user.click(await screen.findByRole('button', { name: 'Delete entry' }))
+    await waitFor(() => expect(spies.deleteMeasurement).toHaveBeenCalledTimes(1))
   })
 })
