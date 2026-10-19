@@ -48,10 +48,44 @@ export const RANGE_DAYS: Record<Exclude<Range, 'all'>, number> = { '7d': 7, '30d
 export const rangeCaption = (range: Range): string =>
   RANGE_OPTIONS.find((option) => option.value === range)?.caption ?? 'All time'
 
-/** Steps and sleep read better as bars; everything else uses the line. */
-export function chartVariantFor(key: MetricKey, count: number): 'line' | 'bar' {
-  if (key !== 'steps' && key !== 'sleep_hours') return 'line'
-  return count <= 31 ? 'bar' : 'line'
+export type ChartKind = 'line' | 'dots' | 'bars'
+
+export interface MetricVisual {
+  /**
+   * `line` connects readings, `dots` never connects (for metrics that change in
+   * discrete steps, such as height) and `bars` plots one bar per recorded day.
+   */
+  kind: ChartKind
+  /** How several entries recorded on the same day collapse into one reading. */
+  dayMode: 'sum' | 'mean'
+  /** Metrics that cannot be negative are drawn from zero so bars stay honest. */
+  zeroBased: boolean
+  /** Caption for the average shown in the summary. */
+  averageLabel: string
+}
+
+const VISUALS: Record<MetricKey, MetricVisual> = {
+  weight: { kind: 'line', dayMode: 'mean', zeroBased: false, averageLabel: 'Average' },
+  // Height is re-measured rarely: connecting two readings would imply a change
+  // that was never recorded, so height is drawn as discrete points only.
+  height: { kind: 'dots', dayMode: 'mean', zeroBased: false, averageLabel: 'Average' },
+  body_fat_percent: { kind: 'line', dayMode: 'mean', zeroBased: false, averageLabel: 'Average' },
+  waist: { kind: 'line', dayMode: 'mean', zeroBased: false, averageLabel: 'Average' },
+  sleep_hours: { kind: 'bars', dayMode: 'mean', zeroBased: true, averageLabel: 'Average per night' },
+  steps: { kind: 'bars', dayMode: 'sum', zeroBased: true, averageLabel: 'Average per recorded day' },
+  bmi: { kind: 'line', dayMode: 'mean', zeroBased: false, averageLabel: 'Average' },
+}
+
+export const METRIC_VISUALS = VISUALS
+
+/**
+ * Bars are only readable while they are not hair-thin, so very dense daily data
+ * falls back to the line once there are more than 31 recorded days.
+ */
+export function chartKindFor(key: MetricKey, recordedDays: number): ChartKind {
+  const visual = VISUALS[key]
+  if (visual.kind !== 'bars') return visual.kind
+  return recordedDays <= 31 ? 'bars' : 'line'
 }
 
 /** Existing per-metric display precision, reused by the chart and the history. */
