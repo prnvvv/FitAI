@@ -72,6 +72,11 @@ Thumbs.db
 *.tmp
 *.bak
 
+# Local UI preview harness (throwaway preview pages, stubs, reference image)
+frontend/chatpreview.html
+frontend/src/__*preview*
+frontend/public/images/fitai-landing-reference.png
+
 # Local test files
 test_upload.py
 test_upload.sh
