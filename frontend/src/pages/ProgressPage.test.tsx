@@ -2,7 +2,8 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { restoreChartWidth, stubChartWidth } from '../test/chartGeometry'
-import { summarise } from './ProgressPage'
+import { toDateKey } from '../utils/dates'
+import { summarise } from '../components/progress/metrics'
 
 const derived = {
   window: { from: '2026-01-01', to: '2026-10-14' },
@@ -39,6 +40,7 @@ async function renderProgress(overrides: Record<string, unknown> = {}) {
     derivedMetrics: vi.fn(async () => derived),
     createMeasurement: vi.fn(async () => ({})),
     deleteMeasurement: vi.fn(async () => undefined),
+    metricSeries: vi.fn(async () => [] as unknown[]),
     ...overrides,
   }
   vi.doMock('../services/api', async () => {
@@ -152,10 +154,10 @@ describe('ProgressPage', () => {
   })
 
   it('renders a labelled point for a single entry', async () => {
-    await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, '2026-10-01')]) })
+    await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, daysAgo(1).toISOString())]) })
     const chart = await screen.findByRole('img', { name: /Weight chart/ })
     expect(chart).toHaveAccessibleName(/One entry: 70.0 kg/)
-    expect(screen.getByText('Log one more entry to see a trend.')).toBeInTheDocument()
+    expect(screen.getByText('Log one more weight entry to see a trend.')).toBeInTheDocument()
   })
 
   it('renders a line with gridlines for several entries', async () => {
@@ -207,7 +209,7 @@ describe('ProgressPage', () => {
   })
 
   it('toggles units for display', async () => {
-    const { user } = await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, '2026-10-01')]) })
+    const { user } = await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, daysAgo(1).toISOString())]) })
     // Two responsive copies exist (header on desktop, toolbar below 768px);
     // CSS hides whichever does not apply.
     await user.click(screen.getAllByRole('button', { name: 'Toggle units' })[0])
@@ -363,5 +365,111 @@ describe('ProgressPage', () => {
     })
     await user.click(await screen.findByRole('button', { name: 'Delete entry' }))
     await waitFor(() => expect(spies.deleteMeasurement).toHaveBeenCalledTimes(1))
+  })
+  it('loads a metric without a dedicated endpoint on demand and charts it', async () => {
+    const steps = [7000, 9000, 11000].map((value, index) => ({
+      ...measurement(value, daysAgo(index + 1).toISOString()),
+      type: 'steps',
+      unit: 'steps',
+    }))
+    const { spies, user } = await renderProgress({ metricSeries: vi.fn(async () => steps) })
+
+    await user.click(screen.getByRole('tab', { name: 'Steps' }))
+    expect(await screen.findByRole('img', { name: /Steps chart/ })).toBeInTheDocument()
+    expect(spies.metricSeries).toHaveBeenCalledWith('steps')
+    // Daily bars for a daily total.
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(3)
+    // Derived from the recorded days only, never from missing calendar days.
+    expect(screen.getByText(/average per recorded day/i).parentElement).toHaveTextContent('9,000')
+  })
+
+  it('explains a single height reading instead of drawing a trend', async () => {
+    const { user } = await renderProgress({
+      heightSeries: vi.fn(async () => [
+        { ...measurement(180, daysAgo(2).toISOString()), type: 'height', unit: 'cm' },
+      ]),
+    })
+    await user.click(screen.getByRole('tab', { name: 'Height' }))
+    expect(await screen.findByRole('img', { name: /Height chart/ })).toBeInTheDocument()
+    expect(screen.getByText(/Height changes rarely/)).toBeInTheDocument()
+    expect(document.querySelectorAll('.chart__line')).toHaveLength(0)
+  })
+
+  it('draws height readings as discrete points even with several entries', async () => {
+    await renderProgress({
+      heightSeries: vi.fn(async () => [
+        { ...measurement(181, daysAgo(40).toISOString()), type: 'height', unit: 'cm' },
+        { ...measurement(180, daysAgo(20).toISOString()), type: 'height', unit: 'cm' },
+        { ...measurement(180, daysAgo(3).toISOString()), type: 'height', unit: 'cm' },
+      ]),
+    })
+    await userEvent.click(screen.getByRole('tab', { name: 'Height' }))
+    await screen.findByRole('img', { name: /Height chart/ })
+    expect(document.querySelectorAll('.chart__marker')).toHaveLength(2)
+    expect(document.querySelectorAll('.chart__line')).toHaveLength(0)
+  })
+
+  it('reports the change since the previous entry and the range average', async () => {
+    await renderProgress({
+      weightSeries: vi.fn(async () => [
+        measurement(80, daysAgo(10).toISOString()),
+        measurement(76, daysAgo(5).toISOString()),
+        measurement(75, daysAgo(1).toISOString()),
+      ]),
+    })
+    const insight = await screen.findByText(/Since the previous entry/)
+    expect(insight.parentElement).toHaveTextContent('Since the previous entry -1.0 kg')
+    expect(insight.parentElement).toHaveTextContent('Average 77.0 kg')
+  })
+
+  it('groups sleep nights into weekly averages', async () => {
+    const nights = [7, 8, 6].map((value, index) => ({
+      ...measurement(value, daysAgo(index + 1).toISOString()),
+      type: 'sleep_hours',
+      unit: 'h',
+    }))
+    await renderProgress({ metricSeries: vi.fn(async () => nights) })
+    await userEvent.click(screen.getByRole('tab', { name: 'Sleep' }))
+    expect(await screen.findByText(/average per recorded night/i)).toBeInTheDocument()
+    expect(screen.getByText(/nights recorded/)).toBeInTheDocument()
+    expect(screen.getByText(/Latest week/)).toBeInTheDocument()
+  })
+
+  it('asks the training summary for the active range', async () => {
+    const { spies, user } = await renderProgress()
+    await waitFor(() => expect(spies.derivedMetrics).toHaveBeenCalledTimes(1))
+    const today = toDateKey(new Date())
+    const from = new Date()
+    from.setDate(from.getDate() - 30)
+    expect(spies.derivedMetrics).toHaveBeenCalledWith({ from: toDateKey(from), to: today })
+
+    await user.click(screen.getByRole('tab', { name: '7D' }))
+    await waitFor(() => expect(spies.derivedMetrics).toHaveBeenCalledTimes(2))
+    expect(screen.getByText('Last 7 days')).toBeInTheDocument()
+  })
+
+  it('shows the planned-versus-completed counts behind the percentage', async () => {
+    await renderProgress({
+      derivedMetrics: vi.fn(async () => ({ ...derived, planned_sessions: 8, planned_completed: 2, planned_completion_rate: 0.25 })),
+    })
+    expect(await screen.findByText('2 of 8')).toBeInTheDocument()
+    expect(screen.getByText('25%')).toBeInTheDocument()
+  })
+
+  it('keeps the history list on the raw entries while the chart uses recorded days', async () => {
+    const first = daysAgo(3)
+    const second = daysAgo(1)
+    await renderProgress({
+      metricSeries: vi.fn(async () => [
+        { ...measurement(4000, first.toISOString()), type: 'steps', unit: 'steps' },
+        { ...measurement(6000, second.toISOString()), type: 'steps', unit: 'steps' },
+        { ...measurement(2000, second.toISOString()), type: 'steps', unit: 'steps' },
+      ]),
+    })
+    await userEvent.click(screen.getByRole('tab', { name: 'Steps' }))
+    await screen.findByRole('img', { name: /Steps chart/ })
+    // Two recorded days collapse into two bars; the history keeps all three rows.
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: 'Delete entry' })).toHaveLength(3)
   })
 })

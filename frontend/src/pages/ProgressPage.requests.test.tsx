@@ -11,6 +11,12 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toDateKey } from '../utils/dates'
 
+const daysAgo = (days: number) => {
+  const date = new Date()
+  date.setDate(date.getDate() - days)
+  return date
+}
+
 const derived = {
   window: { from: '2026-01-01', to: '2026-10-14' },
   sessions_completed: 3,
@@ -37,7 +43,7 @@ const profile = {
 }
 
 const measurement = (value: number, date: string, type = 'weight', unit = 'kg') => ({
-  id: `m-${type}-${date}`,
+  id: `m-${type}-${new Date(date).toISOString().slice(0, 10)}`,
   type,
   value,
   unit,
@@ -55,6 +61,7 @@ function mockApi(overrides: Record<string, unknown> = {}) {
     heightSeries: vi.fn(async () => [] as unknown[]),
     bmiSeries: vi.fn(async () => [] as unknown[]),
     derivedMetrics: vi.fn(async () => derived),
+    metricSeries: vi.fn(async () => [] as unknown[]),
     createMeasurement: vi.fn(async () => ({})),
     deleteMeasurement: vi.fn(async () => undefined),
     ...overrides,
@@ -105,19 +112,50 @@ describe('ProgressPage network baseline', () => {
     expect(writeCalls(spies)).toBe(0)
   })
 
-  it('switching metric or range, or toggling units, fires no requests', async () => {
-    const { spies, user } = await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, '2026-10-01')]) })
+  it('selecting a metric without a dedicated endpoint fetches that series once', async () => {
+    const { spies, user } = await renderProgress()
+    const before = callsOf(spies, 'metricSeries').length
+
+    await user.click(screen.getByRole('tab', { name: 'Steps' }))
+    await waitFor(() => expect(callsOf(spies, 'metricSeries')).toHaveLength(before + 1))
+    expect(callsOf(spies, 'metricSeries')[before]).toEqual(['steps'])
+
+    // Revisiting a cached metric does not refetch, and no writes happen.
+    await user.click(screen.getByRole('tab', { name: 'Weight' }))
+    await user.click(screen.getByRole('tab', { name: 'Steps' }))
+    expect(callsOf(spies, 'metricSeries')).toHaveLength(before + 1)
+    expect(writeCalls(spies)).toBe(0)
+  })
+
+  it('switching range only re-reads the range-scoped training summary', async () => {
+    const { spies, user } = await renderProgress()
+    await waitFor(() => expect(callsOf(spies, 'derivedMetrics')).toHaveLength(1))
+    const measurementReadsBefore = readCalls(spies) - callsOf(spies, 'derivedMetrics').length
+
+    await user.click(screen.getByRole('tab', { name: '7D' }))
+    await waitFor(() => expect(callsOf(spies, 'derivedMetrics')).toHaveLength(2))
+
+    const today = toDateKey(new Date())
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    expect(callsOf(spies, 'derivedMetrics')[1]).toEqual([
+      { from: toDateKey(sevenDaysAgo), to: today },
+    ])
+    // No measurement series is re-fetched when only the range changes.
+    expect(readCalls(spies) - callsOf(spies, 'derivedMetrics').length).toBe(measurementReadsBefore)
+    expect(callsOf(spies, 'metricSeries')).toHaveLength(0)
+    expect(writeCalls(spies)).toBe(0)
+  })
+
+  it('toggling units fires no requests at all', async () => {
+    const { spies, user } = await renderProgress({
+      weightSeries: vi.fn(async () => [measurement(70, daysAgo(1).toISOString())]),
+    })
+    await waitFor(() => expect(callsOf(spies, 'derivedMetrics')).toHaveLength(1))
     const before = readCalls(spies)
 
-    for (const name of ['Height', 'Body fat', 'Waist', 'Sleep', 'Steps', 'BMI', 'Weight']) {
-      await user.click(screen.getByRole('tab', { name }))
-    }
-    for (const name of ['7D', '90D', '1Y', 'All', '30D']) {
-      await user.click(screen.getByRole('tab', { name }))
-    }
-    const unitToggle = screen.getAllByRole('button', { name: 'Toggle units' })[0]
-    await user.click(unitToggle)
-    await user.click(unitToggle)
+    await user.click(screen.getByRole('button', { name: 'Toggle units' }))
+    await user.click(screen.getByRole('button', { name: 'Toggle units' }))
 
     expect(readCalls(spies)).toBe(before)
     expect(writeCalls(spies)).toBe(0)
@@ -154,11 +192,13 @@ describe('ProgressPage network baseline', () => {
   })
 
   it('deleting a history entry writes one delete, then re-reads once', async () => {
-    const { spies, user } = await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, '2026-10-01')]) })
+    const { spies, user } = await renderProgress({ weightSeries: vi.fn(async () => [measurement(70, daysAgo(1).toISOString())]) })
     await user.click(await screen.findByRole('button', { name: 'Delete entry' }))
 
     await waitFor(() => expect(callsOf(spies, 'deleteMeasurement')).toHaveLength(1))
-    expect(callsOf(spies, 'deleteMeasurement')[0]).toEqual(['m-weight-2026-10-01'])
+    expect(callsOf(spies, 'deleteMeasurement')[0]).toEqual([
+      `m-weight-${daysAgo(1).toISOString().slice(0, 10)}`,
+    ])
     await waitFor(() => expect(readCalls(spies)).toBe(10))
   })
 
@@ -192,12 +232,16 @@ describe('ProgressPage network baseline', () => {
     expect(writeCalls(spies)).toBe(0)
   })
 
-  it('the derived training payload is loaded once and never re-fetched per range', async () => {
-    const { spies, user } = await renderProgress()
-    for (const name of ['7D', '1Y', 'All']) {
-      await user.click(screen.getByRole('tab', { name }))
-    }
-    expect(callsOf(spies, 'derivedMetrics')).toHaveLength(1)
+  it('the initial load asks for the active range, not the whole history', async () => {
+    const { spies } = await renderProgress()
+    await waitFor(() => expect(callsOf(spies, 'derivedMetrics')).toHaveLength(1))
+
+    const today = toDateKey(new Date())
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    expect(callsOf(spies, 'derivedMetrics')[0]).toEqual([
+      { from: toDateKey(thirtyDaysAgo), to: today },
+    ])
   })
 
   it('saves a note exactly as typed and keeps the two-day-ago entry untouched', async () => {

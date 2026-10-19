@@ -1,5 +1,5 @@
 import { AlertCircle, LineChart, Plus, Ruler, Table2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, toMessage } from '../services/api'
 import type { BmiPoint, DerivedMetrics, Measurement, Profile } from '../types'
 import {
@@ -9,26 +9,42 @@ import {
   formatWeight,
   kgToLb,
   parseHeightInput,
+  toDateKey,
 } from '../utils/dates'
+import { bucketByDay } from '../components/progress/analytics'
 import { HistoryCard } from '../components/progress/HistoryCard'
 import { LogDialog } from '../components/progress/LogDialog'
 import type { LogPayload } from '../components/progress/LogDialog'
 import { MetricChips } from '../components/progress/MetricChips'
 import {
   METRIC_BY_KEY,
+  METRIC_VISUALS,
   RANGE_DAYS,
   RANGE_OPTIONS,
+  chartKindFor,
+  formatMetricValue,
   metricLabel,
   rangeCaption,
-  formatMetricValue,
-  summarise,
 } from '../components/progress/metrics'
-import type { MetricKey, Range, SeriesPoint } from '../components/progress/metrics'
+import type { LoggableMetricKey, MetricKey, Range, SeriesPoint } from '../components/progress/metrics'
 import { ProgressChart } from '../components/progress/ProgressChart'
 import { StatStrip } from '../components/progress/StatStrip'
 import { TrainingCard } from '../components/progress/TrainingCard'
 
 export { summarise } from '../components/progress/metrics'
+
+/** Metrics the page fetches on demand through the generic series endpoint. */
+const ON_DEMAND: Partial<Record<MetricKey, () => Promise<Measurement[]>>> = {
+  body_fat_percent: () => api.metricSeries('body_fat_percent'),
+  waist: () => api.metricSeries('waist'),
+  sleep_hours: () => api.metricSeries('sleep_hours'),
+  steps: () => api.metricSeries('steps'),
+}
+
+const SINGLE_ENTRY_NOTES: Partial<Record<MetricKey, string>> = {
+  height: 'Height changes rarely. Log another height entry to start a record.',
+  weight: 'Log one more weight entry to see a trend.',
+}
 
 function toPoints(measurements: Measurement[]): SeriesPoint[] {
   return measurements.map((m) => ({
@@ -49,6 +65,15 @@ function bmiToPoints(points: BmiPoint[]): SeriesPoint[] {
   }))
 }
 
+/** Inclusive YYYY-MM-DD bounds for the selected range; undefined means all time. */
+function rangeWindow(range: Range): { from: string; to: string } | undefined {
+  const to = new Date()
+  const from = new Date()
+  if (range === 'all') return undefined
+  from.setDate(from.getDate() - RANGE_DAYS[range])
+  return { from: toDateKey(from), to: toDateKey(to) }
+}
+
 export function ProgressPage() {
   const [metric, setMetric] = useState<MetricKey>('weight')
   const [range, setRange] = useState<Range>('30d')
@@ -61,6 +86,8 @@ export function ProgressPage() {
   const [hasHeight, setHasHeight] = useState(false)
   const [latestBmi, setLatestBmi] = useState<number | null>(null)
   const [derived, setDerived] = useState<DerivedMetrics | null>(null)
+  const [derivedRange, setDerivedRange] = useState<Range | null>(null)
+  const [metricLoading, setMetricLoading] = useState(false)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -90,20 +117,20 @@ export function ProgressPage() {
     setLoading(true)
     setError(null)
     try {
-      const [profile, weights, heights, bmi, derivedMetrics] = await Promise.all([
+      const [profile, weights, heights, bmi] = await Promise.all([
         api.getProfile(),
         api.weightSeries(),
         api.heightSeries(),
         api.bmiSeries(),
-        api.derivedMetrics(),
       ])
       applyProfile(profile)
+      // Weight, height and BMI load up front; the other metrics are cached
+      // separately, so a write drops them and they refetch on next selection.
       setSeries({ weight: toPoints(weights), height: toPoints(heights) })
       setHasHeight(heights.length > 0)
       const bmiSeries = bmiToPoints(bmi)
       setBmiPoints(bmiSeries)
       setLatestBmi(bmiSeries.length ? bmiSeries[bmiSeries.length - 1].value : null)
-      setDerived(derivedMetrics)
     } catch (err) {
       setError(toMessage(err, 'Your progress could not be loaded.'))
     } finally {
@@ -115,17 +142,63 @@ export function ProgressPage() {
     void load()
   }, [load])
 
+  // Training statistics are requested for the selected range so the card only
+  // describes the same window as the chart.
+  useEffect(() => {
+    if (derivedRange === range) return
+    let cancelled = false
+    api
+      .derivedMetrics(rangeWindow(range))
+      .then((metrics) => {
+        if (cancelled) return
+        setDerived(metrics)
+        setDerivedRange(range)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setError(toMessage(err, 'Your training summary could not be loaded.'))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [range, derivedRange])
+
+  // Metrics without a dedicated endpoint are fetched once, on first selection.
+  const fetchOnDemand = ON_DEMAND[metric]
+  const requested = useRef<Set<MetricKey>>(new Set())
+  useEffect(() => {
+    if (!fetchOnDemand) return
+    if (requested.current.has(metric)) return
+    requested.current.add(metric)
+    let cancelled = false
+    setMetricLoading(true)
+    fetchOnDemand()
+      .then((measurements) => {
+        if (!cancelled) setSeries((prev) => ({ ...prev, [metric]: toPoints(measurements) }))
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(toMessage(err, 'That metric could not be loaded.'))
+      })
+      // Always cleared: when this effect is cancelled the next metric owns the flag.
+      .finally(() => setMetricLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [metric, fetchOnDemand])
+
   const points = useMemo(() => (metric === 'bmi' ? bmiPoints : series[metric] ?? []), [bmiPoints, metric, series])
 
   const filtered = useMemo(() => {
-    if (range === 'all') return points
+    const sorted = [...points].sort(
+      (a, b) => new Date(a.measured_at).getTime() - new Date(b.measured_at).getTime(),
+    )
+    if (range === 'all') return sorted
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - RANGE_DAYS[range])
-    return points.filter((point) => new Date(point.measured_at) >= cutoff)
+    return sorted.filter((point) => new Date(point.measured_at) >= cutoff)
   }, [points, range])
 
   const definition = metric === 'bmi' ? null : METRIC_BY_KEY[metric]
-  const summary = useMemo(() => summarise(filtered.map((point) => point.value)), [filtered])
   const displayUnit =
     metric === 'bmi'
       ? ''
@@ -143,15 +216,27 @@ export function ProgressPage() {
     [definition, metric, units],
   )
 
-  const displayPoints = useMemo(
+  const visual = METRIC_VISUALS[metric]
+
+  /** Recorded days, used for averages and for the bar/line switch. */
+  const daily = useMemo(
     () =>
-      filtered.map((point) => ({
-        ...point,
-        value: convertForDisplay(point.value),
+      bucketByDay(filtered, visual.dayMode).map((bucket) => ({
+        id: `${metric}-${bucket.day}`,
+        value: bucket.value,
+        measured_at: `${bucket.day}T12:00:00`,
         unit: displayUnit,
+        notes: null,
       })),
-    [filtered, convertForDisplay, displayUnit],
+    [filtered, visual.dayMode, metric, displayUnit],
   )
+
+  const chartPoints = useMemo(
+    () => daily.map((point) => ({ ...point, value: convertForDisplay(point.value) })),
+    [daily, convertForDisplay],
+  )
+
+  const displayUnitLabel = displayUnit || ''
 
   const openLog = (target: MetricKey) => {
     setFocusMetric(target === 'bmi' ? 'weight' : target)
@@ -166,7 +251,7 @@ export function ProgressPage() {
     try {
       for (const draft of drafts) {
         if (draft.value.trim() === '') continue
-        const def = METRIC_BY_KEY[draft.key]
+        const def = METRIC_BY_KEY[draft.key as LoggableMetricKey]
         const raw = Number(draft.value)
         const canonical =
           draft.key === 'height'
@@ -185,6 +270,9 @@ export function ProgressPage() {
       }
       setShowLog(false)
       setSavedNote('Saved')
+      // A write can touch any metric, so every source is refreshed.
+      requested.current.clear()
+      setDerivedRange(null)
       await load()
     } catch (err) {
       setLogError(toMessage(err, 'That entry could not be saved.'))
@@ -197,6 +285,8 @@ export function ProgressPage() {
     try {
       await api.deleteMeasurement(id)
       setUndo(() => () => void load())
+      requested.current.clear()
+      setDerivedRange(null)
       await load()
     } catch (err) {
       setError(toMessage(err, 'That entry could not be deleted.'))
@@ -215,8 +305,17 @@ export function ProgressPage() {
   const historyValue = (point: SeriesPoint) => {
     if (metric === 'height' && units === 'imperial') return formatHeight(point.value, units)
     if (metric === 'weight') return formatWeight(point.value, units)
-    return `${convertForDisplay(point.value).toFixed(1)} ${displayUnit}`
+    // Every other metric uses its own precision: steps without decimals, sleep
+    // and waist with one, and so on.
+    return `${formatMetricValue(metric, convertForDisplay(point.value), units)} ${displayUnitLabel}`
   }
+
+  const statsRange = filtered.map((point) => point.value)
+  const rangeMin = statsRange.length ? Math.min(...statsRange) : null
+  const rangeMax = statsRange.length ? Math.max(...statsRange) : null
+  const rangeLabel =
+    rangeMin === null || rangeMax === null ? '—' : rangeMin === rangeMax ? String(rangeMin) : `${rangeMin}–${rangeMax}`
+  const busy = loading || (metricLoading && !series[metric])
 
   return (
     <div className="page page--progress">
@@ -226,9 +325,23 @@ export function ProgressPage() {
           <p>Track how you're doing over time.</p>
         </div>
         <div className="progress__header-actions">
+          <div className="progress__range" role="tablist" aria-label="Range">
+            {RANGE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={range === option.value}
+                className={range === option.value ? 'progress__range--active' : ''}
+                onClick={() => setRange(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
-            className="progress__unit-toggle progress__unit-toggle--header"
+            className="progress__unit-toggle"
             onClick={() => setUnits((value) => (value === 'metric' ? 'imperial' : 'metric'))}
             aria-label="Toggle units"
           >
@@ -260,17 +373,17 @@ export function ProgressPage() {
             <MetricChips value={metric} onChange={setMetric} />
 
             <StatStrip
-              latest={summary.latest}
-              change={summary.change}
-              rangeLabel={summary.rangeLabel}
-              entries={summary.entries}
-              unit={displayUnit}
+              metric={metric}
+              points={filtered}
+              daily={daily}
+              entries={filtered.length}
+              rangeLabel={rangeLabel}
+              unit={displayUnitLabel}
               latestDate={latestDate}
-              format={(value) => formatMetricValue(metric, value, 'metric')}
-              loading={loading}
+              loading={busy}
             />
 
-            {metric === 'bmi' && !loading && (
+            {metric === 'bmi' && !busy && (
               <div className="progress__bmi-card">
                 {hasHeight ? (
                   <>
@@ -296,31 +409,10 @@ export function ProgressPage() {
             )}
 
             <div className="chart-toolbar">
-              <span className="chart-toolbar__caption">{rangeCaption(range)}</span>
-              {/* Below 768px the header drops the unit toggle and it lives here. */}
-              <button
-                type="button"
-                className="progress__unit-toggle progress__unit-toggle--toolbar"
-                onClick={() => setUnits((value) => (value === 'metric' ? 'imperial' : 'metric'))}
-                aria-label="Toggle units"
-              >
-                {units === 'metric' ? 'kg / cm' : 'lb / in'}
-              </button>
+              <span className="chart-toolbar__caption">
+                {metricLabel(metric)} · {rangeCaption(range)}
+              </span>
               <div className="chart-toolbar__controls">
-                <div className="progress__range" role="tablist" aria-label="Range">
-                  {RANGE_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="tab"
-                      aria-selected={range === option.value}
-                      className={range === option.value ? 'progress__range--active' : ''}
-                      onClick={() => setRange(option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
                 <div className="segmented segmented--view" role="group" aria-label="View">
                   <button
                     type="button"
@@ -344,7 +436,7 @@ export function ProgressPage() {
               </div>
             </div>
 
-            {loading ? (
+            {busy ? (
               <div className="skeleton skeleton--chart" aria-hidden="true" />
             ) : view === 'table' ? (
               <div className="chart-table">
@@ -357,11 +449,11 @@ export function ProgressPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...displayPoints].reverse().map((point) => (
+                    {[...filtered].reverse().map((point) => (
                       <tr key={point.id}>
                         <td>{new Date(point.measured_at).toLocaleDateString()}</td>
                         <td>
-                          {point.value.toFixed(1)} {displayUnit}
+                          {formatMetricValue(metric, convertForDisplay(point.value), units)} {displayUnitLabel}
                         </td>
                       </tr>
                     ))}
@@ -370,29 +462,31 @@ export function ProgressPage() {
               </div>
             ) : (
               <ProgressChart
-                points={displayPoints}
+                points={chartPoints}
                 metric={metric}
                 units={units}
                 range={range}
-                height={240}
+                kind={chartKindFor(metric, daily.length)}
+                zeroBased={visual.zeroBased}
                 showAllAvailable={filtered.length === 0 && points.length > 0}
                 onShowAll={() => setRange('all')}
                 onLog={() => openLog(metric)}
+                singleEntryNote={SINGLE_ENTRY_NOTES[metric]}
               />
             )}
           </section>
         </div>
 
         <div className="progress__side">
-          <TrainingCard derived={derived} loading={loading} />
+          <TrainingCard derived={derived} loading={loading} rangeLabel={rangeCaption(range)} />
 
           <HistoryCard
-            title={`History${metricLabel(metric) ? ` · ${metricLabel(metric)}` : ''}`}
+            title={`History · ${metricLabel(metric)}`}
             points={filtered}
             renderValue={historyValue}
             readOnly={metric === 'bmi'}
             onDelete={(id) => void handleDelete(id)}
-            loading={loading}
+            loading={busy}
           />
         </div>
       </div>

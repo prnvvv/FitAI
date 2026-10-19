@@ -413,7 +413,16 @@ export const api = {
     }),
   deleteMeasurement: (id: string) =>
     fetchApi<void>(`/progress/measurements/${id}`, { method: 'DELETE' }),
-  derivedMetrics: () => fetchApi<DerivedMetrics>('/progress/derived'),
+  // `from`/`to` are optional: omitted, the endpoint uses its own default window.
+  derivedMetrics: (window?: { from: string; to: string }) => {
+    const params = new URLSearchParams()
+    if (window) {
+      params.set('from', window.from)
+      params.set('to', window.to)
+    }
+    const query = params.toString()
+    return fetchApi<DerivedMetrics>(`/progress/derived${query ? `?${query}` : ''}`)
+  },
 
   // Exercise library
   // The backend caps page size at 100; page rather than requesting more.
