@@ -29,6 +29,7 @@ interface SidebarProps {
   id?: string
   open: boolean
   onToggle: () => void
+  /** Dismisses the drawer; a no-op on desktop, where the toggle owns the state. */
   onClose: () => void
   conversations: Conversation[]
   selectedId: string | null
@@ -72,6 +73,8 @@ export function Sidebar({
   }, [open, onClose])
 
   const go = (path: string) => {
+    // Dismisses the mobile drawer only; on desktop the sidebar stays where the
+    // user put it.
     onClose()
     navigate(path)
   }

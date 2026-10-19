@@ -4,17 +4,26 @@ import { useDisplayName } from '../../hooks/useDisplayName'
 import { AccountMenu } from './AccountMenu'
 
 interface TopBarProps {
-  /** Active conversation title, if one is open. */
-  title?: string | null
+  /** Conversation title on chat routes, destination label elsewhere. */
+  title: string
+  /**
+   * Renders the title as the page heading. False when the page already renders
+   * its own `<h1>`, so no route ends up with two competing headings.
+   */
+  asHeading?: boolean
 }
 
-export function TopBar({ title }: TopBarProps) {
+export function TopBar({ title, asHeading = false }: TopBarProps) {
   const [accountOpen, setAccountOpen] = useState(false)
   const { firstName, initials } = useDisplayName()
 
   return (
     <header className="top-bar">
-      {title && <h1 className="top-bar__title">{title}</h1>}
+      {asHeading ? (
+        <h1 className="top-bar__title">{title}</h1>
+      ) : (
+        <span className="top-bar__title">{title}</span>
+      )}
 
       <div className="top-bar__actions">
         {/* No notification feed exists yet: the control stays visible but inert

@@ -109,18 +109,30 @@ function AuthenticatedApp() {
     }
   }, [sidebarOpen])
 
-  const handleNewChat = useCallback(async () => {
-    setSidebarOpen(false)
+  /**
+   * Dismisses the sidebar only when it is an overlay drawer (below the desktop
+   * breakpoint). On desktop the sidebar is a permanent column that the user
+   * controls with the toggle, so opening a conversation or another destination
+   * must never collapse it.
+   */
+  const closeSidebarDrawer = useCallback(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarOpen(false)
+    }
+  }, [])
+
+  const handleNewChat = useCallback(() => {
+    closeSidebarDrawer()
     navigate('/')
-  }, [navigate])
+  }, [closeSidebarDrawer, navigate])
 
   const handleSelectConversation = useCallback(
     (id: string) => {
       if (id === activeId) return
-      setSidebarOpen(false)
+      closeSidebarDrawer()
       navigate(`/chat/${id}`)
     },
-    [navigate, activeId],
+    [closeSidebarDrawer, navigate, activeId],
   )
 
   const handleConversationCreated = useCallback(
@@ -161,7 +173,7 @@ function AuthenticatedApp() {
           <AppShell
             sidebarOpen={sidebarOpen}
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
-            onCloseSidebar={() => setSidebarOpen(false)}
+            onCloseSidebar={closeSidebarDrawer}
             conversations={conversations}
             selectedId={activeId}
             conversationsLoading={conversationsLoading}

@@ -1,7 +1,17 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import type { Conversation } from '../../types'
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
+
+/** Labels for the non-chat destinations, shown in the shared top bar. */
+const PAGE_TITLES: Record<string, string> = {
+  plan: 'Plan',
+  progress: 'Progress',
+  memory: 'Memory',
+  settings: 'Settings',
+  profile: 'Profile',
+  library: 'Library',
+}
 
 interface AppShellProps {
   sidebarOpen: boolean
@@ -38,7 +48,20 @@ export function AppShell({
     onCloseSidebar()
   }
 
-  const activeTitle = conversations.find((c) => c.id === selectedId)?.title ?? null
+  const { pathname } = useLocation()
+  const isChatRoute = pathname === '/' || pathname.startsWith('/chat/')
+  const activeTitle =
+    conversations.find((c) => c.id === selectedId)?.title?.trim() || null
+
+  // One title slot for every route: the conversation on chat routes, the
+  // destination name everywhere else, so the header never collapses to blank.
+  const title = isChatRoute
+    ? (activeTitle ?? 'New chat')
+    : (PAGE_TITLES[pathname.split('/')[1] ?? ''] ?? 'FitAI')
+
+  // Every non-chat page renders its own <h1>, so the header label is only the
+  // page heading on chat routes, where the page itself has no heading.
+  const titleIsHeading = isChatRoute && (activeTitle !== null || pathname !== '/')
 
   return (
     <div className="app-shell">
@@ -65,7 +88,7 @@ export function AppShell({
         onDelete={onDelete}
       />
       <div className="app-shell__content">
-        <TopBar title={activeTitle} />
+        <TopBar title={title} asHeading={titleIsHeading} />
         <main className="app-shell__main">
           <Outlet />
         </main>
