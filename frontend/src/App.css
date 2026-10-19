@@ -4426,12 +4426,12 @@
 
 .page--progress {
   max-width: 1200px;
-  padding: 24px 24px 32px;
+  padding: 16px 24px 24px;
 }
 
 .page--progress .page__header--row {
-  min-height: 56px;
-  margin-bottom: 16px;
+  min-height: 48px;
+  margin-bottom: 12px;
 }
 
 .progress__layout {
@@ -4609,10 +4609,7 @@
   gap: 8px;
 }
 
-/* The toolbar copy of the unit toggle only exists below 768px. */
-.progress__unit-toggle--toolbar {
-  display: none;
-}
+
 
 .segmented {
   display: inline-flex;
@@ -4662,7 +4659,7 @@
   position: relative;
   width: 100%;
   /* Height comes from CSS so the drawing can be measured, never scaled. */
-  height: 240px;
+  height: 220px;
 }
 
 .chart__svg {
@@ -4676,7 +4673,7 @@
 
 .chart__line {
   stroke: var(--accent);
-  stroke-width: 2;
+  stroke-width: 2.5;
   stroke-linecap: round;
 }
 
@@ -4780,6 +4777,10 @@
   background-color: var(--bg-hover);
 }
 
+.chart--sparse {
+  height: 180px;
+}
+
 .chart--single {
   display: flex;
   flex-direction: column;
@@ -4866,9 +4867,15 @@
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 280px;
+  max-height: 232px;
   overflow-y: auto;
   scrollbar-width: thin;
+  /* Fades the cut-off row so a scrolled list reads as "more below". */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent 100%);
+}
+
+.history:not(:hover) {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 .history__row {
@@ -5013,6 +5020,89 @@
 
 .btn--danger-ghost {
   color: var(--error);
+}
+
+
+/* Progress: summary block, insight line and training week strip */
+.stat-block {
+  margin-top: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--divider);
+}
+
+.stat-block .stat-strip {
+  margin-top: 8px;
+  border-top: none;
+}
+
+.stat-insight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0 0 10px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.stat-insight strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.card__subtitle {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.training-weeks {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+}
+
+.training-weeks__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  margin-top: 0;
+  height: 34px;
+  flex: 1;
+}
+
+.training-week {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+
+.training-week__bar {
+  width: 100%;
+  max-width: 18px;
+  border-radius: 2px;
+  background-color: var(--accent);
+  opacity: 0.8;
+}
+
+.training-week__value {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-toolbar__caption {
+  font-weight: 500;
+  color: var(--text-primary);
 }
 
 /* Log dialog */
@@ -5212,15 +5302,6 @@
     gap: 8px;
   }
 
-  .progress__unit-toggle--header {
-    display: none;
-  }
-
-  .progress__unit-toggle--toolbar {
-    display: inline-flex;
-    margin-left: auto;
-  }
-
   .chart-toolbar__caption {
     flex: 1 1 auto;
   }
@@ -5270,6 +5351,10 @@
   }
 
   .chart--single {
+    height: 160px;
+  }
+
+  .chart--sparse {
     height: 160px;
   }
 
