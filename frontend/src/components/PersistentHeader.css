@@ -48,8 +48,8 @@
   display: flex;
   align-items: flex-end;
   gap: 5px;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
 }
 
@@ -69,23 +69,57 @@
 .persistent-header__wordmark {
   font-family: "Inter", system-ui, sans-serif;
   font-weight: 600;
-  font-size: clamp(26px, 2vw, 34px);
+  font-size: clamp(24px, 2vw, 30px);
   line-height: 1;
   letter-spacing: -0.01em;
-  /* Smooth color transition */
-  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Smooth color transition — match arc timing (900ms, cubic-bezier(0.4, 0, 0.2, 1)) */
+  transition:
+    color 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 900ms cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--cream);
 }
 
-/* Two-tone wordmark on auth pages */
-.persistent-header__wordmark-fit {
-  color: var(--cream);
-  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+/* Route-change wordmark animation — subtle fade/blur like the arc */
+.persistent-header.is-auth .persistent-header__wordmark {
+  animation: wordmarkTransition 900ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-.persistent-header__wordmark-ai {
-  color: var(--gold);
-  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+@keyframes wordmarkTransition {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+  30% {
+    opacity: 0.5;
+    transform: translateX(4px);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+/* Landing state — reverse transition */
+.persistent-header.is-landing .persistent-header__wordmark {
+  animation: wordmarkTransitionReverse 900ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes wordmarkTransitionReverse {
+  0% {
+    opacity: 0.5;
+    transform: translateX(-4px);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
 }
 
 /* Right Actions — fade/slide in/out */
@@ -111,8 +145,9 @@
   cursor: pointer;
   transition:
     color 0.2s ease,
-    opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 900ms cubic-bezier(0.4, 0, 0.2, 1);
   text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
   white-space: nowrap;
 }
@@ -142,8 +177,9 @@
   transition:
     background 0.2s ease,
     color 0.2s ease,
-    opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 900ms cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 }
 
@@ -161,27 +197,22 @@
   opacity: 0;
   pointer-events: none;
   transform: translateX(20px);
+  filter: blur(4px);
+  transition:
+    opacity 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 900ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .persistent-header.is-landing .persistent-header__actions {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
-}
-
-/* Wordmark color transition */
-.persistent-header.is-auth .persistent-header__wordmark {
-  color: transparent; /* Hidden, two-tone spans take over */
-}
-
-.persistent-header.is-auth .persistent-header__wordmark-fit,
-.persistent-header.is-auth .persistent-header__wordmark-ai {
-  display: inline;
-}
-
-.persistent-header.is-landing .persistent-header__wordmark-fit,
-.persistent-header.is-landing .persistent-header__wordmark-ai {
-  display: none;
+  filter: blur(0);
+  transition:
+    opacity 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 900ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 900ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Scrolled state */
@@ -249,8 +280,6 @@
 @media (prefers-reduced-motion: reduce) {
   .persistent-header,
   .persistent-header__wordmark,
-  .persistent-header__wordmark-fit,
-  .persistent-header__wordmark-ai,
   .persistent-header__login,
   .persistent-header__cta {
     transition: none !important;

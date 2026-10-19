@@ -40,16 +40,7 @@ export function PersistentHeader() {
             <div className="persistent-header__bar" />
             <div className="persistent-header__bar" />
           </div>
-          <span className="persistent-header__wordmark">
-            {isAuth ? (
-              <>
-                <span className="persistent-header__wordmark-fit">Fit</span>
-                <span className="persistent-header__wordmark-ai">AI</span>
-              </>
-            ) : (
-              'FitAI'
-            )}
-          </span>
+          <span className="persistent-header__wordmark">FitAI</span>
         </div>
 
         {/* Right Actions — only on landing */}
