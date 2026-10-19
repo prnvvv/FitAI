@@ -1,7 +1,7 @@
 import { useLocation } from 'react-router-dom'
 import { ArrowRight, LogIn } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import './PersistentHeader.css'
 
 export function PersistentHeader() {
@@ -12,7 +12,14 @@ export function PersistentHeader() {
   const isLanding = location.pathname === '/'
   const isAuth = location.pathname.startsWith('/login')
 
-  const handleGetStarted = () => {
+  const handleGetStarted = (event: MouseEvent<HTMLAnchorElement>) => {
+    // Modified clicks keep native behaviour (new tab, etc.). A plain click must
+    // stay client-side: following the href would reload the whole document and
+    // skip the route transition entirely.
+    if (event.defaultPrevented || event.button !== 0) return
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+    event.preventDefault()
     navigate('/login?mode=signup')
   }
 

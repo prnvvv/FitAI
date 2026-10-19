@@ -1,5 +1,5 @@
 import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type MouseEvent } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import '../login.css'
@@ -51,6 +51,16 @@ export function LoginPage() {
 
   if (user) {
     return <Navigate to="/" replace />
+  }
+
+  // Client-side navigation for in-page links: a plain href would reload the
+  // whole document and skip the route transition.
+  const handleNavTo = (event: MouseEvent<HTMLAnchorElement>, to: string) => {
+    if (event.defaultPrevented || event.button !== 0) return
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+    event.preventDefault()
+    navigate(to)
   }
 
   const handleSubmit = async (e: FormEvent) => {
@@ -142,7 +152,11 @@ export function LoginPage() {
             {error && <div className="login-page__error" role="alert">{error}</div>}
 
             {/* Forgot Password */}
-            <a href="/forgot-password" className="login-page__forgot">
+            <a
+              href="/forgot-password"
+              className="login-page__forgot"
+              onClick={(event) => handleNavTo(event, '/forgot-password')}
+            >
               Forgot password?
             </a>
 
@@ -184,7 +198,13 @@ export function LoginPage() {
           {/* Footer — Sign up link */}
           <p className="login-page__footer">
             Don&apos;t have an account?{' '}
-            <a href="/signup" className="login-page__signup-link">Sign up</a>
+            <a
+              href="/login?mode=signup"
+              className="login-page__signup-link"
+              onClick={(event) => handleNavTo(event, '/login?mode=signup')}
+            >
+              Sign up
+            </a>
           </p>
         </div>
       </div>
