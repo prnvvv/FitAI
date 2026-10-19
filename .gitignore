@@ -18,6 +18,11 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Local experiment workspace (speech to text PoC, ad-hoc module testbeds).
+# Kept on disk only: it carries virtual environments, model caches,
+# recordings and scratch scripts, none of which belong in the repository.
+unit testing/
 .coverage
 htmlcov/
 .tox/
