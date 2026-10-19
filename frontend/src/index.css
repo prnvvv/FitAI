@@ -1,8 +1,9 @@
 /* ==========================================================================
-   Global Reset & Design Tokens — FitAI Landing
+   Global Reset & Design Tokens — FitAI
    ========================================================================== */
 
 :root {
+  /* Core colors */
   --bg: #0a0806;
   --bg-strip: #0e0c0a;
   --cream: #efe6d8;
@@ -11,13 +12,58 @@
   --gold-dark: #b9773f;
   --hairline: rgba(255, 255, 255, 0.09);
   --gold-hairline: rgba(226, 162, 79, 0.18);
+
+  /* Layout */
   --gutter: clamp(20px, 5.8vw, 110px);
   --header-h: clamp(76px, 10svh, 104px);
   --strip-h: clamp(84px, 10.5svh, 108px);
+
+  /* Backdrop photo framing — ROUTE-INDEPENDENT, set once here */
+  --bd-pos-x: 72%;
+  --bd-pos-y: 18%;
+  --bd-scale: 1.22;
+  --bd-origin-x: 80%;
+  --bd-origin-y: 20%;
+
+  /* Arc positioning */
+  --arc-diameter: 130svh;
+  --arc-landing-x: 77%;
+  --arc-landing-y: 62%;
+  --arc-auth-x: 60%;
+  --arc-auth-y: 64%;
 }
 
+/* Responsive backdrop framing — same for both routes */
+@media (max-width: 1024px) {
+  :root {
+    --bd-pos-x: 72%;
+    --bd-pos-y: 12%;
+    --bd-scale: 1.25;
+    --bd-origin-x: 80%;
+    --bd-origin-y: 15%;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --bd-pos-x: 78%;
+    --bd-pos-y: 10%;
+    --bd-scale: 1.3;
+    --bd-origin-x: 85%;
+    --bd-origin-y: 10%;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Global Reset
+   --------------------------------------------------------------- */
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+html {
+  /* Prevent viewport width shift when scrollbar appears/disappears */
+  scrollbar-gutter: stable;
 }
 
 html, body, #root {
@@ -95,7 +141,7 @@ input[type='number'] {
 }
 
 /* ==========================================================================
-   Landing Page Animations
+   Landing Page Animations (Foreground Only)
    ========================================================================== */
 
 @keyframes fadeUp {
@@ -107,11 +153,6 @@ input[type='number'] {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .landing .hero__content > * {

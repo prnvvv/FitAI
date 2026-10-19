@@ -2,29 +2,15 @@ import { ArrowRight, Dumbbell, Leaf, BarChart3, Sparkle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useEffect, useState } from 'react'
 import '../landing.css'
 
 export function LandingPage() {
   const { user, loading } = useAuth()
   const navigate = useNavigate()
-  const [scrolled, setScrolled] = useState(false)
 
   const handleStartJourney = () => {
     navigate('/login?mode=signup')
   }
-
-  const handleLogIn = () => {
-    navigate('/login')
-  }
-
-  useEffect(() => {
-    const onScroll = () => {
-      setScrolled(window.scrollY > 24)
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
 
   if (loading) {
     return (
@@ -40,52 +26,10 @@ export function LandingPage() {
 
   return (
     <div className="landing">
-      {/* Header / Nav */}
-      <header className={`nav ${scrolled ? 'is-scrolled' : ''}`} role="banner">
-        {/* Logo: waveform + wordmark */}
-        <div className="nav__logo" aria-label="FitAI home">
-          <div className="nav__waveform" aria-hidden="true">
-            <div className="nav__bar" />
-            <div className="nav__bar" />
-            <div className="nav__bar" />
-            <div className="nav__bar" />
-            <div className="nav__bar" />
-          </div>
-          <span className="nav__wordmark">FitAI</span>
-        </div>
-
-        {/* Right Actions */}
-        <div className="nav__actions">
-          <button className="nav__login" onClick={handleLogIn} type="button">
-            Log in
-          </button>
-          <a className="nav__cta" href="/login?mode=signup">
-            <span>Get started</span>
-            <ArrowRight size={18} aria-hidden="true" />
-          </a>
-        </div>
-      </header>
-
-      {/* Hero */}
+      {/* Hero — transparent, content only */}
       <section className="hero" aria-labelledby="hero-heading">
-        {/* Media layer: image + overlays + arc */}
-        <div className="hero__media" aria-hidden="true">
-          <div className="hero__img-wrapper">
-            <img
-              src="/images/fitai-roman-pillar.png"
-              alt=""
-              className="hero__img"
-            />
-          </div>
-          <div className="hero__overlay hero__overlay--left" />
-          <div className="hero__overlay hero__overlay--top" />
-          <div className="hero__overlay hero__overlay--bottom" />
-          <div className="hero__overlay hero__overlay--glow" />
-          <div className="hero__arc" />
-        </div>
-
         {/* Content */}
-        <div className="hero__content">
+        <div className="hero__content landing-fade-in">
           <p className="hero__eyebrow">
             DISCIPLINE <span className="hero__cross" aria-hidden="true">&times;</span> PROGRESS <span className="hero__cross" aria-hidden="true">&times;</span> LONGEVITY
           </p>
@@ -107,7 +51,7 @@ export function LandingPage() {
       </section>
 
       {/* Feature Strip */}
-      <section className="features" aria-label="Features">
+      <section className="features landing-fade-in-delayed" aria-label="Features">
         <div className="feature">
           <div className="feature__icon" aria-hidden="true">
             <Dumbbell size={40} strokeWidth={1.25} />

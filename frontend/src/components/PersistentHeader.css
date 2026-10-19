@@ -1,0 +1,258 @@
+/* ==========================================================================
+   FitAI Persistent Header — Smooth Transitions Between Pages
+   ========================================================================== */
+
+.persistent-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-h);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--gutter);
+  background: transparent;
+  transition:
+    background 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    border-bottom 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.persistent-header.is-scrolled {
+  background: rgba(10, 8, 6, 0.85);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.persistent-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+}
+
+/* Logo — persists, wordmark transitions color */
+.persistent-header__logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.persistent-header__waveform {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+.persistent-header__bar {
+  flex: 1;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--gold);
+}
+
+.persistent-header__bar:nth-child(1) { height: 40%; }
+.persistent-header__bar:nth-child(2) { height: 70%; }
+.persistent-header__bar:nth-child(3) { height: 100%; }
+.persistent-header__bar:nth-child(4) { height: 65%; }
+.persistent-header__bar:nth-child(5) { height: 35%; }
+
+.persistent-header__wordmark {
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 600;
+  font-size: clamp(26px, 2vw, 34px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  /* Smooth color transition */
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--cream);
+}
+
+/* Two-tone wordmark on auth pages */
+.persistent-header__wordmark-fit {
+  color: var(--cream);
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.persistent-header__wordmark-ai {
+  color: var(--gold);
+  transition: color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Right Actions — fade/slide in/out */
+.persistent-header__actions {
+  display: flex;
+  align-items: center;
+  gap: clamp(20px, 2vw, 38px);
+  flex-shrink: 0;
+}
+
+.persistent-header__login {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 400;
+  font-size: clamp(16px, calc(1.1vw + 4px), 18px);
+  line-height: 1;
+  color: #d9d0c3;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+
+.persistent-header__login:hover {
+  color: var(--gold);
+}
+
+.persistent-header__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: clamp(50px, 6.2svh, 58px);
+  padding: 0 26px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  background: rgba(10, 8, 6, 0.55);
+  backdrop-filter: blur(8px);
+  font-family: "Inter", system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(16px, 1.1vw, 18px);
+  line-height: 1;
+  color: var(--gold);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.persistent-header__cta:hover {
+  background: rgba(10, 8, 6, 0.75);
+  color: var(--gold);
+}
+
+.persistent-header__cta svg {
+  flex-shrink: 0;
+}
+
+/* Auth state: hide landing actions, show nothing (logo only) */
+.persistent-header.is-auth .persistent-header__actions {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(20px);
+}
+
+.persistent-header.is-landing .persistent-header__actions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+/* Wordmark color transition */
+.persistent-header.is-auth .persistent-header__wordmark {
+  color: transparent; /* Hidden, two-tone spans take over */
+}
+
+.persistent-header.is-auth .persistent-header__wordmark-fit,
+.persistent-header.is-auth .persistent-header__wordmark-ai {
+  display: inline;
+}
+
+.persistent-header.is-landing .persistent-header__wordmark-fit,
+.persistent-header.is-landing .persistent-header__wordmark-ai {
+  display: none;
+}
+
+/* Scrolled state */
+.persistent-header.is-scrolled {
+  background: rgba(10, 8, 6, 0.85);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--hairline);
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .persistent-header {
+    height: var(--header-h);
+  }
+
+  .persistent-header__logo {
+    gap: 10px;
+  }
+
+  .persistent-header__waveform {
+    width: 28px;
+    height: 28px;
+  }
+
+  .persistent-header__actions {
+    gap: clamp(12px, 2vw, 20px);
+  }
+
+  .persistent-header__login {
+    padding: 6px 8px;
+    font-size: clamp(14px, 1.1vw + 4px, 16px);
+  }
+
+  .persistent-header__login span {
+    display: none;
+  }
+
+  .persistent-header__cta {
+    padding: 0 18px;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .persistent-header__cta span {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .persistent-header__login {
+    padding: 6px;
+    width: 20px;
+  }
+
+  .persistent-header__login::after {
+    content: "";
+    display: block;
+    width: 18px;
+    height: 18px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d9d0c3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4'/%3E%3Cpolyline points='10 17 15 12 10 7'/%3E%3Cline x1='15' y1='12' x2='3' y2='12'/%3E%3C/svg%3E") center/contain no-repeat;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .persistent-header,
+  .persistent-header__wordmark,
+  .persistent-header__wordmark-fit,
+  .persistent-header__wordmark-ai,
+  .persistent-header__login,
+  .persistent-header__cta {
+    transition: none !important;
+  }
+}

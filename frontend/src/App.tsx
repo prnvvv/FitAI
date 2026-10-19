@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import type { ReactNode } from 'react'
 import './App.css'
 import { AppShell } from './components/layout/AppShell'
 import { PageErrorBoundary } from './components/layout/PageErrorBoundary'
+import { SiteBackdrop } from './components/SiteBackdrop'
+import { PersistentHeader } from './components/PersistentHeader'
 import { useAuth } from './context/AuthContext'
 import { useConversations } from './hooks/useConversations'
 import { ChatPage } from './pages/ChatPage'
@@ -13,6 +16,19 @@ import { MemoryPage } from './pages/MemoryPage'
 import { PlanPage } from './pages/PlanPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ProgressPage } from './pages/ProgressPage'
+import './backdrop.css'
+
+function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <SiteBackdrop />
+      <PersistentHeader />
+      <div className="page-transition">
+        {children}
+      </div>
+    </>
+  )
+}
 
 function AuthenticatedApp() {
   const { user, loading: authLoading } = useAuth()
@@ -168,11 +184,13 @@ function PublicApp() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <RootLayout>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </RootLayout>
   )
 }
 
