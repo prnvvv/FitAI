@@ -63,6 +63,18 @@ def test_warmup_swallows_the_error_and_records_it():
     assert "checkpoint missing" in service.status.error
 
 
+def test_missing_torchaudio_gets_an_actionable_hint():
+    """The Granite feature extractor hard-requires torchaudio; say how to fix it."""
+    failure = RuntimeError(
+        "GraniteSpeech5FeatureExtractor requires the torchaudio library but it was not found in your environment."
+    )
+
+    hint = SpeechService._dependency_hint(failure)
+
+    assert "torchaudio" in hint
+    assert "torch==2.9.1 torchaudio==2.9.1" in hint
+
+
 def test_transcribe_raises_when_the_model_failed_to_load():
     service = SpeechService(
         model_id="test/model",

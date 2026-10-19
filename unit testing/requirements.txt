@@ -11,7 +11,17 @@ soundfile==0.12.1
 
 # Model inference (only needed for real transcription, not for the unit tests).
 # Granite Speech 5.0 TurboCTC requires transformers>=5.16.0.
-torch>=2.6.0
+#
+# torchaudio is a hard requirement of GraniteSpeech5FeatureExtractor (it builds
+# the log-mel front-end), and torchaudio wheels only exist for the torch release
+# they are pinned to. The latest published pair is 2.9.1 / 2.9.1: installing
+# torch 2.10+ leaves you without a matching torchaudio, which fails at load time
+# with "requires the torchaudio library but it was not found".
+#
+# CPU wheels (default). For NVIDIA GPUs use the matching CUDA index instead:
+#   pip install torch==2.9.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cu128
+torch==2.9.1
+torchaudio==2.9.1
 transformers>=5.16.0
 accelerate>=1.0.0
 

@@ -72,15 +72,29 @@ task conversation in plaintext, so it should be rotated.
 | | |
 |---|---|
 | Python | 3.10+ (3.10.10 verified; `transformers` 5.x needs ≥3.10) |
-| RAM | ~3 GB free for weights + activations (16 kHz audio is streamed in one piece) |
-| GPU | optional. `device_map="auto"` uses CUDA when present; CPU-only works, just slower |
+| RAM | ~3 GB free for weights + activations (16 kHz audio is held in one piece) |
+| GPU | optional. `device_map="auto"` uses CUDA when present; CPU-only works |
 | Disk | ~0.9 GB for `model.safetensors` in the Hugging Face cache + ~2.5 GB for the CUDA torch wheel |
 | ffmpeg | **optional.** Only needed if you upload a compressed file from outside the browser. The page converts recordings to 16 kHz mono WAV in the browser, so the normal flow needs no ffmpeg |
 
-Measured on this machine: 15.7 GB RAM (3.5 GB free at the time), RTX 2050 with
-4 GB VRAM (≈3.9 GB free), 220 GB free disk on `C:`. That is enough for the
-0.5 B-parameter checkpoint, but weights were **not** downloaded as part of this
-task — run the smoke test when you want them.
+**`torchaudio` is required, and it must match your `torch` exactly.**
+`GraniteSpeech5FeatureExtractor` builds its log-mel front-end with
+`torchaudio.transforms.MelSpectrogram` / `torchaudio.functional.compute_deltas`,
+so transformers raises *"requires the torchaudio library but it was not found"*
+if it is missing. torchaudio only publishes wheels for the torch release it is
+pinned to, and the latest pair is **2.9.1 / 2.9.1** — installing torch 2.10+
+leaves you with a torch that has no matching torchaudio. `requirements.txt`
+pins the working pair and the loader prints this hint when it trips.
+
+Measured on this machine (CPU-only torch 2.9.1, 16 kHz mono):
+
+| step | result |
+|---|---|
+| First load (900 MB download) | 529 s (network-bound), weights loaded in 1.9 s |
+| Transcription of 33.6 s of 8 kHz speech | 7.1 s on CPU (~4.7× realtime) |
+
+`recordings/jfk.wav` (a public-domain 8 kHz speech clip) is included locally for
+re-running the smoke test; it is git-ignored.
 
 ## 4. Setup and run (Windows, PowerShell or bash)
 
@@ -192,8 +206,21 @@ webm/ogg/mp4/mp3 also accepted when ffmpeg is installed).
 
 ## 8. Known limitations
 
+- **Non-speech audio can produce words.** Verified with the real model: a 3.2 s
+  pure 440 Hz tone (Chromium's fake microphone device) came back as
+  `"thanks"`. CTC decoders emit the most likely token sequence for whatever
+  they are fed, and an RMS silence check cannot catch this. A cheap
+  spectral-flatness guard was measured and **rejected**: three real speech clips
+  scored 0.0002 / 0.0003 / 0.0282 against 0.0000 for the tone — far too close to
+  threshold safely without discarding valid speech. Treat every transcript as a
+  draft: if the microphone picked up music, a tone or noise, read it before
+  sending.
 - English only; short-form speech (it was trained for short utterances, not
   meetings or dictation-length audio).
+- The transcript comes back as lowercase text without punctuation or
+  capitalisation — the model is a CTC/BPE system, so expect
+  `"the birch canoe slid on the smooth planks"` rather than a punctuated
+  sentence. Capitalise and punctuate before sending if that matters.
 - Accuracy is not guaranteed. Proper nouns, numbers and noisy rooms are where
   errors show up, which is why the transcript lands in an editable box.
 - English model, so non-English speech will transcribe poorly or not at all.

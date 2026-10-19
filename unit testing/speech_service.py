@@ -137,6 +137,23 @@ class SpeechService:
 
     # ------------------------------------------------------------------ load
 
+    @staticmethod
+    def _dependency_hint(error: Exception) -> str:
+        """Turn the most common load failures into an actionable message."""
+        message = str(error).lower()
+        if "torchaudio" in message:
+            return (
+                "\nFix: GraniteSpeech5FeatureExtractor requires torchaudio. Install a torch/torchaudio"
+                ' pair of the same version, e.g. `pip install torch==2.9.1 torchaudio==2.9.1`'
+                " (add --index-url https://download.pytorch.org/whl/cu128 for an NVIDIA GPU)."
+                " torchaudio publishes no wheel for torch 2.10+, so a newer torch cannot be paired."
+            )
+        if "transformers" in message or "accelerate" in message:
+            return "\nFix: `pip install -r requirements.txt` inside this folder's virtual environment."
+        if "out of memory" in message or "not enough memory" in message:
+            return "\nFix: set STT_DEVICE=cpu, or close memory-hungry applications and retry."
+        return ""
+
     def _default_loader(self) -> tuple[object, object]:
         """Follow the model card: AutoProcessor + AutoModelForCTC, device_map auto."""
         try:
@@ -155,10 +172,11 @@ class SpeechService:
             processor = AutoProcessor.from_pretrained(self.model_id, **common)
         except Exception as native_error:
             # The repository also ships remote-code copies of the processor.
+            hint = self._dependency_hint(native_error)
             try:
                 processor = AutoProcessor.from_pretrained(self.model_id, trust_remote_code=True, **common)
             except Exception as exc:
-                raise ModelLoadError(f"Could not load the processor: {exc} (native: {native_error})") from exc
+                raise ModelLoadError(f"Could not load the processor: {exc} (native: {native_error}){hint}") from exc
 
         try:
             model = AutoModelForCTC.from_pretrained(self.model_id, device_map=self.device_request, **common)
