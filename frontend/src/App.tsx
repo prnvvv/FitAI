@@ -29,7 +29,7 @@ function RootLayout({ children }: { children: ReactNode }) {
 }
 
 /* Keep in sync with .page-transition.is-exit in backdrop.css */
-const PAGE_EXIT_MS = 150
+const PAGE_EXIT_MS = 100
 
 /**
  * Renders the public routes with a coordinated exit/enter sequence.
@@ -43,30 +43,28 @@ const PAGE_EXIT_MS = 150
 function PublicRoutes() {
   const location = useLocation()
   const [renderedLocation, setRenderedLocation] = useState(location)
-  const [isExiting, setIsExiting] = useState(false)
+
+  const pathChanged = location.pathname !== renderedLocation.pathname
+  // Derived during render so the outgoing page gets its exit class in the same
+  // commit that renders the new location.
+  const isExiting = pathChanged && location.key !== renderedLocation.key
 
   useEffect(() => {
     if (location.key === renderedLocation.key) return
 
+    const prefersReducedMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
     // Query-only changes (e.g. /login -> /login?mode=signup) render the same
     // page, so swap immediately instead of flashing an exit/enter animation.
-    if (location.pathname !== renderedLocation.pathname) {
-      const prefersReducedMotion =
-        typeof window.matchMedia === 'function' &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const timer = window.setTimeout(
+      () => setRenderedLocation(location),
+      pathChanged && !prefersReducedMotion ? PAGE_EXIT_MS : 0,
+    )
 
-      setIsExiting(true)
-      const timer = window.setTimeout(() => {
-        setRenderedLocation(location)
-        setIsExiting(false)
-      }, prefersReducedMotion ? 0 : PAGE_EXIT_MS)
-
-      return () => window.clearTimeout(timer)
-    }
-
-    setRenderedLocation(location)
-    setIsExiting(false)
-  }, [location, renderedLocation.key, renderedLocation.pathname])
+    return () => window.clearTimeout(timer)
+  }, [location, renderedLocation, pathChanged])
 
   return (
     <div

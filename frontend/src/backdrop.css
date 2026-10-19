@@ -235,7 +235,7 @@
    once by RootLayout and never remount, so the near-black + amber
    atmosphere is continuous across routes.
 
-   Only the page foreground animates:
+   Only the page foreground animates (exit + enter ≈ 360ms total):
    - the outgoing page fades out with a slight rise (is-exit, applied by
      PublicRoutes for PAGE_EXIT_MS before the new page is mounted);
    - the incoming page plays its own entrance animation (landing.css /
@@ -247,7 +247,7 @@
 }
 
 .page-transition.is-exit > * {
-  animation: pageExit 150ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: pageExit 100ms cubic-bezier(0.4, 0, 1, 1) forwards;
   /* Never let a fading page swallow clicks meant for the next one */
   pointer-events: none;
 }

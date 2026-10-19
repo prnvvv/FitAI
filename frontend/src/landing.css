@@ -459,11 +459,11 @@
 }
 
 .landing-fade-in {
-  animation: landingFadeIn 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: landingFadeIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .landing-fade-in-delayed {
-  animation: landingFadeIn 300ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
+  animation: landingFadeIn 260ms cubic-bezier(0.22, 1, 0.36, 1) 60ms both;
 }
 
 /* ==========================================================================
