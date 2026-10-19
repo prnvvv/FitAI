@@ -126,6 +126,22 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+describe('month rows', () => {
+  it('renders only the weeks the month needs', async () => {
+    const { monthWeeks } = await import('./PlanPage')
+    // Only weeks that contain a day of the month are kept, so a month renders
+    // between four and six rows instead of a fixed six.
+    expect(monthWeeks(new Date(2027, 1, 15))).toHaveLength(4)
+    expect(monthWeeks(new Date(2026, 9, 15))).toHaveLength(5)
+    expect(monthWeeks(new Date(2026, 7, 15))).toHaveLength(6)
+    // Every row holds seven days and each row keeps an in-month day.
+    for (const row of monthWeeks(new Date(2026, 9, 15))) {
+      expect(row).toHaveLength(7)
+      expect(row.some((cell) => cell.inMonth)).toBe(true)
+    }
+  })
+})
+
 describe('Plan workspace layout', () => {
   it('never overflows horizontally at narrow container widths', async () => {
     const restore = setWorkspaceWidth(320)
@@ -291,6 +307,20 @@ describe('Plan workspace layout', () => {
     expect(legend).toHaveTextContent('Rest')
     expect(screen.getByText(/This month:/)).toHaveTextContent('2 planned')
     expect(screen.getByText(/This month:/)).toHaveTextContent('1 logged')
+  })
+
+  it('offers the two day actions when the day is completely empty', async () => {
+    const { user } = await renderPlan()
+
+    expect(screen.getByRole('button', { name: 'Plan a session' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mark as rest day' })).toBeInTheDocument()
+    // The same action stays available in the day menu.
+    await user.click(screen.getByRole('button', { name: 'Day options' }))
+    expect(await screen.findByRole('menuitem', { name: 'Mark as rest day' })).toBeInTheDocument()
+
+    // The first switches to Plan mode without touching the network.
+    await user.click(screen.getByRole('button', { name: 'Plan a session' }))
+    expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('shows the week strip and a day list in week view', async () => {

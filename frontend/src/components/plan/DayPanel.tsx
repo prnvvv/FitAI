@@ -126,6 +126,10 @@ export function DayPanel(props: DayPanelProps) {
   const [collapsedLog, setCollapsedLog] = useState<Record<string, boolean>>({})
   const [expandedPlan, setExpandedPlan] = useState<Record<string, boolean>>({})
 
+  // Nothing at all for this day: offer the two actions that change that, rather
+  // than leaving the user with a mute list and a hidden menu.
+  const showEmptyActions = !restSession && props.planned.length === 0 && props.logged.length === 0
+
   const menuItems = [
     ...(restSession
       ? [{ label: 'Unmark rest day', onSelect: () => onUnmarkRest(restSession) }]
@@ -229,7 +233,29 @@ export function DayPanel(props: DayPanelProps) {
         </div>
       )}
 
-      <div className="workspace__body">{body}</div>
+      <div className="workspace__body">
+        {showEmptyActions && !split && (
+          <div className="workspace__empty">
+            <p className="plan__hint">Nothing planned or logged for this day yet.</p>
+            <div className="workspace__empty-actions">
+              <button type="button" className="workspace__empty-btn" onClick={() => onTabChange('plan')}>
+                Plan a session
+              </button>
+              {showMarkRest && (
+                <button
+                  type="button"
+                  className="workspace__empty-btn"
+                  onClick={onMarkRest}
+                  disabled={markingRest}
+                >
+                  Mark as rest day
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {body}
+      </div>
 
       {!loading && !error && (
         <footer className="workspace__footer">

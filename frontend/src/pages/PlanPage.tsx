@@ -660,7 +660,8 @@ const cellStatus = (key: string): string => {
       }}
       loadingLabel={`Loading your ${view} plan…`}
       statusText={dayTypeLabel(daySummary)}
-      showMarkRest={daySummary?.day_type === 'none'}
+      // A day with no summary row is just as unplanned as an explicit 'none'.
+      showMarkRest={!daySummary || daySummary.day_type === 'none'}
       markingRest={markingRest}
       onMarkRest={() => void markRestDay()}
       restSession={restSession}

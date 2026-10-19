@@ -5929,6 +5929,35 @@
   justify-content: center;
 }
 
+.workspace__empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.workspace__empty-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workspace__empty-btn {
+  padding: 8px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.workspace__empty-btn:hover {
+  background-color: var(--bg-hover);
+}
+
 /* Plan mode */
 .composer {
   display: grid;
