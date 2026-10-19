@@ -224,6 +224,9 @@ input[type='number'] {
   --sidebar-width: clamp(320px, 22vw, 360px);
   --sidebar-collapsed: 64px;
   --max-content-width: 1120px;
+  /* Page column: the chat workspace content width plus its own gutters, so the
+     content box of every route lines up with the chat workspace at any width. */
+  --page-column-width: calc(var(--max-content-width) + 2 * var(--space-5));
   --topbar-h: 70px;
   --space-1: 4px;
   --space-2: 8px;

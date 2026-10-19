@@ -892,7 +892,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 32px 20px 8px;
+  /* Bottom padding keeps the last line of a response clear of the composer. */
+  padding: 32px 20px 24px;
   scrollbar-gutter: stable;
 }
 
@@ -907,7 +908,8 @@
 .message-list__scroll-btn {
   position: fixed;
   right: 24px;
-  bottom: 120px;
+  /* Clears the composer block (~86px control + padding + disclaimer). */
+  bottom: 168px;
   width: 38px;
   height: 38px;
   border-radius: 50%;
@@ -919,6 +921,13 @@
   justify-content: center;
   cursor: pointer;
   z-index: 30;
+}
+
+@media (max-width: 767px) {
+  .message-list__scroll-btn {
+    right: 16px;
+    bottom: 148px;
+  }
 }
 
 /* Assistant turns sit in a mark + text grid so the action rows align with the
@@ -991,6 +1000,8 @@
 
 .message__markdown {
   font-family: var(--font-serif);
+  /* Long unbroken strings (URLs, tokens) wrap instead of widening the column. */
+  overflow-wrap: break-word;
   font-size: 19px;
   line-height: 1.55;
   color: var(--text-primary);
@@ -1040,6 +1051,93 @@
 .message__markdown pre code {
   background: transparent;
   padding: 0;
+}
+
+.message__markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.message__markdown blockquote {
+  margin: 0 0 0.75em;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--divider-strong);
+  color: var(--text-secondary);
+}
+
+.message__markdown hr {
+  border: none;
+  border-top: 1px solid var(--divider);
+  margin: 1.25em 0;
+}
+
+.message__markdown li > p {
+  margin: 0 0 0.35em;
+}
+
+/* Nested lists keep their own indentation without collapsing into the parent. */
+.message__markdown ul ul,
+.message__markdown ol ol,
+.message__markdown ul ol,
+.message__markdown ol ul {
+  margin: 0.35em 0 0;
+}
+
+/*
+ * Tables scroll inside their own wrapper. Cells keep a minimum width so a table
+ * that genuinely needs more room scrolls sideways instead of squeezing every
+ * column into an unreadable sliver, and the page never overflows horizontally.
+ */
+.message__table-scroll {
+  max-width: 100%;
+  margin: 0 0 0.9em;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--divider);
+  border-radius: 10px;
+  background-color: var(--bg-composer);
+  -webkit-overflow-scrolling: touch;
+}
+
+.message__table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.message__markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.message__markdown th,
+.message__markdown td {
+  min-width: 108px;
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--divider);
+}
+
+.message__markdown th:first-child,
+.message__markdown td:first-child {
+  min-width: 132px;
+}
+
+.message__markdown th {
+  background-color: var(--bg-hover);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.message__markdown tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .message__time {
@@ -1538,13 +1636,15 @@
   }
 }
 
-/* Generic page layout: a centred column inside the scrolling main area. */
+/* Generic page layout: one centred column inside the scrolling main area.
+   The column keeps the chat workspace gutters, so the content box of every route
+   starts at the same horizontal position when the sidebar is expanded. */
 .page {
   flex: 0 0 auto;
   width: 100%;
-  max-width: 900px;
+  max-width: var(--page-column-width);
   margin: 0 auto;
-  padding: 32px 24px 72px;
+  padding: 28px 20px 64px;
   overflow: visible;
 }
 
@@ -1721,7 +1821,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 16px 16px;
+  /* Sits on the page gutter instead of adding its own horizontal offset. */
+  margin: 0 0 16px;
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 0.875rem;
@@ -2167,13 +2268,8 @@
 
 /* Responsive */
 @media (max-width: 1023px) {
-  .sidebar {
-    width: 85%;
-    max-width: 320px;
-  }
-
   .page {
-    padding: 24px 16px;
+    padding: 24px 20px;
   }
 
   .profile__row {
@@ -2183,17 +2279,7 @@
   .progress__stats {
     grid-template-columns: 1fr 1fr;
   }
-
-  .message__bubble {
-    max-width: calc(100% - 40px);
-  }
 }
-
-  @media (min-width: 768px) {
-    .app-shell__content--shifted {
-      margin-left: 0;
-    }
-  }
 
 /* Shared page utilities */
 .page__header--row {
@@ -2783,15 +2869,15 @@
   justify-content: center;
 }
 
-/* Plan uses the full width of the main area; the generic page column is narrow. */
+/* Plan fills the main area but keeps the shared content column and gutters. */
 .page--plan {
-  max-width: 1280px;
+  max-width: var(--page-column-width);
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 24px 24px 16px;
+  padding: 24px 20px 16px;
   flex: 1 1 auto;
 }
 
@@ -4551,8 +4637,8 @@
 /* ------------------------------------------------------------------ */
 
 .page--progress {
-  max-width: 1200px;
-  padding: 16px 24px 24px;
+  max-width: var(--page-column-width);
+  padding: 20px 20px 32px;
 }
 
 .page--progress .page__header--row {
@@ -5555,8 +5641,8 @@
 /* ------------------------------------------------------------------ */
 
 .page--plan {
-  max-width: 1280px;
-  padding: 16px 24px 24px;
+  max-width: var(--page-column-width);
+  padding: 16px 20px 24px;
 }
 
 /* The page fills the main area and never scrolls; only the workspace body does. */
