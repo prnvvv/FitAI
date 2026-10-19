@@ -642,43 +642,6 @@
   padding: 10px 12px;
 }
 
-.composer__files {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.composer__file-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background-color: var(--bg-hover);
-  border-radius: 999px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.composer__file-chip button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-}
-
-.composer__file-chip button:hover {
-  color: var(--text-primary);
-}
-
 .composer__inner {
   display: flex;
   align-items: flex-end;
@@ -687,28 +650,6 @@
 
 .composer__inner--multi {
   align-items: stretch;
-}
-
-.composer__attach {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
-}
-
-.composer__attach:hover {
-  background-color: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.composer__attach input {
-  display: none;
 }
 
 .composer__input {

@@ -11,7 +11,7 @@ describe('Composer', () => {
     fireEvent.change(input, { target: { value: 'Hello' } })
     fireEvent.keyDown(input, { key: 'Enter' })
 
-    expect(onSend).toHaveBeenCalledWith('Hello', [])
+    expect(onSend).toHaveBeenCalledWith('Hello')
   })
 
   it('does not send empty messages', () => {
@@ -23,5 +23,12 @@ describe('Composer', () => {
 
     fireEvent.click(button)
     expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('has no attachment control while inline documents are unsupported', () => {
+    render(<Composer onSend={vi.fn()} />)
+
+    expect(screen.queryByLabelText('Attach document')).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).toBeNull()
   })
 })

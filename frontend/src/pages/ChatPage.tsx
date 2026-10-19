@@ -52,7 +52,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
   }, [conversationId])
 
   const handleSend = useCallback(
-    async (text: string, _files: File[]) => {
+    async (text: string) => {
       if (sendLock.current || streaming) return
       sendLock.current = true
       setStreaming(true)
@@ -125,7 +125,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
   return (
     <div className="chat-page">
       {!hasMessages && !loading && !error ? (
-        <WelcomeScreen onSuggestion={(text) => handleSend(text, [])} />
+        <WelcomeScreen onSuggestion={(text) => handleSend(text)} />
       ) : (
         <MessageList messages={messages} loading={streaming} />
       )}
