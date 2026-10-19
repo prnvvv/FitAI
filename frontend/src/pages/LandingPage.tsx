@@ -34,31 +34,35 @@ export function LandingPage() {
 
   return (
     <div className="landing-page">
+      {/* Header placeholder for fixed nav */}
+      <div className="landing-header-placeholder" aria-hidden="true" />
       {/* Navigation */}
-      <nav className="landing-nav" role="navigation" aria-label="Main navigation">
-        <div className="landing-nav__brand">
-          <span className="landing-nav__logo" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 3v18" />
-              <path d="M7 3v14" />
-              <path d="M11 3v10" />
-              <path d="M15 3v6" />
-              <path d="M19 3v2" />
-            </svg>
-          </span>
-          <span className="landing-nav__wordmark">FitAI</span>
-        </div>
-        <div className="landing-nav__actions">
-          <button className="landing-nav__login" onClick={handleLogIn} type="button">
-            <LogIn size={16} aria-hidden="true" />
-            <span>Log in</span>
-          </button>
-          <button className="landing-nav__cta" onClick={handleGetStarted} type="button">
-            <span>Get started</span>
-            <ArrowRight size={16} aria-hidden="true" />
-          </button>
-        </div>
-      </nav>
+      <header className="landing-nav" role="banner">
+        <nav aria-label="Main navigation">
+          <div className="landing-nav__brand">
+            <span className="landing-nav__logo" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 3v18" />
+                <path d="M7 3v14" />
+                <path d="M11 3v10" />
+                <path d="M15 3v6" />
+                <path d="M19 3v2" />
+              </svg>
+            </span>
+            <span className="landing-nav__wordmark">FitAI</span>
+          </div>
+          <div className="landing-nav__actions">
+            <button className="landing-nav__login" onClick={handleLogIn} type="button">
+              <LogIn size={16} aria-hidden="true" />
+              <span>Log in</span>
+            </button>
+            <button className="landing-nav__cta" onClick={handleGetStarted} type="button">
+              <span>Get started</span>
+              <ArrowRight size={16} aria-hidden="true" />
+            </button>
+          </div>
+        </nav>
+      </header>
 
       {/* Hero Section */}
       <main className="landing-hero" role="main">
