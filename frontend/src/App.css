@@ -6217,25 +6217,40 @@
 
 /* Templates */
 .workspace__templates {
-  /* Directly below the toolbar row, spanning the workspace it belongs to. */
+  /* The anchor itself never takes clicks: on the stacked layout it spans the
+     viewport as a centring wrapper, and must not swallow page interaction. */
+  pointer-events: none;
+  /* Directly below the toolbar row. The negative offsets cancel the row's
+     padding so the panel lines up with the card edges, and the height cap
+     keeps it inside the workspace it belongs to. */
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
-  right: 0;
+  left: -16px;
+  right: -16px;
   z-index: 40;
 }
 
 .templates {
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
   width: 100%;
-  max-height: min(520px, 64dvh);
+  /* Bounded so the panel always fits the workspace it is anchored in. When the
+     cap bites, only the list shrinks and scrolls; the head, fields and actions
+     stay visible. */
+  max-height: min(520px, calc(100dvh - 390px));
+  overflow: hidden;
   padding: 14px;
   border: 1px solid var(--popover-border);
   border-radius: 12px;
   background-color: var(--bg-popover);
   box-shadow: var(--shadow-popover);
+}
+
+/* Only the list absorbs a capped height; every other section keeps its size. */
+.templates > *:not(.templates__list) {
+  flex: none;
 }
 
 .templates__head {
@@ -6252,7 +6267,9 @@
   flex-direction: column;
   gap: 6px;
   /* The one intentional scroll area, sized so the panel itself never scrolls. */
-  max-height: 232px;
+  flex: 0 1 auto;
+  min-height: 96px;
+  max-height: 240px;
   overflow-y: auto;
   scrollbar-width: thin;
   padding-right: 2px;
@@ -6365,6 +6382,7 @@
 
 .templates__actions,
 .templates__confirm-actions {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -6408,7 +6426,28 @@
   }
 }
 
-/* Mobile */
+/* Template panel on the stacked layout */
+@media (max-width: 1099px) {
+  /* The calendar and workspace stack here, so the card is too short for an
+     anchored popover: the panel becomes a centred dialog that always fits the
+     viewport and scrolls as one. */
+  .workspace__templates {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .templates {
+    width: min(560px, 100%);
+    max-height: 84dvh;
+  }
+}
+
+/* Phone */
 @media (max-width: 767px) {
   .plan__month-grid {
     grid-template-rows: repeat(var(--rows, 6), minmax(44px, 1fr));
@@ -6466,20 +6505,19 @@
     gap: 0;
   }
 
+  /* The panel becomes a bottom sheet, matching the other mobile surfaces. */
   .workspace__templates {
     position: fixed;
-    top: auto;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    inset: auto 0 0 0;
     z-index: 70;
+    padding: 0;
+    align-items: flex-end;
   }
 
   .templates {
     width: 100%;
-    max-height: 88dvh;
+    max-height: 84dvh;
     border-radius: 14px 14px 0 0;
     padding-bottom: calc(14px + env(safe-area-inset-bottom));
-    overflow-y: auto;
   }
 }
