@@ -1,5 +1,6 @@
 import { Loader2, MapPin, Save, User, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useConfirmAction } from '../components/ui/ConfirmDialog'
 import { api } from '../services/api'
 import type { Profile, ProfilePreferences } from '../types'
 
@@ -26,6 +27,7 @@ const EMPTY_PROFILE: Partial<Profile> = {
 export function ProfilePage() {
   const [profile, setProfile] = useState<Partial<Profile>>(EMPTY_PROFILE)
   const [original, setOriginal] = useState<Partial<Profile>>(EMPTY_PROFILE)
+  const confirmAction = useConfirmAction()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -58,11 +60,23 @@ export function ProfilePage() {
     setSuccess(false)
   }
 
-  const handleCancel = () => {
-    if (dirty && !confirm('Discard unsaved changes?')) return
+  const discardChanges = () => {
     setProfile(JSON.parse(JSON.stringify(original)))
     setError(null)
     setSuccess(false)
+  }
+
+  const handleCancel = () => {
+    if (!dirty) {
+      discardChanges()
+      return
+    }
+    confirmAction.request({
+      title: 'Discard unsaved changes?',
+      description: 'Your edits to this profile will be lost.',
+      confirmLabel: 'Discard',
+      onConfirm: discardChanges,
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -358,6 +372,7 @@ export function ProfilePage() {
           </button>
         </div>
       </form>
+      {confirmAction.dialog}
     </div>
   )
 }

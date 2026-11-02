@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError } from '../services/api'
@@ -153,8 +153,8 @@ describe('LibraryPage', () => {
     const spies = await renderLoaded()
     const user = userEvent.setup()
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
     await user.click(screen.getByLabelText('Delete plan.txt'))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete' }))
     await waitFor(() => expect(spies.deleteDocument).toHaveBeenCalledWith('doc-1'))
   })
 })

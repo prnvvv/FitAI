@@ -9,6 +9,8 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useConfirmAction } from '../components/ui/ConfirmDialog'
+import { useToast } from '../components/ui/Toast'
 import { api } from '../services/api'
 import { toMessage } from '../services/api'
 import type { Document } from '../types'
@@ -48,6 +50,8 @@ function statusClass(status: string): string {
 }
 
 export function LibraryPage() {
+  const confirmAction = useConfirmAction()
+  const toast = useToast()
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -163,17 +167,25 @@ export function LibraryPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this item?')) return
-    setBusyId(id)
-    try {
-      await api.deleteDocument(id)
-      setDocuments((prev) => prev.filter((d) => d.id !== id))
-    } catch (err) {
-      setError(toMessage(err, 'That item could not be deleted.'))
-    } finally {
-      setBusyId(null)
-    }
+  const handleDelete = (id: string) => {
+    const name = documents.find((d) => d.id === id)?.filename
+    confirmAction.request({
+      title: 'Delete item?',
+      description: `${name ? `“${name}”` : 'This item'} will be removed from your library. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setBusyId(id)
+        try {
+          await api.deleteDocument(id)
+          setDocuments((prev) => prev.filter((d) => d.id !== id))
+          toast.show('Item deleted', 'success')
+        } catch (err) {
+          throw new Error(toMessage(err, 'That item could not be deleted.'))
+        } finally {
+          setBusyId(null)
+        }
+      },
+    })
   }
 
   return (
@@ -334,6 +346,7 @@ export function LibraryPage() {
           ))}
         </ul>
       )}
+      {confirmAction.dialog}
     </div>
   )
 }

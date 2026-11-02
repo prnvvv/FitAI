@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../services/api'
@@ -60,8 +60,6 @@ async function renderLoaded() {
 
 describe('MemoryPage', () => {
   beforeEach(() => {
-    // Delete is guarded by a native confirm dialog.
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -74,6 +72,8 @@ describe('MemoryPage', () => {
     const { listMemory } = await renderLoaded()
 
     await user.click(screen.getByLabelText('Delete weight'))
+    // Delete is guarded by an in-app confirmation dialog.
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Forget' }))
 
     await waitFor(() => expect(api.deleteMemory).toHaveBeenCalledWith('mem-1'))
     // Regression: previously the row was only removed from local state; the page

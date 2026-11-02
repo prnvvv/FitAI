@@ -1,5 +1,7 @@
 import { AlertCircle, Brain, Check, Loader2, Pencil, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { useConfirmAction } from '../components/ui/ConfirmDialog'
+import { useToast } from '../components/ui/Toast'
 import { api } from '../services/api'
 import type { Memory, PendingMemoryUpdate } from '../types'
 
@@ -16,6 +18,8 @@ function isNumberValue(value: unknown): boolean {
 }
 
 export function MemoryPage() {
+  const confirmAction = useConfirmAction()
+  const toast = useToast()
   const [memories, setMemories] = useState<Memory[]>([])
   const [pending, setPending] = useState<PendingMemoryUpdate[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,14 +46,18 @@ export function MemoryPage() {
     load()
   }, [load])
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Forget this memory?')) return
-    try {
-      await api.deleteMemory(id)
-      load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete memory')
-    }
+  const handleDelete = (id: string) => {
+    const key = memories.find((m) => m.id === id)?.key
+    confirmAction.request({
+      title: 'Forget this memory?',
+      description: `FitAI will no longer remember${key ? ` “${key}”` : ' this'}. This cannot be undone.`,
+      confirmLabel: 'Forget',
+      onConfirm: async () => {
+        await api.deleteMemory(id)
+        toast.show('Memory forgotten', 'success')
+        load()
+      },
+    })
   }
 
   const handleConfirm = async (id: string) => {
@@ -255,6 +263,7 @@ export function MemoryPage() {
           </section>
         </>
       )}
+      {confirmAction.dialog}
     </div>
   )
 }

@@ -1,5 +1,7 @@
 import { Dumbbell, Loader2, Plus, Save, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useConfirmAction } from '../components/ui/ConfirmDialog'
+import { useToast } from '../components/ui/Toast'
 import { api } from '../services/api'
 import type { WorkoutSession } from '../types'
 
@@ -24,6 +26,8 @@ function formatDate(value: string): string {
 }
 
 export function WorkoutsPage() {
+  const confirmAction = useConfirmAction()
+  const toast = useToast()
   const [sessions, setSessions] = useState<WorkoutSession[]>([])
   const [exercises, setExercises] = useState<DraftExercise[]>([])
   const [name, setName] = useState('')
@@ -90,20 +94,23 @@ export function WorkoutsPage() {
       setExercises([])
     } catch (err) {
       console.error(err)
-      alert('Failed to save workout')
+      toast.show('Failed to save workout', 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  const deleteSession = async (id: string) => {
-    if (!confirm('Delete this workout?')) return
-    try {
-      await api.deleteWorkout(id)
-      setSessions((prev) => prev.filter((s) => s.id !== id))
-    } catch (err) {
-      console.error(err)
-    }
+  const deleteSession = (id: string) => {
+    confirmAction.request({
+      title: 'Delete workout?',
+      description: 'This workout session and its sets will be permanently deleted.',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        await api.deleteWorkout(id)
+        setSessions((prev) => prev.filter((s) => s.id !== id))
+        toast.show('Workout deleted', 'success')
+      },
+    })
   }
 
   return (
@@ -219,6 +226,7 @@ export function WorkoutsPage() {
           ))}
         </ul>
       ) : null}
+      {confirmAction.dialog}
     </div>
   )
 }

@@ -1,6 +1,8 @@
 import { AlertCircle, FileText, Loader2, Trash2, Upload } from 'lucide-react'
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { api } from '../services/api'
+import { useConfirmAction } from '../components/ui/ConfirmDialog'
+import { useToast } from '../components/ui/Toast'
 import type { Document } from '../types'
 
 function getStatusClass(status: string): string {
@@ -21,6 +23,8 @@ function formatStatus(status: string): string {
 }
 
 export function DocumentsPage() {
+  const confirmAction = useConfirmAction()
+  const toast = useToast()
   const [documents, setDocuments] = useState<Document[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -59,14 +63,18 @@ export function DocumentsPage() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this document?')) return
-    try {
-      await api.deleteDocument(id)
-      setDocuments((prev) => prev.filter((d) => d.id !== id))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete document')
-    }
+  const handleDelete = (id: string) => {
+    const name = documents.find((d) => d.id === id)?.filename
+    confirmAction.request({
+      title: 'Delete document?',
+      description: `${name ? `"${name}"` : 'This document'} will be removed from your knowledge base. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        await api.deleteDocument(id)
+        setDocuments((prev) => prev.filter((d) => d.id !== id))
+        toast.show('Document deleted', 'success')
+      },
+    })
   }
 
   return (
@@ -127,6 +135,7 @@ export function DocumentsPage() {
           ))}
         </ul>
       )}
+      {confirmAction.dialog}
     </div>
   )
 }
