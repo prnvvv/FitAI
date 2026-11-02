@@ -76,9 +76,16 @@ const cellFor = (day: number, monthOffset = 0) => {
 
 beforeEach(() => {
   vi.resetModules()
+  // Pin "today" to mid-month. The calendar shows neighbouring-month days as
+  // outside days, so a real clock near a month boundary made "today" appear in
+  // the next month's grid and broke these assertions. Only Date is faked so
+  // waitFor and user-event keep using real timers.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 15, 12, 0, 0))
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
