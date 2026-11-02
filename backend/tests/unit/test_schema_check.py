@@ -67,3 +67,29 @@ def test_valid_schema_passes(tmp_path) -> None:
 def test_head_revision_independent_of_cwd(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     assert alembic_head_revision() == "0004_conversation_summaries"
+
+
+def test_migrations_build_full_schema_on_sqlite(tmp_path, monkeypatch) -> None:
+    """The whole migration chain applies to a SQLite file and passes startup checks."""
+    from alembic import command
+    from alembic.config import Config
+
+    from app.db.schema_check import BACKEND_DIR
+
+    db_url = f"sqlite:///{(tmp_path / 'm.db').as_posix()}"
+    monkeypatch.setattr("app.core.config.settings.database_url", db_url)
+    cfg = Config(str(BACKEND_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(db_url)
+    verify_database_schema(engine, alembic_head_revision())
+
+
+def test_relative_sqlite_url_anchored_to_backend_dir() -> None:
+    from app.core.config import Settings
+    from app.db.schema_check import BACKEND_DIR
+
+    url = Settings(database_url="sqlite:///./data.db").database_url
+    assert url == f"sqlite:///{(BACKEND_DIR / 'data.db').as_posix()}"
+    assert Settings(database_url="sqlite:///").database_url == "sqlite:///"
