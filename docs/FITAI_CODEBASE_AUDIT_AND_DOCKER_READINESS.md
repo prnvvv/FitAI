@@ -36,7 +36,7 @@ Data flow (chat): frontend → `POST /chat` (sync handler, threadpool) → `Chat
 |---|---|---|---|---|
 | Auth / user provisioning | Complete | `core/security.py`, `services/auth_service.py`; user created on first request (verified via smoke run) | Live Supabase flow not exercised | Verify against real project |
 | Chat + agent | Complete | `routers/chat.py`, `services/chat_service.py`, `agent/` | Synchronous, non-streaming; no rate limit | See F-06 |
-| Conversations (list/rename/delete) | Partial | `routers/conversations.py` | Orphaned messages on SQLite (F-02) | Enable FK enforcement |
+| Conversations (list/rename/delete) | Partial | `routers/conversations.py` | Orphaned messages on SQLite (F-02, resolved for new deletes; see section 11) | None for new data |
 | Documents / RAG ingest | Complete | `routers/documents.py`, `rag/*`, `services/document_service.py` | Background ingest is in-process only; stuck docs reconciled at startup (works) | Acceptable for single instance |
 | Document delete | Complete | Router deletes vectors, file, row (stale docstring in service says vectors are not removed) | Misleading docstring | Fix comment |
 | Library page | Complete | `LibraryPage.tsx` | — | — |
@@ -58,8 +58,8 @@ Data flow (chat): frontend → `POST /chat` (sync handler, threadpool) → `Chat
 | ID | Severity | Area | Finding | Evidence | Recommended fix |
 |---|---|---|---|---|---|
 | F-01 | **High** | Config / DB | Previously `DATABASE_URL=sqlite:///` (in-memory) in local `.env` caused "no such table". Root cause fixed in code (startup schema check; portable migrations; SQLite path anchoring) and locally (`data.db` migrated). **Production Postgres/Supabase state is Needs Verification**: the live DB's `alembic_version` is unknown. | commits `f1e64d0`…`631826d`; `alembic current` on `data.db` = `0004` | Run `alembic upgrade head` on the real DB after a backup; if tables pre-exist without Alembic history, plan a reviewed baseline (do not blind-stamp). |
-| F-02 | **High** | Data integrity | SQLite never enables `PRAGMA foreign_keys`. Models use `passive_deletes=True`, so deleting a conversation leaves its messages. | Reproduced: 1 orphan message after delete on SQLite. `db/session.py` has no pragma. | Enable FK pragma via an engine `connect` listener for SQLite. |
-| F-03 | **High** | Config | Relative `CHROMADB_PERSIST_DIR=./chroma_data` and `UPLOAD_DIR=./uploads` depend on CWD. Three Chroma directories exist on disk (`/chroma_data`, `backend/chroma_data`, `backend/data/chroma`), so starting from different folders yields different vector stores — the same class of bug as the DB issue. | `core/config.py:81,111`; directory listing | Anchor to a data root (as done for SQLite) and/or require absolute paths; consolidate. |
+| F-02 | **High** (resolved, see section 11) | Data integrity | SQLite never enables `PRAGMA foreign_keys`. Models use `passive_deletes=True`, so deleting a conversation leaves its messages. | Reproduced: 1 orphan message after delete on SQLite. `db/session.py` has no pragma. | Enable FK pragma via an engine `connect` listener for SQLite. |
+| F-03 | **High** (resolved in code; data consolidation open, see section 11) | Config | Relative `CHROMADB_PERSIST_DIR=./chroma_data` and `UPLOAD_DIR=./uploads` depend on CWD. Three Chroma directories exist on disk (`/chroma_data`, `backend/chroma_data`, `backend/data/chroma`), so starting from different folders yields different vector stores — the same class of bug as the DB issue. | `core/config.py:81,111`; directory listing | Anchor to a data root (as done for SQLite) and/or require absolute paths; consolidate. |
 | F-04 | Medium | Migrations | `alembic check` reports drift between models and the migrated SQLite schema (Enum vs VARCHAR, `user_profiles.user_id` unique constraint vs unique index). Much is SQLite/non-native-enum noise; the `user_profiles` uniqueness difference may be real. **Needs Verification on Postgres.** | `alembic check` output | Run `alembic check` against Postgres; add a CI job that migrates a scratch DB and checks drift. |
 | F-05 | Medium | Migrations | Migrations were edited in place (JSONB→portable JSON variant, `now()`→`CURRENT_TIMESTAMP`, dialect branch in `0cf16f5439a2`). Postgres SQL output was compared offline only; no live Postgres run. | Offline `--sql` render | Run the chain on a disposable Postgres in CI. |
 | F-06 | **High** | Security / cost | No rate limiting on `/chat`, `/documents` upload, `/stt/transcribe`. Each chat call triggers paid LLM work. (Only web-tool calls have a limit.) | grep: only `web_user_rate_limit_per_minute` | Add per-user rate limits/quotas. |
@@ -117,8 +117,8 @@ Prioritised additions:
 | Liveness/readiness endpoints | **Ready** (readiness DB-only — improve) |
 | Migrations runnable headless (`alembic upgrade head`) | **Ready** after this work; Postgres run **Needs Verification** |
 | DB URL / startup validation | **Ready** (fails fast) |
-| Persistent paths independent of CWD (Chroma, uploads) | **Not ready — blocker (F-03)** |
-| FK integrity if SQLite is used | **Not ready (F-02)**; not a blocker if Postgres is mandated |
+| Persistent paths independent of CWD (Chroma, uploads) | Ready in code (F-03 resolved); existing directories not consolidated |
+| FK integrity if SQLite is used | Resolved for SQLite (F-02); pre-existing orphans reported only |
 | Postgres production path proven | **Needs Verification — blocker (F-01/F-05)** |
 | Production CORS / default-credential guard | **Not ready — blocker (F-09/F-10)** |
 | Rate limiting | **Not ready — high priority, not a build blocker** |
@@ -178,3 +178,23 @@ Startup sequence: `db` healthy → migrate → `api` ready (schema check passes)
 3. **Safely deferred:** rate-limit polish beyond a basic limiter, job queue, Playwright e2e, lint-warning cleanup, coverage thresholds, image hardening details.
 4. **Order:** P0 → P1 (rate limits, readiness) → P2 (CI Postgres/drift tests) → P3 → P4.
 5. **First task after approval:** enable SQLite FK enforcement and anchor Chroma/upload paths to a single data root (F-02 + F-03), with tests — small, high-value, and it removes the last CWD-dependent behaviour.
+
+## 11. Remediation log: P0 data integrity and storage (F-02, F-03)
+
+### F-02: SQLite foreign keys — resolved for new data
+- **Root cause (confirmed):** `app/db/session.py` built the SQLite engine without `PRAGMA foreign_keys=ON`. The relationships use `passive_deletes=True` and the schema declares `ON DELETE CASCADE`, so SQLite skipped the cascade and left messages behind.
+- **Fix:** `enable_sqlite_foreign_keys(engine)` registers an engine `connect` hook, so the pragma is set on every pooled connection. `build_engine` applies it to SQLite; the `db_session` test fixture applies it too. Alembic builds its own engine and is intentionally left without it (SQLite batch table rebuilds must run with enforcement off). No model or migration changed; no cascade semantics were altered.
+- **Existing data:** `find_foreign_key_violations(engine)` (`PRAGMA foreign_key_check`, read-only) runs at startup and logs `foreign_key_violations_found`. `backend/scripts/check_orphans.py` prints counts per table. Nothing is deleted automatically. The local `backend/data.db` currently has **2 orphan rows in `messages`** (parent conversation missing); they were left untouched. Back up the file before any manual cleanup.
+- **Tests:** `tests/unit/test_sqlite_foreign_keys.py` (pragma on every/new/recycled connection, invalid reference rejected, conversation delete removes only its own messages, legacy orphans reported and preserved, no-op on non-SQLite).
+- **Limits:** this does not show PostgreSQL behaviour (PostgreSQL enforces FKs natively; unverified here, see F-01).
+
+### F-03: working-directory-dependent paths — resolved in code; consolidation open
+- **Root cause (confirmed):** `upload_dir` and `chromadb_persist_dir` were relative strings; `VectorStore` fell back to a different default (`./data/chroma`); `.env` itself was read from the current directory.
+- **Fix:** `core/config.py` adds `BACKEND_DIR` and `resolve_storage_path()`. Relative `UPLOAD_DIR` / `CHROMADB_PERSIST_DIR` values are resolved against `backend/`; absolute values (e.g. a volume mount) are used unchanged. `.env` is read from `backend/.env` regardless of directory. `VectorStore` now falls back to the configured directory instead of `./data/chroma`. Defaults are unchanged for the usual launch from `backend/`, so the store in use does not move.
+- **Existing Chroma directories (read-only inspection):**
+  - `backend/chroma_data`: the active store. `user_documents` 237 chunks, `user_continuity` 28, `fitness_knowledge` 0.
+  - `backend/data/chroma`: `user_documents` 2 chunks. It was the old `VectorStore()` default, no longer used by the application.
+  - `<repo>/chroma_data`: collections exist but hold 0 chunks (created when launched from the repo root).
+  - No migration was performed. The two minor directories were not merged, moved or deleted. Whether the 2 chunks in `backend/data/chroma` matter must be decided by the owner (they may correspond to test documents). Re-ingesting is the safe path if needed.
+- **Tests:** `tests/unit/test_storage_paths.py` (anchoring, absolute and env overrides, document storage root, and a subprocess probe from `backend/`, the repo root and a temp directory returning identical paths without creating directories).
+- **Limits:** the data root is still two separate settings rather than a single `DATA_DIR`; `.env.example` keeps the same relative defaults.
