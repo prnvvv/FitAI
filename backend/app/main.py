@@ -64,34 +64,15 @@ ROUTERS = (
 
 
 def _check_migrations_at_startup() -> None:
-    """Fail loudly if the database is behind the latest migration.
+    """Fail loudly if the database is unusable or behind the latest migration.
 
     This prevents cryptic 500s from missing tables/columns and tells operators
-    exactly what to do.
+    exactly what to do. It checks the same engine the application uses.
     """
-    from alembic.config import Config
-    from alembic.script import ScriptDirectory
-
-    alembic_cfg = Config("alembic.ini")
-    script = ScriptDirectory.from_config(alembic_cfg)
-    head_revision = script.get_current_head()
-
-    from sqlalchemy import text
-
+    from app.db.schema_check import alembic_head_revision, verify_database_schema
     from app.db.session import engine
 
-    with engine.connect() as conn:
-        try:
-            current = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        except Exception:
-            # SQLite test databases created from metadata have no alembic_version table.
-            return
-
-    if current != head_revision:
-        raise RuntimeError(
-            f"Database migration mismatch: current={current}, head={head_revision}. "
-            "Run: alembic upgrade head"
-        )
+    verify_database_schema(engine, alembic_head_revision())
 
 
 def create_app() -> FastAPI:
