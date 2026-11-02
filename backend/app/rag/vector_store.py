@@ -8,7 +8,6 @@ Every owner-scoped collection operation requires `owner_id` and is filtered by i
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -53,7 +52,14 @@ def _and(*filters: FilterDict | None) -> FilterDict | None:
 
 
 def _persist_path(persist_dir: str | None) -> str:
-    return persist_dir or os.getenv("CHROMA_PERSIST_DIR") or "./data/chroma"
+    """Absolute persist path; relative inputs are anchored to ``backend/``.
+
+    The fallback is the configured ``CHROMADB_PERSIST_DIR`` so every entry point
+    opens the same store regardless of the working directory.
+    """
+    from app.core.config import resolve_storage_path, settings
+
+    return str(resolve_storage_path(persist_dir or settings.chromadb_persist_dir))
 
 
 class VectorStore:

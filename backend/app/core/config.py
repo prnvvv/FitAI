@@ -9,6 +9,7 @@ Real secrets must be supplied through the environment, never committed.
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
 # Work around langchain<->langchain-core version mismatch: langchain_core expects
@@ -31,11 +32,24 @@ DEFAULT_JWT_ALGORITHMS = ["ES256", "RS256"]
 KNOWN_VISION_PROVIDERS = ("groq", "rapidocr")
 
 
+#: ``backend/``: the anchor for every relative persistent path.
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+
+def resolve_storage_path(value: str | Path) -> Path:
+    """Return an absolute path; relative values are anchored to ``backend/``.
+
+    ``~`` is expanded. The result never depends on the process working directory.
+    """
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else (BACKEND_DIR / path).resolve()
+
+
 class Settings(BaseSettings):
     """Runtime configuration for the FitAI backend."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=BACKEND_DIR / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -201,6 +215,17 @@ class Settings(BaseSettings):
     foursquare_api_key: str | None = None
     weather_provider: str = "open-meteo"  # open-meteo only for now
 
+    @field_validator("upload_dir", "chromadb_persist_dir")
+    @classmethod
+    def _anchor_storage_dir(cls, value: str) -> str:
+        """Resolve relative storage directories against ``backend/``.
+
+        Without this, uploads and the Chroma store would be created relative to
+        wherever the process was launched, silently forking user data.
+        Absolute paths (e.g. a Docker volume mount) are used as given.
+        """
+        return str(resolve_storage_path(value))
+
     @field_validator("database_url")
     @classmethod
     def _anchor_sqlite_path(cls, value: str) -> str:
@@ -209,8 +234,6 @@ class Settings(BaseSettings):
         Otherwise the app, Alembic and scripts would open different files depending
         on the process working directory.
         """
-        from pathlib import Path
-
         from sqlalchemy.engine import make_url
 
         url = make_url(value)
@@ -219,8 +242,7 @@ class Settings(BaseSettings):
         path = Path(url.database)
         if path.is_absolute():
             return value
-        backend_dir = Path(__file__).resolve().parents[2]
-        return url.set(database=(backend_dir / path).as_posix()).render_as_string(
+        return url.set(database=(BACKEND_DIR / path).as_posix()).render_as_string(
             hide_password=False
         )
 
