@@ -37,7 +37,7 @@ dependencies = [
     "chromadb>=0.5.20,<0.7",
     # Pin posthog so chromadb's telemetry call (positional capture API) keeps working.
     "posthog>=2.4,<3.0",
-    "pypdf>=5.1.0,<7",
+    "pypdf>=6.21.4,<7",
     "python-docx>=1.1.2,<2",
     # Image text extraction: Pillow for prep, RapidOCR (ONNX) for local OCR.
     "pillow>=10.4.0,<13",
