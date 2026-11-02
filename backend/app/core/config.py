@@ -301,8 +301,6 @@ class Settings(BaseSettings):
         problems: list[str] = []
         if self.database_url.startswith("sqlite"):
             problems.append("DATABASE_URL must be a PostgreSQL URL, not SQLite.")
-        if "@localhost" in self.database_url or "@127.0.0.1" in self.database_url:
-            problems.append("DATABASE_URL points at localhost.")
         origins = self.cors_origins
         if "*" in origins:
             problems.append("CORS_ORIGINS must list explicit origins, not '*'.")

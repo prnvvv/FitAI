@@ -34,7 +34,6 @@ def test_valid_production_configuration_is_accepted(monkeypatch) -> None:
     ("override", "fragment"),
     [
         ({"DATABASE_URL": "sqlite:///./data.db"}, "PostgreSQL"),
-        ({"DATABASE_URL": "postgresql://u:p@localhost:5432/x"}, "localhost"),
         ({"CORS_ORIGINS": "*"}, "explicit origins"),
         ({"CORS_ORIGINS": "http://localhost:5173"}, "deployed frontend"),
         ({"CORS_ORIGINS": "http://fitai.example.com"}, "https://"),
