@@ -18,7 +18,7 @@ down_revision: Union[str, None] = "0003"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-JSONB = postgresql.JSONB(astext_type=sa.Text())
+JSONB = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
 
 NEW_MEASUREMENT_TYPES = [
     "weight",
@@ -44,15 +44,38 @@ def _check_sql(values: list[str]) -> str:
     return f"type::text = ANY (ARRAY[{quoted}]::text[])"
 
 
+def _portable_check_sql(values: list[str]) -> str:
+    quoted = ", ".join(f"'{v}'" for v in values)
+    return f"type IN ({quoted})"
+
+
+def _replace_measurement_check(old_name: str, values: list[str]) -> None:
+    """Swap the measurements.type check constraint on any supported dialect.
+
+    PostgreSQL alters the constraint in place (unchanged behaviour). SQLite cannot
+    ALTER constraints, so the table is rebuilt via batch mode with portable SQL.
+    """
+    if op.get_bind().dialect.name == "postgresql":
+        op.drop_constraint(old_name, "measurements")
+        op.create_check_constraint(
+            "ck_measurements_measurement_type", "measurements", sa.text(_check_sql(values))
+        )
+        return
+    with op.batch_alter_table("measurements", recreate="always") as batch:
+        # Batch mode applies the metadata naming convention (ck_<table>_<name>) itself,
+        # so pass the logical name rather than the fully expanded one.
+        batch.drop_constraint("ck_measurements_measurement_type", type_="check")
+        batch.create_check_constraint(
+            "ck_measurements_measurement_type", sa.text(_portable_check_sql(values))
+        )
+
+
 def upgrade() -> None:
     # Widen the measurements.type check constraint to include new metric types.
     # The initial migration creates the constraint with an auto-generated name.
     # We need to drop it by the actual name PostgreSQL assigned.
-    op.drop_constraint("ck_measurements_ck_measurements_measurement_type", "measurements")
-    op.create_check_constraint(
-        "ck_measurements_measurement_type",
-        "measurements",
-        sa.text(_check_sql(NEW_MEASUREMENT_TYPES)),
+    _replace_measurement_check(
+        "ck_measurements_ck_measurements_measurement_type", NEW_MEASUREMENT_TYPES
     )
 
     # Canonical + custom exercise library.
@@ -67,8 +90,8 @@ def upgrade() -> None:
         sa.Column("unit_mode", sa.String(length=50), nullable=False),
         sa.Column("is_custom", sa.Boolean(), nullable=False),
         sa.Column("user_id", sa.Uuid(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id", name="pk_exercise_library"),
         sa.Index("ix_exercise_library_slug_user", "slug", "user_id", unique=True),
@@ -86,8 +109,8 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=50), nullable=False),
         sa.Column("completed_session_id", sa.Uuid(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["completed_session_id"], ["workout_sessions.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id", name="pk_planned_sessions"),
@@ -107,8 +130,8 @@ def upgrade() -> None:
         sa.Column("duration_seconds", sa.Integer(), nullable=True),
         sa.Column("distance_meters", sa.Numeric(precision=8, scale=2), nullable=True),
         sa.Column("notes", sa.String(length=500), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["planned_session_id"], ["planned_sessions.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id", name="pk_planned_exercises"),
         sa.Index("ix_planned_exercises_session", "planned_session_id"),
@@ -121,13 +144,7 @@ def downgrade() -> None:
     op.drop_table("exercise_library")
 
     # Drop the constraint with the actual name (as created by the upgrade above)
-    op.drop_constraint("ck_measurements_measurement_type", "measurements")
-    op.create_check_constraint(
-        "ck_measurements_measurement_type",
-        "measurements",
-        sa.text(
-            _check_sql(
-                [
+    _replace_measurement_check("ck_measurements_measurement_type", [
                     "weight",
                     "body_fat_percent",
                     "chest",
@@ -136,7 +153,4 @@ def downgrade() -> None:
                     "arm",
                     "thigh",
                     "neck",
-                ]
-            )
-        ),
-    )
+                ])

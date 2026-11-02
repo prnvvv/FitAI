@@ -16,7 +16,7 @@ down_revision = "0001_initial_schema"
 branch_labels = None
 depends_on = None
 
-JSONB = postgresql.JSONB(astext_type=sa.Text())
+JSONB = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
 
 
 def upgrade() -> None:
@@ -30,8 +30,8 @@ def upgrade() -> None:
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("source", sa.String(length=20), nullable=False),
         sa.Column("payload", JSONB, nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id", name="pk_activity_events"),
         sa.Index("ix_activity_events_user_occurred", "user_id", "occurred_at"),
