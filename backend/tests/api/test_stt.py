@@ -72,8 +72,12 @@ def test_transcribe_requires_auth(anon_client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_transcribe_returns_text_for_valid_audio(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    def _transcriber(_processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int) -> str:
+def test_transcribe_returns_text_for_valid_audio(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _transcriber(
+        _processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int
+    ) -> str:
         return "hello from granite"
 
     service = _make_service(_transcriber)
@@ -124,7 +128,9 @@ def test_transcribe_rejects_unsupported_format(client: TestClient) -> None:
 
 
 def test_transcribe_returns_503_when_model_will_not_load(client: TestClient) -> None:
-    def _broken(_processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int) -> str:
+    def _broken(
+        _processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int
+    ) -> str:
         raise ModelLoadError("GPU not available")
 
     service = _make_service(_broken)
@@ -139,7 +145,9 @@ def test_transcribe_returns_503_when_model_will_not_load(client: TestClient) -> 
 
 
 def test_transcribe_returns_500_on_inference_failure(client: TestClient) -> None:
-    def _broken(_processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int) -> str:
+    def _broken(
+        _processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int
+    ) -> str:
         raise TranscriptionError("inference exploded")
 
     service = _make_service(_broken)
@@ -164,7 +172,9 @@ def test_transcribe_rejects_oversized_upload(client: TestClient) -> None:
 def test_user_id_is_derived_from_token_not_request_body(client: TestClient) -> None:
     """The endpoint must never trust a user id supplied by the caller."""
 
-    def _transcriber(_processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int) -> str:
+    def _transcriber(
+        _processor: object, _model: object, _samples: npt.NDArray[np.float32], _sample_rate: int
+    ) -> str:
         return "ok"
 
     set_service(_make_service(_transcriber))
