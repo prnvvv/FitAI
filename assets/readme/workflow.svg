@@ -1,0 +1,71 @@
+<svg width="1200" height="480" viewBox="0 0 1200 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FitAI agent turn lifecycle">
+  <title>FitAI agent turn lifecycle — LangGraph routing</title>
+  <defs>
+    <marker id="wfArrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#e2a24f" fill-opacity="0.6"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="480" fill="#0a0806"/>
+
+  <text x="600" y="34" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" letter-spacing="4" fill="#e2a24f" fill-opacity="0.85">AGENT TURN LIFECYCLE</text>
+  <text x="600" y="54" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="18" fill="#efe6d8">Every message is safety-gated before any tool, memory or model call</text>
+
+  <!-- gate node -->
+  <g transform="translate(100,235)">
+    <polygon points="0,-26 26,0 0,26 -26,0" fill="#0a0806" stroke="#e2a24f" stroke-width="1.5"/>
+    <text x="0" y="46" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" fill="#efe6d8">SAFETY CHECK</text>
+    <text x="0" y="62" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#77736d">guardrails gate every turn</text>
+  </g>
+
+  <!-- lane: blocked -->
+  <text x="240" y="60" font-family="Arial, Helvetica, sans-serif" font-size="11" letter-spacing="2" fill="#e2a24f" fill-opacity="0.75">BLOCKED</text>
+  <path d="M126,220 C180,220 180,80 230,80" fill="none" stroke="#e2a24f" stroke-opacity="0.45"/>
+  <line x1="230" y1="80" x2="420" y2="80" stroke="#e2a24f" stroke-opacity="0.45"/>
+  <circle cx="430" cy="80" r="6" fill="#e2a24f"/>
+  <text x="430" y="102" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#efe6d8">SAFE RESPONSE</text>
+  <line x1="440" y1="80" x2="590" y2="80" stroke="#e2a24f" stroke-opacity="0.45" marker-end="url(#wfArrow)"/>
+  <text x="605" y="84" font-family="Arial, Helvetica, sans-serif" font-size="12" font-style="italic" fill="#77736d">END</text>
+
+  <!-- lane: personal statement -->
+  <text x="240" y="160" font-family="Arial, Helvetica, sans-serif" font-size="11" letter-spacing="2" fill="#e2a24f" fill-opacity="0.75">PERSONAL STATEMENT</text>
+  <path d="M126,228 C170,228 170,190 230,190" fill="none" stroke="#e2a24f" stroke-opacity="0.45"/>
+  <line x1="230" y1="190" x2="820" y2="190" stroke="#e2a24f" stroke-opacity="0.45"/>
+
+  <circle cx="300" cy="190" r="6" fill="#e2a24f"/>
+  <text x="300" y="212" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#efe6d8">EXTRACT FACTS</text>
+
+  <circle cx="470" cy="190" r="6" fill="#e2a24f"/>
+  <text x="470" y="212" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#efe6d8">DETECT CHANGES</text>
+
+  <circle cx="640" cy="190" r="6" fill="#e2a24f"/>
+  <text x="640" y="212" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" fill="#efe6d8">APPLY UPDATES</text>
+
+  <!-- lane: question -->
+  <text x="240" y="276" font-family="Arial, Helvetica, sans-serif" font-size="11" letter-spacing="2" fill="#e2a24f" fill-opacity="0.75">QUESTION</text>
+  <path d="M126,242 C170,242 170,300 230,300" fill="none" stroke="#e2a24f" stroke-opacity="0.45"/>
+  <line x1="230" y1="300" x2="680" y2="300" stroke="#e2a24f" stroke-opacity="0.45"/>
+  <path d="M680,300 C760,300 760,190 820,190" fill="none" stroke="#e2a24f" stroke-opacity="0.45"/>
+
+  <!-- lane: otherwise -->
+  <text x="240" y="356" font-family="Arial, Helvetica, sans-serif" font-size="11" letter-spacing="2" fill="#e2a24f" fill-opacity="0.75">OTHERWISE</text>
+  <path d="M126,250 C170,250 170,390 230,390" fill="none" stroke="#e2a24f" stroke-opacity="0.35" stroke-dasharray="4 4"/>
+  <path d="M230,390 L800,390 C920,390 920,190 990,190" fill="none" stroke="#e2a24f" stroke-opacity="0.35" stroke-dasharray="4 4"/>
+
+  <!-- merge: retrieve + generate -->
+  <circle cx="820" cy="190" r="7" fill="#e9a447"/>
+  <text x="820" y="212" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700" fill="#efe6d8">RETRIEVE CONTEXT</text>
+  <text x="820" y="228" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#77736d">ChromaDB similarity search</text>
+
+  <line x1="828" y1="190" x2="982" y2="190" stroke="#e2a24f" stroke-opacity="0.5" marker-end="url(#wfArrow)"/>
+
+  <circle cx="990" cy="190" r="7" fill="#e9a447"/>
+  <text x="990" y="212" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12.5" font-weight="700" fill="#efe6d8">GENERATE RESPONSE</text>
+  <text x="990" y="228" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="10.5" fill="#77736d">grounded answer via Groq</text>
+
+  <line x1="998" y1="190" x2="1130" y2="190" stroke="#e2a24f" stroke-opacity="0.5" marker-end="url(#wfArrow)"/>
+  <text x="1145" y="194" font-family="Arial, Helvetica, sans-serif" font-size="12" font-style="italic" fill="#77736d">END</text>
+
+  <line x1="90" y1="440" x2="1110" y2="440" stroke="#e2a24f" stroke-opacity="0.18"/>
+  <text x="600" y="464" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="12" fill="#77736d">A blocked turn never reaches a tool, memory or retrieval node.</text>
+</svg>
