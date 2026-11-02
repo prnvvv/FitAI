@@ -1,8 +1,8 @@
 /**
  * Client for the Granite speech-to-text endpoint.
  *
- * The model now lives inside the FitAI backend, so the default base URL is a
- * relative path served by the same origin (`/api/v1/stt`). Override it with
+ * The model lives inside the FitAI backend, so the default base URL is the
+ * API base followed by `/stt` (`/api/v1/stt` in development). Override it with
  * `VITE_STT_URL` only if you are running a separate transcription service.
  *
  * Nothing about the model, its credentials or its environment is exposed to the
@@ -10,11 +10,16 @@
  */
 import { getToken } from './supabase'
 
-/** Base path for the STT routes. Override with VITE_STT_URL. */
-export const STT_BASE_URL: string = (import.meta.env.VITE_STT_URL ?? '/api/v1/stt').replace(
-  /\/+$/,
-  '',
-)
+/**
+ * Base URL for the STT routes. Defaults to `<API base>/stt`, so a deployment
+ * that sets `VITE_API_BASE_URL` to the backend origin reaches the backend
+ * rather than the static host. Override with VITE_STT_URL only for a separate
+ * transcription service.
+ */
+const API_BASE: string = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+export const STT_BASE_URL: string = (
+  import.meta.env.VITE_STT_URL ?? `${API_BASE.replace(/\/+$/, '')}/stt`
+).replace(/\/+$/, '')
 
 /** A transcription that ran, including the case where nothing was recognised. */
 export interface TranscriptionResult {
