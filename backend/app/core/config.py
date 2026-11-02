@@ -23,7 +23,7 @@ try:
 except Exception:
     pass
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 DEFAULT_CORS_ORIGINS = ["http://localhost:5173", "http://localhost:3000"]
@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
     cors_origins: Annotated[list[str], NoDecode] = DEFAULT_CORS_ORIGINS
+    #: Optional regex of additionally allowed origins (e.g. Vercel preview URLs:
+    #: ``https://fitai-.*-myteam\.vercel\.app``). Empty means exact origins only.
+    cors_origin_regex: str | None = None
 
     # Database
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/fitai"
@@ -226,6 +229,21 @@ class Settings(BaseSettings):
         """
         return str(resolve_storage_path(value))
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _normalise_postgres_scheme(cls, value: object) -> object:
+        """Accept the ``postgres://`` / ``postgresql://`` URLs hosting providers hand out.
+
+        SQLAlchemy 2 rejects ``postgres://`` and would pick whichever default
+        driver is installed for ``postgresql://``; this project ships psycopg2.
+        """
+        if isinstance(value, str):
+            value = value.strip()
+            for prefix in ("postgres://", "postgresql://"):
+                if value.startswith(prefix):
+                    return "postgresql+psycopg2://" + value[len(prefix) :]
+        return value
+
     @field_validator("database_url")
     @classmethod
     def _anchor_sqlite_path(cls, value: str) -> str:
@@ -277,6 +295,42 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
+
+    def production_problems(self) -> list[str]:
+        """Configuration mistakes that must never reach a production start."""
+        problems: list[str] = []
+        if self.database_url.startswith("sqlite"):
+            problems.append("DATABASE_URL must be a PostgreSQL URL, not SQLite.")
+        if "@localhost" in self.database_url or "@127.0.0.1" in self.database_url:
+            problems.append("DATABASE_URL points at localhost.")
+        origins = self.cors_origins
+        if "*" in origins:
+            problems.append("CORS_ORIGINS must list explicit origins, not '*'.")
+        elif not any("localhost" not in o and "127.0.0.1" not in o for o in origins):
+            problems.append("CORS_ORIGINS must include the deployed frontend origin.")
+        elif any(not o.startswith("https://") and "localhost" not in o for o in origins):
+            problems.append("CORS_ORIGINS must use https:// for non-local origins.")
+        if not self.supabase_url:
+            problems.append("SUPABASE_URL is required to verify sign-in tokens.")
+        if not self.groq_api_key:
+            problems.append("GROQ_API_KEY is required for chat.")
+        if self.debug:
+            problems.append("DEBUG must be false.")
+        if self.document_storage_backend.strip().lower() != "local":
+            problems.append(
+                "DOCUMENT_STORAGE_BACKEND must be 'local' (point UPLOAD_DIR at the "
+                "persistent disk); other values leave uploads disabled."
+            )
+        return problems
+
+    @model_validator(mode="after")
+    def _reject_unsafe_production(self) -> Settings:
+        if self.is_production:
+            problems = self.production_problems()
+            if problems:
+                bullets = "".join(f"\n- {p}" for p in problems)
+                raise ValueError("Invalid production configuration:" + bullets)
+        return self
 
     @property
     def is_production(self) -> bool:
