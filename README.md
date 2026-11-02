@@ -224,3 +224,52 @@ GitHub Actions runs on pull requests into `main` and on pushes to `main`:
 - `.github/workflows/secret-scan.yml` — fails a pull request if a configured credential value appears in a changed file.
 
 All three use `permissions: contents: read`, pin actions to commit SHAs, and inject no production secrets.
+
+## Deployment
+
+### Frontend — Vercel
+
+The frontend is a static Vite build, ready to deploy on Vercel:
+
+1. Import the repository into Vercel and set **Root Directory** to `frontend`.
+2. Build command: `npm run build` · Output directory: `dist`.
+3. Add the frontend environment variables as Vercel project settings: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_API_BASE_URL` pointed at the deployed backend's `/api/v1`.
+4. Deploy. Vercel rebuilds automatically on pushes to the connected branch.
+
+### Backend
+
+The backend is a standard FastAPI/Uvicorn ASGI app with Alembic migrations — deploy it to any host that can run a long-lived Python process (a VM, container platform, or PaaS of your choice):
+
+1. Install with `python -m pip install -e .` (or build from the root `requirements.txt`).
+2. Provide the variables in `backend/.env.example` as real environment configuration.
+3. Run `alembic upgrade head` against the target database before starting the app.
+4. Start with `uvicorn app.main:app --host 0.0.0.0 --port <port>`.
+5. Point the frontend's `VITE_API_BASE_URL` at the deployed backend.
+
+## API Overview
+
+All endpoints are served under `/api/v1`. Route groups include `health`, `auth`, `chat`, `conversations` (and messages), `profile`, `memory` (and pending proposals), `documents`, `workouts`, `progress`, `plan`, `exercises`, `location`, `activity`, and `stt`.
+
+Every protected endpoint verifies the Supabase access token and derives the user identity from the verified context; private queries and vector retrieval are scoped to the authenticated user. See [`docs/api_contracts.md`](docs/api_contracts.md) and the live OpenAPI schema at `/docs`.
+
+## Documentation
+
+- [`docs/backend_setup.md`](docs/backend_setup.md) — backend environment and runbook
+- [`docs/api_contracts.md`](docs/api_contracts.md) — endpoint contracts
+- [`docs/extraction.md`](docs/extraction.md) — structured fact extraction
+- [`AGENTS.MD`](AGENTS.MD) — conventions, ownership, and workflow rules
+
+## Contributing & Ownership
+
+Two developers share this repository with clear boundaries:
+
+- **Core backend & persistence** — authentication, CRUD routers, Pydantic schemas, SQLAlchemy models, repositories, migrations, conversation and message persistence, profile/memory persistence, document metadata, and workout/measurement persistence.
+- **AI engine & intelligence** — the LangGraph agent, Groq prompts, RAG ingestion and retrieval, ChromaDB operations, memory extraction and temporal reasoning, continuity, fitness tools, and safety policies.
+
+Some files are shared and require coordination before changes: `backend/app/main.py`, `backend/app/api/deps.py`, `backend/app/api/routers/chat.py`, `backend/app/services/chat_service.py`, `backend/app/core/config.py`, `backend/pyproject.toml`, `backend/.env.example`, and `backend/tests/end_to_end/`.
+
+See [`AGENTS.MD`](AGENTS.MD) for the full workflow: read it first, keep changes small and focused, add or update tests, run formatting/lint/type checks, and commit with clear, focused messages.
+
+## License
+
+License reference is pending (see `backend/pyproject.toml`). No open-source license has been selected yet.
