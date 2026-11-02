@@ -67,7 +67,7 @@ Data flow (chat): frontend → `POST /chat` (sync handler, threadpool) → `Chat
 | F-08 | Medium | Reliability | Ingestion uses in-process `BackgroundTasks`; a process restart mid-ingest leaves docs `processing` until reconciliation marks them failed. Multiple uvicorn workers would each run their own startup sweep and share one Chroma dir. | `rag/worker.py`, `main.py` | Document single-worker constraint, or add a proper job queue later (not needed now). |
 | F-09 | Medium | Security | `allow_credentials=True` with an origins list — safe while the list is explicit; defaults are localhost only, so production **will** need `CORS_ORIGINS` set. | `main.py`, `config.py:28` | Make origins required in production; startup warning. |
 | F-10 | Medium | Security | Default `DATABASE_URL` embeds `postgres:postgres@localhost`; `DEBUG=true`/`reload` are dev defaults. | `config.py:64`, root `package.json` | Fail fast in `ENVIRONMENT=production` on default credentials. |
-| F-11 | Low | Hygiene | Stray files at repo root and in backend: `test_upload.py/.sh`, `test_full_flow.py`, `test_workout.*`, `test_config.py`, `backend/check_tables.py` (the last two are untracked local debugging scripts) and a `unit testing/` folder. Some are git-ignored. | `ls` | Remove/relocate after review (not touched here). |
+| F-11 | Low | Hygiene | Stray files at repo root and in backend: `test_upload.py/.sh`, `test_full_flow.py`, `test_workout.*`, `test_config.py` and `backend/check_tables.py` (removed in the follow-up below) and a `unit testing/` folder. Some are git-ignored. | `ls` | Remove/relocate after review (not touched here). |
 | F-12 | Low | Config | `.env.example` is missing `EXTRACTION_API_KEY` and `EXTRACTION_MODEL` (the only 2 of 76 settings absent). | script comparison | Add placeholders. |
 | F-13 | Low | Docs | `DocumentService.delete` docstring says vectors are not removed; the router does remove them first. | `document_service.py:279` | Correct docstring. |
 | F-14 | Low | Frontend | Pre-existing oxlint warnings (setState-in-effect, impure `Date` in render, fast-refresh exports). Not errors. | `npm run lint` | Triage later. |
@@ -198,3 +198,22 @@ Startup sequence: `db` healthy → migrate → `api` ready (schema check passes)
   - No migration was performed. The two minor directories were not merged, moved or deleted. Whether the 2 chunks in `backend/data/chroma` matter must be decided by the owner (they may correspond to test documents). Re-ingesting is the safe path if needed.
 - **Tests:** `tests/unit/test_storage_paths.py` (anchoring, absolute and env overrides, document storage root, and a subprocess probe from `backend/`, the repo root and a temp directory returning identical paths without creating directories).
 - **Limits:** the data root is still two separate settings rather than a single `DATA_DIR`; `.env.example` keeps the same relative defaults.
+
+## 12. Follow-up decisions on open items (evidence-based, non-destructive)
+
+Backups taken before inspection (outside the repo): a copy of `backend/data.db` and of `backend/data/chroma`, in the local scratch backup folder. All inspection was read-only.
+
+### Orphan messages in `backend/data.db` — preserved, unresolved
+- Two `messages` rows ("hey" and the assistant reply, 2026-11-02 16:12:37 and 16:12:41 UTC) reference conversation `b368137d...`, which no longer exists. Messages carry no `user_id`, so ownership can only be inferred through the missing conversation.
+- Circumstantial evidence: they were created seconds after the only user row (`demouser01@gmail.com`, 16:12:33) and a surviving conversation (16:12:51), which matches a conversation created and deleted during manual endpoint verification while foreign keys were off. This is inference, not proof.
+- No rows were deleted. Cleanup, if wanted, is a manual decision after a backup; the DB is otherwise valid and the startup warning will continue until then.
+
+### Chroma chunks in `backend/data/chroma` — preserved, unresolved
+- Two `user_documents` chunks created 2026-10-13: `plan.txt` with text "Protein supports muscle recovery." and `plan.txt` with text "hello world". Their `doc_id`/`owner_id` values match no row in `data.db` (it has 0 documents and one different user).
+- The texts match fixtures from earlier versions of the document-upload tests (a stale compiled test in the repo contains the first string), so they are very likely test artefacts written to the old `VectorStore()` default path. This is strong inference, not confirmation. Nothing was moved or deleted; the directory is no longer used by the application.
+
+### `check_tables.py` and `test_config.py` (from `5c51e38`) — removed
+- `backend/check_tables.py` crashes (`Engine.table_names()` does not exist in SQLAlchemy 2) and inspected an in-memory database, which is always empty: the original misdiagnosis. `test_config.py` at the repo root cannot run (`app` is not importable from there). Neither was referenced anywhere. Their purpose is covered by `verify_database_schema`, the `Settings` tests and `scripts/check_orphans.py`. They remain in Git history.
+
+### PostgreSQL — still unverified
+- No PostgreSQL server, `psql` or Docker is available in this environment, and no `DATABASE_URL` for a real instance was provided, so nothing was run against PostgreSQL. SQLite results must not be read as PostgreSQL compatibility. F-01, F-04 and F-05 remain open, as does production readiness. Required before any such claim: run `alembic upgrade head` and `alembic check` on a disposable PostgreSQL, then exercise initialisation, persistence and the critical workflows (chat, documents, memory, workouts) against it.
