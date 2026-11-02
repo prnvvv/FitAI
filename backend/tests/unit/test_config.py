@@ -22,5 +22,14 @@ def test_jwks_and_issuer_derive_from_url() -> None:
 
 
 def test_is_production_flag() -> None:
-    assert Settings(environment="production").is_production is True
+    production = Settings(
+        environment="production",
+        debug=False,
+        database_url="postgresql://u:p@db.example.com/fitai",
+        cors_origins=["https://fitai.example.com"],
+        supabase_url="https://abc.supabase.co",
+        groq_api_key="gsk_test",
+        document_storage_backend="local",
+    )
+    assert production.is_production is True
     assert Settings(environment="development").is_production is False
