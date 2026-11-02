@@ -4,10 +4,32 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
+
+
+def enable_sqlite_foreign_keys(engine: Engine) -> Engine:
+    """Turn on FK enforcement for every SQLite connection the engine opens.
+
+    SQLite ignores foreign keys unless ``PRAGMA foreign_keys=ON`` is issued on
+    each connection, so the ``ON DELETE CASCADE`` rules in the schema would
+    otherwise be silently skipped. The pragma is per-connection, hence the
+    ``connect`` hook rather than a one-off statement. Alembic builds its own
+    engine and is deliberately left alone: batch table rebuilds on SQLite must
+    run with enforcement off.
+    """
+
+    @event.listens_for(engine, "connect")
+    def _set_pragma(dbapi_connection, _record) -> None:  # noqa: ANN001
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+        finally:
+            cursor.close()
+
+    return engine
 
 
 def build_engine(database_url: str) -> Engine:
@@ -17,10 +39,12 @@ def build_engine(database_url: str) -> Engine:
     branch adds pre-ping and pool sizing suitable for a remote Supabase instance.
     """
     if database_url.startswith("sqlite"):
-        return create_engine(
-            database_url,
-            future=True,
-            connect_args={"check_same_thread": False},
+        return enable_sqlite_foreign_keys(
+            create_engine(
+                database_url,
+                future=True,
+                connect_args={"check_same_thread": False},
+            )
         )
     return create_engine(
         database_url,

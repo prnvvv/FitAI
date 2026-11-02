@@ -58,3 +58,18 @@ def verify_database_schema(engine: Engine, head_revision: str | None) -> None:
     missing = [t for t in REQUIRED_TABLES if t not in existing]
     if missing:
         raise DatabaseSchemaError(f"Database is missing required tables: {', '.join(missing)}")
+
+
+def find_foreign_key_violations(engine: Engine) -> list[dict[str, object]]:
+    """Report rows whose foreign key points at a missing parent (SQLite only).
+
+    Read-only: ``PRAGMA foreign_key_check`` never modifies data. Databases
+    written before FK enforcement was enabled may hold such orphans; they are
+    reported, never deleted. Returns an empty list for other dialects, where the
+    database enforces constraints itself.
+    """
+    if engine.dialect.name != "sqlite":
+        return []
+    with engine.connect() as conn:
+        rows = conn.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+    return [{"table": r[0], "rowid": r[1], "parent_table": r[2], "fk_index": r[3]} for r in rows]

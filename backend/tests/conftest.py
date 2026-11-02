@@ -25,7 +25,7 @@ from typing import Any
 import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -35,11 +35,12 @@ from app.api.deps import get_current_auth_user
 from app.core.errors import AuthenticationError
 from app.core.security import AuthUser
 from app.db.base import Base
-from app.db.session import get_db
+from app.db.session import enable_sqlite_foreign_keys, get_db
 from app.main import app
 from app.memory.change_detector import DetectedChange, MemoryEntry
 from app.memory.confirmation import Decision, MemoryWriter
 from app.memory.extractor import TextCompleter
+from app.models import User
 from app.tools.progress_tools import DatedValue, GoalEntry, ProgressService
 from app.tools.workout_tools import WorkoutLog, WorkoutService
 
@@ -214,6 +215,25 @@ def now() -> datetime:
 # ---------------------------------------------------------------------------
 
 
+def _provision_owner_rows(session: Session, _ctx: object, _instances: object) -> None:
+    """Create the ``users`` row behind any new row's ``user_id``.
+
+    Foreign keys are enforced in tests (as in PostgreSQL), but many tests use a
+    made-up ``uuid4()`` as the owner and never create the user. Provisioning it
+    here keeps those tests about their own behaviour; dangling references to
+    anything else (e.g. a missing conversation) are still rejected.
+    """
+    pending = {o.id for o in session.new if isinstance(o, User)}
+    for obj in list(session.new):
+        owner = getattr(obj, "user_id", None)
+        if isinstance(obj, User) or owner is None:
+            continue
+        owner_id = owner if isinstance(owner, uuid.UUID) else uuid.UUID(str(owner))
+        if owner_id not in pending and session.get(User, owner_id) is None:
+            session.add(User(id=owner_id))
+            pending.add(owner_id)
+
+
 @pytest.fixture
 def db_session() -> Iterator[Session]:
     """Provide a session bound to a fresh in-memory SQLite database."""
@@ -222,9 +242,11 @@ def db_session() -> Iterator[Session]:
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    enable_sqlite_foreign_keys(engine)
     Base.metadata.create_all(engine)
     test_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     session = test_session()
+    event.listen(session, "before_flush", _provision_owner_rows)
     try:
         yield session
     finally:
