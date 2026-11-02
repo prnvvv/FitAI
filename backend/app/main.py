@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -101,6 +103,7 @@ def create_app() -> FastAPI:
         version="0.1.0",
         docs_url="/docs",
         openapi_url="/openapi.json",
+        lifespan=_build_lifespan(),
     )
 
     app.add_middleware(
@@ -114,8 +117,6 @@ def create_app() -> FastAPI:
 
     _register_error_handlers(app)
 
-    app.add_event_handler("startup", _check_migrations_at_startup)
-
     for router in ROUTERS:
         app.include_router(router, prefix=settings.api_v1_prefix)
 
@@ -123,13 +124,29 @@ def create_app() -> FastAPI:
     app.include_router(compat.router)
 
     _register_health_endpoints(app)
-    _register_startup_tasks(app)
 
     return app
 
 
-def _register_startup_tasks(app: FastAPI) -> None:
-    @app.on_event("startup")
+def _build_lifespan() -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    """Return the application lifespan that runs the startup tasks in order.
+
+    Starlette 1.x removed ``add_event_handler``/``on_event``, so startup work is
+    expressed as a lifespan. The migration check runs first and, as before, a
+    failure there aborts startup. The tasks after it never block startup.
+    """
+    startup_tasks = _startup_tasks()
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        for task in startup_tasks:
+            task()
+        yield
+
+    return lifespan
+
+
+def _startup_tasks() -> tuple[Callable[[], None], ...]:
     def _reconcile_stuck_documents() -> None:
         """Mark documents that were left pending/processing across restarts as failed."""
         from app.db.session import SessionLocal
@@ -145,7 +162,6 @@ def _register_startup_tasks(app: FastAPI) -> None:
         finally:
             db.close()
 
-    @app.on_event("startup")
     def _log_guardrails_mode() -> None:
         """Warn loudly if guardrails are in monitor mode."""
         from app.core.config import settings
@@ -158,7 +174,6 @@ def _register_startup_tasks(app: FastAPI) -> None:
         elif not settings.guardrails_enabled:
             logger.warning("GUARDRAILS_ENABLED=false: all guardrails are DISABLED.")
 
-    @app.on_event("startup")
     def _warm_stt_model() -> None:
         """Start loading the Granite STT model in the background if eager load is on.
 
@@ -192,6 +207,13 @@ def _register_startup_tasks(app: FastAPI) -> None:
             "stt_warmup_started", model_id=service.model_id, device_request=service.device_request
         )
         threading.Thread(target=_warm, name="stt-warmup", daemon=True).start()
+
+    return (
+        _check_migrations_at_startup,
+        _reconcile_stuck_documents,
+        _log_guardrails_mode,
+        _warm_stt_model,
+    )
 
 
 def _register_error_handlers(app: FastAPI) -> None:
