@@ -26,7 +26,7 @@ interface AppShellProps {
   onSelectConversation: (id: string) => void
   onNewChat: () => void
   onRename: (id: string, title: string) => void
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void | Promise<void>
 }
 
 export function AppShell({

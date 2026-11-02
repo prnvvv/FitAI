@@ -1,6 +1,7 @@
 import { MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { Conversation } from '../../types'
+import { useConfirmAction } from '../ui/ConfirmDialog'
 import { CONVERSATION_GROUPS, conversationDateGroup } from '../../utils/dates'
 
 interface ConversationListProps {
@@ -10,7 +11,7 @@ interface ConversationListProps {
   error: string | null
   onSelect: (id: string) => void
   onRename: (id: string, title: string) => void
-  onDelete: (id: string) => void
+  onDelete: (id: string) => void | Promise<void>
 }
 
 interface ConversationBucket {
@@ -43,13 +44,13 @@ function ConversationItem({
   selected,
   onSelect,
   onRename,
-  onDelete,
+  onRequestDelete,
 }: {
   conversation: Conversation
   selected: boolean
   onSelect: (id: string) => void
   onRename: (id: string, title: string) => void
-  onDelete: (id: string) => void
+  onRequestDelete: (conversation: Conversation) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -148,7 +149,7 @@ function ConversationItem({
               onClick={(e) => {
                 e.stopPropagation()
                 setMenuOpen(false)
-                if (confirm('Delete this conversation?')) onDelete(conversation.id)
+                onRequestDelete(conversation)
               }}
             >
               <Trash2 size={16} />
@@ -161,15 +162,17 @@ function ConversationItem({
   )
 }
 
-export function ConversationList({
+function ConversationListBody({
   conversations,
   selectedId,
   loading,
   error,
   onSelect,
   onRename,
-  onDelete,
-}: ConversationListProps) {
+  onRequestDelete,
+}: Omit<ConversationListProps, 'onDelete'> & {
+  onRequestDelete: (conversation: Conversation) => void
+}) {
   if (loading) {
     return (
       <div className="conversation-list conversation-list--loading">
@@ -215,7 +218,7 @@ export function ConversationList({
                     selected={selectedId === conversation.id}
                     onSelect={onSelect}
                     onRename={onRename}
-                    onDelete={onDelete}
+                    onRequestDelete={onRequestDelete}
                   />
                 </li>
               ))}
@@ -224,5 +227,33 @@ export function ConversationList({
         )
       })}
     </div>
+  )
+}
+
+export function ConversationList({ onDelete, ...props }: ConversationListProps) {
+  // The dialog lives here (not in each row) so it survives the optimistic removal
+  // and rollback of the row while the delete request is in flight.
+  const { request, dialog } = useConfirmAction()
+
+  return (
+    <>
+      <ConversationListBody
+        {...props}
+        onRequestDelete={(conversation) =>
+          request({
+            title: 'Delete conversation?',
+            description: (
+              <>
+                <strong>{conversation.title || 'New chat'}</strong> and its messages will be permanently
+                deleted. This cannot be undone.
+              </>
+            ),
+            confirmLabel: 'Delete',
+            onConfirm: () => onDelete(conversation.id),
+          })
+        }
+      />
+      {dialog}
+    </>
   )
 }

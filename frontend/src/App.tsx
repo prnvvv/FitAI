@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
+import { useToast } from './components/ui/Toast'
 import './App.css'
 import { AppShell } from './components/layout/AppShell'
 import { PageErrorBoundary } from './components/layout/PageErrorBoundary'
@@ -83,6 +84,7 @@ function PublicRoutes() {
 function AuthenticatedApp() {
   const { user, loading: authLoading } = useAuth()
   const navigate = useNavigate()
+  const toast = useToast()
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     const stored = typeof window !== 'undefined' ? window.localStorage.getItem('fitai_sidebar_open') : null
     if (stored !== null) return stored !== 'false'
@@ -146,11 +148,19 @@ function AuthenticatedApp() {
   const handleDelete = useCallback(
     async (id: string) => {
       await deleteConversation(id)
+      toast.show('Conversation deleted', 'success')
       if (activeId === id) {
         navigate('/')
       }
     },
-    [deleteConversation, activeId, navigate],
+    [deleteConversation, activeId, navigate, toast],
+  )
+
+  const handleRename = useCallback(
+    (id: string, title: string) => {
+      renameConversation(id, title).catch(() => toast.show('Could not rename the conversation', 'error'))
+    },
+    [renameConversation, toast],
   )
 
   if (authLoading) {
@@ -182,7 +192,7 @@ function AuthenticatedApp() {
             onSearchQueryChange={setSearchQuery}
             onSelectConversation={handleSelectConversation}
             onNewChat={handleNewChat}
-            onRename={renameConversation}
+            onRename={handleRename}
             onDelete={handleDelete}
           />
         }
