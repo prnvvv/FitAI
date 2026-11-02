@@ -110,14 +110,15 @@ describe('stepsAnalytics', () => {
 describe('sleepAnalytics', () => {
   it('averages nights and groups them into Monday-anchored weeks', () => {
     const stats = sleepAnalytics([
-      point('a', 7, on(9)), // same Monday-anchored week as the next entry
-      point('b', 8, on(8)),
-      point('c', 6, on(1)),
+      // Fixed dates: relative dates made this depend on the weekday it ran on.
+      point('a', 7, '2026-10-20T08:00:00'), // same Monday-anchored week as the next entry
+      point('b', 8, '2026-10-19T08:00:00'),
+      point('c', 6, '2026-10-26T08:00:00'),
     ])
     expect(stats.recordedNights).toBe(3)
     expect(stats.average).toBe(7)
     expect(stats.weeks).toHaveLength(2)
-    expect(stats.weeks[0]).toEqual({ weekOf: startOfWeekKey(on(9)), average: 7.5, nights: 2 })
+    expect(stats.weeks[0]).toEqual({ weekOf: startOfWeekKey('2026-10-20T08:00:00'), average: 7.5, nights: 2 })
     expect(stats.weeks[1].nights).toBe(1)
   })
 
