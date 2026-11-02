@@ -201,6 +201,29 @@ class Settings(BaseSettings):
     foursquare_api_key: str | None = None
     weather_provider: str = "open-meteo"  # open-meteo only for now
 
+    @field_validator("database_url")
+    @classmethod
+    def _anchor_sqlite_path(cls, value: str) -> str:
+        """Resolve relative SQLite file paths against ``backend/``.
+
+        Otherwise the app, Alembic and scripts would open different files depending
+        on the process working directory.
+        """
+        from pathlib import Path
+
+        from sqlalchemy.engine import make_url
+
+        url = make_url(value)
+        if url.get_backend_name() != "sqlite" or url.database in (None, "", ":memory:"):
+            return value
+        path = Path(url.database)
+        if path.is_absolute():
+            return value
+        backend_dir = Path(__file__).resolve().parents[2]
+        return url.set(database=(backend_dir / path).as_posix()).render_as_string(
+            hide_password=False
+        )
+
     @field_validator("search_providers", mode="before")
     @classmethod
     def _split_providers(cls, value: object) -> object:
