@@ -18,7 +18,10 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # CPU-only PyTorch (the default PyPI wheel drags in several GB of CUDA libraries).
 # The versions match the pins in requirements.txt, so the next step keeps them.
-RUN pip install torch==2.9.1 torchaudio==2.9.1 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install torch==2.9.1+cpu torchaudio==2.9.1+cpu \
+       --index-url https://download.pytorch.org/whl/cpu \
+       --extra-index-url https://pypi.org/simple
 
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
