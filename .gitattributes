@@ -1,0 +1,4 @@
+# Shell scripts and Dockerfiles must keep LF endings or they fail inside Linux images.
+*.sh text eol=lf
+Dockerfile text eol=lf
+.dockerignore text eol=lf

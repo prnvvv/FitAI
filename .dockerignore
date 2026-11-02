@@ -1,0 +1,27 @@
+# Build context for backend/Dockerfile is the repository root.
+# Allow-list approach: nothing enters the image unless it is listed here.
+*
+
+!requirements.txt
+!backend/
+!backend/alembic.ini
+!backend/pyproject.toml
+!backend/docker-entrypoint.sh
+!backend/app/**
+!backend/migrations/**
+
+# Never ship secrets, local data, caches or tests, even inside allowed folders.
+**/.env
+**/.env.*
+**/*.db
+**/*.sqlite3
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+backend/chroma_data
+backend/data
+backend/uploads
+backend/tests
+backend/scripts
