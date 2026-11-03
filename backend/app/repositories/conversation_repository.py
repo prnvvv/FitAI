@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -106,13 +106,33 @@ class MessageRepository:
         content: str,
         metadata: dict[str, object] | None = None,
     ) -> Message:
-        """Persist a message within a conversation."""
+        """Persist a message within a conversation.
+
+        ``created_at`` is assigned here and kept strictly increasing within the
+        conversation. The database default (``now()``) has coarse resolution on
+        some engines and is identical for rows written close together, which would
+        leave the order of equal timestamps to the random UUID tie-breaker and could
+        show an assistant reply before the question it answers.
+        """
         message = Message(
             conversation_id=conversation_id,
             role=role,
             content=content,
             message_metadata=metadata,
+            created_at=self._next_timestamp(conversation_id),
         )
         self._db.add(message)
         self._db.flush()
         return message
+
+    def _next_timestamp(self, conversation_id: UUID) -> datetime:
+        """Return a UTC timestamp later than every stored message in the conversation."""
+        now = datetime.now(timezone.utc)
+        latest = self._db.scalar(
+            select(func.max(Message.created_at)).where(Message.conversation_id == conversation_id)
+        )
+        if latest is None:
+            return now
+        if latest.tzinfo is None:  # SQLite returns naive datetimes
+            latest = latest.replace(tzinfo=timezone.utc)
+        return max(now, latest + timedelta(microseconds=1))
