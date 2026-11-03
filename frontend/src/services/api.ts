@@ -21,6 +21,12 @@ import type {
 } from '../types'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
+/**
+ * Base URL for the document routes. Defaults to the main API so a single-process
+ * deployment is unchanged; set `VITE_DOCUMENTS_URL` when documents are served by
+ * the separate Documents service (e.g. https://fitai-documents.onrender.com/api/v1).
+ */
+const DOCUMENTS_BASE = import.meta.env.VITE_DOCUMENTS_URL || API_BASE
 
 /** An upload either creates a new item or returns the identical existing one. */
 export interface UploadResult {
@@ -41,11 +47,11 @@ async function sleep(ms: number): Promise<void> {
 
 async function fetchApi<T>(
   path: string,
-  options: RequestInit & { timeoutMs?: number } = {},
+  options: RequestInit & { timeoutMs?: number; baseUrl?: string } = {},
   retryCount = 0,
   capture?: (response: Response) => void,
 ): Promise<T> {
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, ...init } = options
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, baseUrl = API_BASE, ...init } = options
   const token = await getToken()
   const headers = new Headers(init.headers)
   headers.set('Accept', 'application/json')
@@ -63,7 +69,7 @@ async function fetchApi<T>(
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    const response = await fetch(`${API_BASE}${path}`, {
+    const response = await fetch(`${baseUrl}${path}`, {
       ...init,
       headers,
       signal: controller.signal,
@@ -293,7 +299,9 @@ export const api = {
 
   // Documents
   listDocuments: (limit = 50, offset = 0) =>
-    fetchApi<Page<Document>>(`/documents?limit=${limit}&offset=${offset}`),
+    fetchApi<Page<Document>>(`/documents?limit=${limit}&offset=${offset}`, {
+      baseUrl: DOCUMENTS_BASE,
+    }),
   /** Returns the existing item when the same bytes are already in the library. */
   uploadDocument: async (file: File): Promise<UploadResult> => {
     const formData = new FormData()
@@ -301,7 +309,7 @@ export const api = {
     let duplicate = false
     const document = await fetchApi<Document>(
       '/documents',
-      { method: 'POST', body: formData },
+      { method: 'POST', body: formData, baseUrl: DOCUMENTS_BASE },
       0,
       (response) => {
         duplicate = response.headers.get('X-Duplicate') === 'true'
@@ -310,11 +318,15 @@ export const api = {
     return { document, duplicate } satisfies UploadResult
   },
   deleteDocument: (id: string) =>
-    fetchApi<void>(`/documents/${id}`, { method: 'DELETE' }),
+    fetchApi<void>(`/documents/${id}`, { method: 'DELETE', baseUrl: DOCUMENTS_BASE }),
   retryDocument: (id: string) =>
-    fetchApi<Document>(`/documents/${id}/retry`, { method: 'POST' }),
+    fetchApi<Document>(`/documents/${id}/retry`, { method: 'POST', baseUrl: DOCUMENTS_BASE }),
   renameDocument: (id: string, filename: string) =>
-    fetchApi<Document>(`/documents/${id}`, { method: 'PATCH', body: JSON.stringify({ filename }) }),
+    fetchApi<Document>(`/documents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ filename }),
+      baseUrl: DOCUMENTS_BASE,
+    }),
   metricDefinitions: () => fetchApi<MetricDefinition[]>('/progress/metrics'),
   metricSeries: (type: string, from?: string, to?: string) => {
     const params = new URLSearchParams({ type })

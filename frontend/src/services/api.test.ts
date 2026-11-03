@@ -202,3 +202,62 @@ describe('plan response normalization', () => {
     expect(isAbortError(new Error('boom'))).toBe(false)
   })
 })
+
+describe('document service base URL', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  async function loadApi(documentsUrl?: string) {
+    vi.resetModules()
+    vi.unstubAllEnvs()
+    vi.stubEnv('VITE_API_BASE_URL', 'https://core.example.com/api/v1')
+    if (documentsUrl !== undefined) vi.stubEnv('VITE_DOCUMENTS_URL', documentsUrl)
+    return (await import('./api')).api
+  }
+
+  function stubFetch() {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0, limit: 50, offset: 0 })))
+    vi.stubGlobal('fetch', fetchMock)
+    return fetchMock
+  }
+
+  it('sends document calls to VITE_DOCUMENTS_URL when it is set', async () => {
+    const fetchMock = stubFetch()
+    const client = await loadApi('https://docs.example.com/api/v1')
+    await client.listDocuments()
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      'https://docs.example.com/api/v1/documents?limit=50&offset=0',
+    )
+  })
+
+  it('keeps other calls on the main API even when documents are split out', async () => {
+    const fetchMock = stubFetch()
+    const client = await loadApi('https://docs.example.com/api/v1')
+    await client.listDocuments()
+    await client.metricDefinitions().catch(() => undefined)
+    expect(String(fetchMock.mock.calls[1][0])).toBe('https://core.example.com/api/v1/progress/metrics')
+  })
+
+  it('falls back to the main API base when VITE_DOCUMENTS_URL is empty', async () => {
+    const fetchMock = stubFetch()
+    const client = await loadApi('')
+    await client.listDocuments()
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      'https://core.example.com/api/v1/documents?limit=50&offset=0',
+    )
+  })
+
+  it('falls back to the main API base when VITE_DOCUMENTS_URL is not set', async () => {
+    const fetchMock = stubFetch()
+    const client = await loadApi()
+    await client.listDocuments()
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      'https://core.example.com/api/v1/documents?limit=50&offset=0',
+    )
+  })
+})
