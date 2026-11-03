@@ -1,7 +1,7 @@
 /**
  * Dictation in the chat composer, with the browser SpeechRecognition mocked.
  * These tests prove the wiring; real microphone behaviour needs the manual
- * browser checklist in docs/SPEECH_TO_TEXT.md.
+ * browser checklist in frontend/SPEECH_TO_TEXT.md.
  */
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

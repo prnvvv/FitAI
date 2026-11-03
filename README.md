@@ -83,8 +83,8 @@ FitAI/
 │   └── src/
 │       ├── components/      # chat, layout, plan, progress, ui
 │       ├── pages/           # Chat, Library, Memory, Plan, Profile, Progress, Documents, Login
-│       ├── hooks/            # e.g. useConversations, useSpeechToText
-│       ├── services/         # API client, Supabase, speech-to-text
+│       ├── hooks/            # e.g. useConversations, useSpeechRecognition
+│       ├── services/         # API client, Supabase, Web Speech helpers
 │       ├── context/           # auth context
 │       ├── types/              # shared TypeScript types
 │       └── utils/
@@ -105,7 +105,6 @@ FitAI/
 │   │   ├── tools/                  # fitness calculators and helpers
 │   │   ├── llm/                     # Groq client + prompts
 │   │   ├── safety/                  # policy checks
-│   │   ├── stt/                      # speech-to-text service
 │   │   ├── core/                      # config, security, logging, errors
 │   │   └── db/                         # engine, session, base
 │   ├── migrations/           # Alembic
@@ -187,7 +186,7 @@ Common backend variables (the full set is documented in [`docs/backend_setup.md`
 | `CORS_ORIGINS` | Comma-separated allowed origins. |
 | `DOCUMENT_STORAGE_BACKEND` | `unconfigured` / `local` / `supabase`. |
 
-Frontend variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL` (defaults to `/api/v1`), and `VITE_STT_URL` (defaults to `/api/v1/stt`). Only the Supabase **anon** key belongs in the frontend; server-only secrets stay in the backend.
+Frontend variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_API_BASE_URL` (defaults to `/api/v1`). Speech input uses the browser's Web Speech API and needs no variable (see `frontend/SPEECH_TO_TEXT.md`). Only the Supabase **anon** key belongs in the frontend; server-only secrets stay in the backend.
 
 ## Testing & Quality Checks
 
@@ -248,7 +247,7 @@ The backend is a standard FastAPI/Uvicorn ASGI app with Alembic migrations — d
 
 ## API Overview
 
-All endpoints are served under `/api/v1`. Route groups include `health`, `auth`, `chat`, `conversations` (and messages), `profile`, `memory` (and pending proposals), `documents`, `workouts`, `progress`, `plan`, `exercises`, `location`, `activity`, and `stt`.
+All endpoints are served under `/api/v1`. Route groups include `health`, `auth`, `chat`, `conversations` (and messages), `profile`, `memory` (and pending proposals), `documents`, `workouts`, `progress`, `plan`, `exercises`, `location`, and `activity`. There is no speech-to-text route: dictation runs in the browser.
 
 Every protected endpoint verifies the Supabase access token and derives the user identity from the verified context; private queries and vector retrieval are scoped to the authenticated user. See [`docs/api_contracts.md`](docs/api_contracts.md) and the live OpenAPI schema at `/docs`.
 
