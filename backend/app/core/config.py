@@ -113,6 +113,11 @@ class Settings(BaseSettings):
     # owns those routes.
     serve_documents_routes: bool = True
 
+    #: Directory holding the built frontend (``index.html`` + ``assets/``). When it
+    #: exists, Core serves the single-page app itself (one-service deployment).
+    #: Unset (the default) keeps Core API-only.
+    frontend_dist_dir: str | None = None
+
     # Vector storage: ``chroma`` (local, development default) or ``pgvector``
     # (Supabase PostgreSQL, production).
     vector_store_backend: str = "chroma"

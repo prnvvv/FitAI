@@ -33,6 +33,7 @@ from app.api.routers import (
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.core.service_app import build_lifespan, build_service_app
+from app.core.spa import configure_frontend
 from app.db.startup_checks import check_migrations_at_startup as _check_migrations_at_startup
 
 # Quiet HuggingFace Hub "404 additional_chat_templates" probes — they're normal fallbacks
@@ -75,6 +76,8 @@ def create_app() -> FastAPI:
         lifespan=_build_lifespan(),
     )
     _register_guardrails_health(app)
+    # Last: the SPA catch-all must not shadow any API, health or docs route.
+    configure_frontend(app)
     return app
 
 
@@ -85,7 +88,14 @@ def _build_lifespan() -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     expressed as a lifespan. The migration check runs first and, as before, a
     failure there aborts startup. The tasks after it never block startup.
     """
-    return build_lifespan(_startup_tasks)
+    return build_lifespan(_startup_tasks, on_shutdown=_stop_ingestion_worker)
+
+
+def _stop_ingestion_worker() -> None:
+    if settings.serve_documents_routes:
+        from app.services.ingestion_runtime import stop_worker
+
+        stop_worker()
 
 
 def _startup_tasks() -> tuple[Callable[[], None], ...]:
@@ -119,6 +129,11 @@ def _startup_tasks() -> tuple[Callable[[], None], ...]:
     tasks: list[Callable[[], None]] = [_check_migrations_at_startup]
     if settings.serve_documents_routes and settings.ingestion_mode.strip().lower() != "jobs":
         tasks.append(_reconcile_stuck_documents)
+    if settings.serve_documents_routes and settings.ingestion_mode.strip().lower() == "jobs":
+        # One-service deployment: Core owns the durable ingestion queue too.
+        from app.services.ingestion_runtime import start_worker
+
+        tasks.append(start_worker)
     tasks.append(_log_guardrails_mode)
     return tuple(tasks)
 
