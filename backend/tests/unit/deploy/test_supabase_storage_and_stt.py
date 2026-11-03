@@ -52,6 +52,24 @@ def test_save_read_delete_use_the_object_api_with_service_credentials() -> None:
     assert [c.method for c in calls] == ["POST", "GET", "DELETE"]
 
 
+def test_new_style_secret_key_is_sent_as_apikey_only() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, content=b"x")
+
+    s = SupabaseDocumentStorage(
+        "https://proj.supabase.co",
+        "sb_secret_test",
+        "fitai-documents",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    s.read("u/d")
+    assert seen[0].headers["apikey"] == "sb_secret_test"
+    assert "authorization" not in seen[0].headers
+
+
 def test_delete_of_a_missing_object_is_not_an_error() -> None:
     _storage(lambda r: httpx.Response(404, json={})).delete("u/d")
 
