@@ -1,9 +1,8 @@
 """FitAI Documents API entry point (``uvicorn app.documents_main:app``).
 
 Serves only ``/api/v1/documents/*`` plus the shared health endpoints and runs the
-durable ingestion worker. It never imports the chat agent, LangGraph or the
-speech-to-text stack, and with ``VECTOR_STORE_BACKEND=pgvector`` it never imports
-ChromaDB either.
+durable ingestion worker. It never imports the chat agent or LangGraph, and with
+``VECTOR_STORE_BACKEND=pgvector`` it never imports ChromaDB either.
 """
 
 from __future__ import annotations

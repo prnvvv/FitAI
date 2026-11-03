@@ -1,5 +1,9 @@
 # FitAI deployment audit (512 MB / service)
 
+> **Update:** the IBM Granite speech-to-text service (`fitai-stt`) described below has since been
+> removed. Dictation is now browser-native (Web Speech API); see `frontend/SPEECH_TO_TEXT.md`. The
+> measurements and tables in this report are historical and were not re-run for the two-service layout.
+
 Audit of the repository as it stood at `main` (`d56475c`) before the split-service
 work on `feat/deployment`. Everything here was read from the code or measured; the
 "measured" numbers are reproduced in [DEPLOYMENT_VERIFICATION.md](DEPLOYMENT_VERIFICATION.md).

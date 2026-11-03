@@ -144,7 +144,12 @@ class SupabaseDocumentStorage(DocumentStorage):
         return f"{self._base}/storage/v1/object/{quote(self._bucket, safe='')}/{quoted}"
 
     def _headers(self, content_type: str | None = None) -> dict[str, str]:
-        headers = {"Authorization": f"Bearer {self._key}", "apikey": str(self._key)}
+        key = str(self._key)
+        # New-style ``sb_secret_...`` keys are opaque, not JWTs: the gateway takes
+        # them from ``apikey`` alone. Legacy JWT service-role keys also need Bearer.
+        headers = {"apikey": key}
+        if not key.startswith("sb_"):
+            headers["Authorization"] = f"Bearer {key}"
         if content_type:
             headers["Content-Type"] = content_type
         return headers

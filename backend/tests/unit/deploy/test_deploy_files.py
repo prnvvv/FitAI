@@ -12,8 +12,8 @@ from app.core.config import Settings
 
 BACKEND = Path(__file__).resolve().parents[3]
 ROOT = BACKEND.parent
-SERVICES = ("core", "stt", "documents")
-MODULES = {"core": "app.main:app", "stt": "app.stt_main:app", "documents": "app.documents_main:app"}
+SERVICES = ("core", "documents")
+MODULES = {"core": "app.main:app", "documents": "app.documents_main:app"}
 
 BLUEPRINT = yaml.safe_load((ROOT / "render.yaml").read_text(encoding="utf-8"))
 BY_NAME = {s["name"]: s for s in BLUEPRINT["services"]}
@@ -59,16 +59,15 @@ def test_blueprint_production_settings_validate_for_each_service(svc, monkeypatc
         CORS_ORIGINS="https://app.example.com",
         SUPABASE_URL="https://abc.supabase.co",
         EMBEDDING_API_URL="https://e.example.com",
-        STT_REMOTE_URL="https://s.example.com",
     )
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     assert Settings(_env_file=None).is_production
 
 
-def test_core_blueprint_disables_peer_service_routes() -> None:
+def test_core_blueprint_disables_document_routes() -> None:
     env = {v["key"]: v.get("value") for v in BY_NAME["fitai-core"]["envVars"]}
-    assert env["SERVE_DOCUMENTS_ROUTES"] == "false" and env["SERVE_STT_ROUTES"] == "false"
+    assert env["SERVE_DOCUMENTS_ROUTES"] == "false"
 
 
 @pytest.mark.parametrize("svc", SERVICES)
@@ -97,10 +96,10 @@ def test_requirements_are_minimal_per_service() -> None:
     for svc in SERVICES:
         assert not names(svc) & forbidden, svc
     assert {"pypdf", "python-docx"} <= names("documents")
-    assert not {"pypdf", "python-docx"} & (names("core") | names("stt"))
+    assert not {"pypdf", "python-docx"} & names("core")
     assert {"langgraph", "groq"} <= names("core")
-    assert not {"langgraph", "groq"} & (names("stt") | names("documents"))
-    assert "numpy" in names("stt") and "numpy" not in names("core") | names("documents")
+    assert not {"langgraph", "groq"} & names("documents")
+    assert "numpy" not in names("core") | names("documents")
 
 
 def test_dockerignore_blocks_secrets_and_local_data() -> None:

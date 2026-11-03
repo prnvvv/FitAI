@@ -1,5 +1,7 @@
 # FitAI — Codebase Audit and Docker Readiness
 
+> **Update:** this audit predates the removal of IBM Granite STT; speech input is now browser-native (see `frontend/SPEECH_TO_TEXT.md`). STT-related findings below are historical.
+
 Date: 2026-11-02 · Branch: `feat/in-app-dialogs` · Scope: read-only audit (no fixes applied except Phase 1 dialogs).
 
 Evidence legend: **Verified** = I executed it or read the code path end to end. **Needs Verification** = inferred, not executed (e.g. anything requiring live Supabase/Groq/GPU). No secrets are reproduced here.

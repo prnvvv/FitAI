@@ -1,13 +1,12 @@
 """Container smoke + memory + restart-recovery verification (local, disposable).
 
-Runs the three real images with a 512 MB memory limit against a DISPOSABLE
+Runs the two real images with a 512 MB memory limit against a DISPOSABLE
 pgvector Postgres and the fake providers in ``mock_providers.py``, then prints a
 JSON report (peak RSS per scenario, restart-recovery result).
 
 Prerequisites::
 
     docker build -f Dockerfile.core      -t fitai-core:test .
-    docker build -f Dockerfile.stt       -t fitai-stt:test .
     docker build -f Dockerfile.documents -t fitai-documents:test .
     docker run -d --name fitai-pgvector-test -e POSTGRES_PASSWORD=test \
         -e POSTGRES_DB=fitai_test -p 54329:5432 pgvector/pgvector:pg16
@@ -263,7 +262,6 @@ def main() -> int:
             "GROQ_API_KEY": "mock",
             "GROQ_BASE_URL": mock,
             "SERVE_DOCUMENTS_ROUTES": "false",
-            "SERVE_STT_ROUTES": "false",
             "CONTINUITY_ENABLED": "true",
             "GUARD_CLASSIFIER_ENABLED": "false",
             "PROMPT_GUARD_ENABLED": "false",
@@ -284,6 +282,7 @@ def main() -> int:
             headers={"Content-Type": "application/json"},
         )[0],
         "documents_route_absent": http("GET", f"{core.url}/api/v1/documents", headers=auth)[0],
+        # Dictation is browser-native: Core must not expose any STT route.
         "stt_route_absent": http("GET", f"{core.url}/api/v1/stt/status", headers=auth)[0],
     }
     chat_codes = []
@@ -307,54 +306,6 @@ def main() -> int:
     core_report["after_requests"] = mem("smoke-core")
     report["core"] = core_report
     core.stop()
-
-    # ============================== STT =====================================
-    stt = Svc(
-        "smoke-stt",
-        "fitai-stt:test",
-        18002,
-        {
-            "ENVIRONMENT": "production",
-            "FITAI_SERVICE": "stt",
-            "STT_PROVIDER": "remote",
-            "STT_REMOTE_URL": f"{mock}/stt/v1/audio/transcriptions",
-            "STT_REMOTE_API_KEY": "mock-key",
-            "STT_REMOTE_MODEL": "mock",
-            "STT_MAX_UPLOAD_MB": "10",
-        },
-        args.db_url,
-    )
-    stt.start()
-    time.sleep(2)
-    stt_report = {
-        "startup": mem("smoke-stt"),
-        "status": json.loads(http("GET", f"{stt.url}/api/v1/stt/status", headers=auth)[1]),
-    }
-    audio = b"\x1a\x45\xdf\xa3" + b"\x00" * (9 * MB + 700_000)  # ~9.7 MB, just under the limit
-    body, ctype = multipart("clip.webm", "audio/webm", audio)
-    codes = [
-        http(
-            "POST",
-            f"{stt.url}/api/v1/stt/transcribe",
-            data=body,
-            headers={**auth, "Content-Type": ctype},
-            timeout=120,
-        )[0]
-        for _ in range(3)
-    ]
-    big = b"\x1a\x45\xdf\xa3" + b"\x00" * (11 * MB)
-    body2, ctype2 = multipart("big.webm", "audio/webm", big)
-    stt_report["transcribe_codes"] = codes
-    stt_report["oversize_code"] = http(
-        "POST",
-        f"{stt.url}/api/v1/stt/transcribe",
-        data=body2,
-        headers={**auth, "Content-Type": ctype2},
-        timeout=120,
-    )[0]
-    stt_report["after_requests"] = mem("smoke-stt")
-    report["stt"] = stt_report
-    stt.stop()
 
     # ============================ DOCUMENTS =================================
     docs_env = {

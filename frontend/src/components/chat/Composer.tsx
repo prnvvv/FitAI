@@ -1,6 +1,7 @@
-import { ArrowUp, Loader2, Mic, Paperclip, Square, X } from 'lucide-react'
+import { ArrowUp, Loader2, Mic, MicOff, Paperclip, Square, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ChangeEvent } from 'react'
-import { useSpeechToText, type SpeechToText } from '../../hooks/useSpeechToText'
+import { useSpeechRecognition } from '../../hooks/useSpeechRecognition'
+import { SPEECH_LANGUAGES } from '../../services/speechRecognition'
 
 interface ComposerProps {
   /**
@@ -28,71 +29,66 @@ export function Composer({
   onOpenDocuments,
 }: ComposerProps) {
   const [text, setText] = useState('')
+  const [showUnsupported, setShowUnsupported] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  /** Mirrors `text` so several phrases arriving in one tick build on each other. */
+  const textRef = useRef('')
   /**
-   * Where the caret sat when recording started. Clicking the microphone moves
-   * focus away from the textarea, so the position is captured up front and the
-   * transcript is inserted back where the user was typing.
+   * Where dictated text goes. Clicking the microphone moves focus away from the
+   * textarea, so the caret is captured up front; the first phrase replaces any
+   * selection, later phrases continue after the previous one.
    */
   const caretRef = useRef<{ start: number; end: number } | null>(null)
 
-  /**
-   * Inserts the recognised text where the caret was, keeping any existing draft
-   * and focusing the input so the user can correct it before sending.
-   */
-  const insertTranscript = useCallback((transcript: string) => {
-    const el = textareaRef.current
-    if (!el) {
-      setText((current) => (current ? `${current} ${transcript}` : transcript))
-      return
-    }
-    const caret = caretRef.current
-    const start = caret ? caret.start : (el.selectionStart ?? el.value.length)
-    const end = caret ? caret.end : (el.selectionEnd ?? el.value.length)
-    caretRef.current = null
-    const separator = start > 0 && !/\s$/.test(el.value.slice(0, start)) ? ' ' : ''
-    const insertion = `${separator}${transcript}`
-    const next = `${el.value.slice(0, start)}${insertion}${el.value.slice(end)}`
+  const updateText = useCallback((next: string) => {
+    textRef.current = next
     setText(next)
-    el.focus()
-    const caretPosition = start + insertion.length
-    requestAnimationFrame(() => el.setSelectionRange(caretPosition, caretPosition))
   }, [])
 
-  const handleTranscript = useCallback(
-    (transcript: string) => insertTranscript(transcript),
-    [insertTranscript],
+  /** Inserts a finalised phrase at the caret without touching the rest of the draft. */
+  const insertPhrase = useCallback(
+    (phrase: string) => {
+      const current = textRef.current
+      const caret = caretRef.current
+      const start = Math.min(caret ? caret.start : current.length, current.length)
+      const end = Math.min(caret ? caret.end : start, current.length)
+      const before = current.slice(0, start)
+      const separator = before.length > 0 && !/\s$/.test(before) ? ' ' : ''
+      const insertion = `${separator}${phrase}`
+      const after = current.slice(end)
+      updateText(`${before}${insertion}${after}`)
+      const position = start + insertion.length
+      caretRef.current = { start: position, end: position }
+    },
+    [updateText],
   )
 
-  const speech: SpeechToText = useSpeechToText({
-    onTranscript: handleTranscript,
-    onError: onSpeechError,
-  })
+  const speech = useSpeechRecognition({ onFinalText: insertPhrase, onError: onSpeechError })
+  const { status: speechStatus } = speech
 
-  /** Captures the caret, then starts recording. */
-  const beginRecording = useCallback(() => {
+  /** Captures the caret, then starts listening. */
+  const beginListening = useCallback(() => {
     const el = textareaRef.current
     caretRef.current = el
       ? { start: el.selectionStart ?? el.value.length, end: el.selectionEnd ?? el.value.length }
       : null
-    void speech.start()
+    speech.start()
   }, [speech])
 
-  const recording = speech.status === 'recording'
-  const transcribing = speech.status === 'transcribing'
-  // Sending while recording would lose the clip; transcription must finish first.
-  const sendDisabled = !streaming && (!text.trim() || recording)
-  const multiLine = text.split('\n').length > 1 || text.length > 60
-  const hasTools = Boolean(onOpenDocuments) || speech.isSupported
+  const requesting = speechStatus === 'requesting'
+  const listening = speechStatus === 'listening'
+  const finalizing = speechStatus === 'finalizing'
+  const dictating = requesting || listening || finalizing
+  // Sending while dictating would drop words that have not been finalised yet.
+  const sendDisabled = !streaming && (!text.trim() || dictating)
+  const multiLine = text.includes('\n') || text.length > 60
 
   const handleSend = () => {
     const trimmed = text.trim()
-    if (!trimmed || disabled || recording) return
+    if (!trimmed || disabled || dictating) return
     onSend(trimmed)
-    setText('')
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
+    updateText('')
+    caretRef.current = null
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -102,98 +98,146 @@ export function Composer({
     }
   }
 
-  /** Escape cancels a recording wherever focus sits inside the composer. */
-  const handleComposerKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Escape' || !recording) return
-    e.preventDefault()
-    speech.cancel()
-  }
-
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value)
-    const el = e.target
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+    updateText(e.target.value)
+    // Typing while dictating moves the insertion point with the user.
+    if (caretRef.current) {
+      const position = e.target.selectionStart ?? e.target.value.length
+      caretRef.current = { start: position, end: position }
+    }
   }
 
-  const speechError = speech.error
-  const dismissSpeechError = speech.dismissError
+  // Keep the textarea height in step with its content, including dictated text.
+  useEffect(() => {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = text ? `${Math.min(el.scrollHeight, 200)}px` : 'auto'
+  }, [text])
 
+  // After dictation finishes, hand focus to the textarea so the user can review
+  // and edit before sending. Nothing is ever sent automatically.
+  useEffect(() => {
+    if (speechStatus !== 'completed') return
+    const el = textareaRef.current
+    if (!el) return
+    el.focus()
+    const position = caretRef.current?.end ?? el.value.length
+    el.setSelectionRange(position, position)
+  }, [speechStatus])
+
+  const { error: speechError, dismissError: dismissSpeechError } = speech
   useEffect(() => {
     if (!speechError) return
-    // Auto-dismiss so a stale permission error does not linger over the draft.
-    const timer = setTimeout(dismissSpeechError, 8000)
+    // Auto-dismiss so a stale error does not linger over the draft.
+    const timer = setTimeout(dismissSpeechError, 10000)
     return () => clearTimeout(timer)
   }, [speechError, dismissSpeechError])
 
+  useEffect(() => {
+    if (!showUnsupported) return
+    const timer = setTimeout(() => setShowUnsupported(false), 10000)
+    return () => clearTimeout(timer)
+  }, [showUnsupported])
+
+  const statusLine = (() => {
+    if (requesting) return 'Waiting for microphone permission…'
+    if (listening) return speech.interim ? `Listening… ${speech.interim}` : 'Listening… speak now'
+    if (finalizing) return 'Finalizing…'
+    if (speechStatus === 'completed') return 'Added to your message. Review and edit it before sending.'
+    return null
+  })()
+
   return (
-    <div className="composer" onKeyDown={handleComposerKeyDown}>
+    <div className="composer">
       <div className={`composer__inner ${multiLine ? 'composer__inner--multi' : ''}`}>
-        {hasTools && (
-          <>
-            <div className="composer__tools">
-              {onOpenDocuments && (
+        <div className="composer__tools">
+          {onOpenDocuments && (
+            <button
+              type="button"
+              className="composer__action"
+              onClick={onOpenDocuments}
+              disabled={disabled}
+              aria-label="Add documents to the knowledge base"
+              title="Manage documents"
+            >
+              <Paperclip size={18} />
+            </button>
+          )}
+          <div className="composer__speech">
+            {speechStatus === 'unsupported' ? (
+              <button
+                type="button"
+                className="composer__mic composer__mic--unsupported"
+                aria-disabled="true"
+                aria-label="Voice input unavailable"
+                title="Voice input is not available in this browser"
+                onClick={() => setShowUnsupported(true)}
+              >
+                <MicOff size={18} />
+              </button>
+            ) : dictating ? (
+              <>
+                {requesting ? (
+                  <span className="composer__mic" aria-hidden="true">
+                    <Loader2 className="page__spinner" size={18} />
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="composer__mic composer__mic--recording"
+                    onClick={speech.stop}
+                    disabled={finalizing}
+                    aria-label="Stop voice input"
+                    title="Stop voice input"
+                  >
+                    {finalizing ? <Loader2 className="page__spinner" size={16} /> : <Square size={16} />}
+                  </button>
+                )}
+                {listening && <span className="composer__recording-dot" aria-hidden="true" />}
                 <button
                   type="button"
-                  className="composer__action"
-                  onClick={onOpenDocuments}
-                  disabled={disabled}
-                  aria-label="Add documents to the knowledge base"
-                  title="Manage documents"
+                  className="composer__mic composer__mic--cancel"
+                  onClick={() => {
+                    caretRef.current = null
+                    speech.cancel()
+                  }}
+                  aria-label="Cancel voice input"
+                  title="Cancel voice input (Esc)"
                 >
-                  <Paperclip size={18} />
+                  <X size={16} />
                 </button>
-              )}
-              {speech.isSupported && (
-                <div className="composer__speech">
-                  {recording ? (
-                    <>
-                      <button
-                        type="button"
-                        className="composer__mic composer__mic--recording"
-                        onClick={speech.stop}
-                        disabled={transcribing}
-                        aria-label="Stop recording and transcribe"
-                        title="Stop recording"
-                      >
-                        <Square size={16} />
-                      </button>
-                      <span className="composer__recording" role="status">
-                        <span className="composer__recording-dot" aria-hidden="true" />
-                        {speech.elapsedSeconds}s
-                      </span>
-                      <button
-                        type="button"
-                        className="composer__mic composer__mic--cancel"
-                        onClick={() => {
-                          caretRef.current = null
-                          speech.cancel()
-                        }}
-                        aria-label="Cancel recording"
-                        title="Cancel recording"
-                      >
-                        <X size={16} />
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      className="composer__mic"
-                      onClick={beginRecording}
-                      disabled={disabled || transcribing}
-                      aria-label="Start recording"
-                      title="Start recording (dictate a message)"
-                    >
-                      {transcribing ? <Loader2 className="page__spinner" size={18} /> : <Mic size={18} />}
-                    </button>
-                  )}
-                  {transcribing && <span className="composer__transcribing">Transcribing…</span>}
-                </div>
-              )}
-            </div>
-            <span className="composer__divider" aria-hidden="true" />
-          </>
-        )}
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="composer__mic"
+                  onClick={beginListening}
+                  disabled={disabled}
+                  aria-label="Start voice input"
+                  title="Dictate a message"
+                >
+                  <Mic size={18} />
+                </button>
+                <select
+                  className="composer__lang"
+                  value={speech.language}
+                  onChange={(e) => speech.setLanguage(e.target.value)}
+                  aria-label="Voice input language"
+                  title="Voice input language (availability depends on your browser)"
+                >
+                  {SPEECH_LANGUAGES.map((language) => (
+                    <option key={language.code} value={language.code}>
+                      {language.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
+        </div>
+        <span className="composer__divider" aria-hidden="true" />
         <textarea
           ref={textareaRef}
           rows={1}
@@ -215,12 +259,19 @@ export function Composer({
           {streaming ? <Square size={18} /> : <ArrowUp size={20} />}
         </button>
       </div>
-      {speech.error && (
+      <p className="composer__speech-note" role="status" aria-live="polite">
+        {statusLine}
+      </p>
+      {speechError && (
         <p className="composer__speech-error" role="alert">
-          {speech.error}
+          {speechError}
         </p>
       )}
-      {speech.conversionNote && !speech.error && <p className="composer__speech-note">{speech.conversionNote}</p>}
+      {showUnsupported && speech.unsupportedMessage && (
+        <p className="composer__speech-error" role="alert">
+          {speech.unsupportedMessage}
+        </p>
+      )}
     </div>
   )
 }

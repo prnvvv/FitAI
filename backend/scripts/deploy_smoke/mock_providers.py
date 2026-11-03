@@ -3,7 +3,6 @@
 One HTTP server emulating, on a single port:
 
 * ``POST /embed``                         HuggingFace-style feature extraction (384-d vectors)
-* ``POST /stt/v1/audio/transcriptions``   OpenAI-compatible transcription
 * ``POST|GET|DELETE /storage/v1/object/<bucket>/<key>``  Supabase Storage REST
 * ``POST /openai/v1/chat/completions``    Groq (OpenAI-compatible) chat completion
 
@@ -29,8 +28,6 @@ STORE: dict[str, bytes] = {}
 STATS = {
     "embed_requests": 0,
     "embed_texts": 0,
-    "stt_requests": 0,
-    "stt_bytes": 0,
     "chat_requests": 0,
 }
 LOCK = threading.Lock()
@@ -82,11 +79,6 @@ class Handler(BaseHTTPRequestHandler):
                 STATS["embed_requests"] += 1
                 STATS["embed_texts"] += len(texts)
             return self._json(200, [embed(t) for t in texts])
-        if path == "/stt/v1/audio/transcriptions":
-            with LOCK:
-                STATS["stt_requests"] += 1
-                STATS["stt_bytes"] += len(body)
-            return self._json(200, {"text": "mock transcript"})
         if path.startswith("/storage/v1/object/"):
             if self.headers.get("x-upsert") == "false" and path in STORE:
                 return self._json(409, {"error": "Duplicate"})

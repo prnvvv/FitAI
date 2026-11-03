@@ -1,10 +1,10 @@
 # FitAI Core API runtime dependencies (Dockerfile.core).
 #
 # Authoritative ranges live in pyproject.toml; this file is the minimal subset the
-# Core service actually imports. It deliberately EXCLUDES torch/transformers
-# (local STT), chromadb/onnxruntime (local vectors + embeddings), pypdf/python-docx
-# (document parsing) and numpy/scipy/av/soundfile (audio): production Core embeds
-# through a remote provider and stores vectors in pgvector.
+# Core service actually imports. It deliberately EXCLUDES chromadb/onnxruntime
+# (local vectors + embeddings), pypdf/python-docx (document parsing) and numpy:
+# production Core embeds through a remote provider and stores vectors in pgvector.
+# Speech input runs in the browser (Web Speech API); no backend audio stack exists.
 #
 # Verified by tests/unit/deploy/test_service_entrypoints.py (import isolation) and
 # by installing this file alone into a clean virtualenv (see DEPLOYMENT_VERIFICATION.md).

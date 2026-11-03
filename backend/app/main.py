@@ -2,10 +2,10 @@
 
 Core serves auth, chat (LangGraph + Groq), conversations, profile, workouts,
 progress, memory, activity, plan, exercises and location. The document and
-speech-to-text route groups are optional (``SERVE_DOCUMENTS_ROUTES`` /
-``SERVE_STT_ROUTES``, both true for a single-process local run): in production
-they are served by the dedicated Documents and STT services, and Core then never
-imports their modules or dependencies.
+document route group is optional (``SERVE_DOCUMENTS_ROUTES``, true for a
+single-process local run): in production it is served by the dedicated Documents
+service, and Core then never imports its modules or dependencies. Dictation runs
+in the browser (Web Speech API), so there is no speech-to-text backend.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ logger = get_logger(__name__)
 
 
 def core_routers() -> tuple[APIRouter, ...]:
-    """Routers Core serves; document/STT groups are imported only when enabled."""
+    """Routers Core serves; the document group is imported only when enabled."""
     routers: list[APIRouter] = [
         auth.router,
         chat.router,
@@ -61,10 +61,6 @@ def core_routers() -> tuple[APIRouter, ...]:
         from app.api.routers import documents
 
         routers.insert(5, documents.router)
-    if settings.serve_stt_routes:
-        from app.stt import router as stt_router
-
-        routers.append(stt_router)
     return tuple(routers)
 
 
@@ -120,17 +116,10 @@ def _startup_tasks() -> tuple[Callable[[], None], ...]:
         elif not settings.guardrails_enabled:
             logger.warning("GUARDRAILS_ENABLED=false: all guardrails are DISABLED.")
 
-    def _warm_stt_model() -> None:
-        from app.stt.startup import warm_stt_model
-
-        warm_stt_model()
-
     tasks: list[Callable[[], None]] = [_check_migrations_at_startup]
     if settings.serve_documents_routes and settings.ingestion_mode.strip().lower() != "jobs":
         tasks.append(_reconcile_stuck_documents)
     tasks.append(_log_guardrails_mode)
-    if settings.serve_stt_routes and settings.stt_provider.strip().lower() == "local":
-        tasks.append(_warm_stt_model)
     return tuple(tasks)
 
 

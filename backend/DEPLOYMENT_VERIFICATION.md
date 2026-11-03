@@ -1,5 +1,9 @@
 # Deployment verification report
 
+> **Update:** the IBM Granite speech-to-text service (`fitai-stt`) described below has since been
+> removed. Dictation is now browser-native (Web Speech API); see `frontend/SPEECH_TO_TEXT.md`. The
+> measurements and tables in this report are historical and were not re-run for the two-service layout.
+
 Everything below was executed on 2026-11-03 on a Windows 11 workstation (Python 3.10.10,
 Docker Desktop 29.8.1 running **Linux containers**, the same OS family as Render). Numbers are copied
 from real runs; nothing is estimated. Where something could not be verified it says so.

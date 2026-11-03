@@ -121,4 +121,43 @@ describe('useConversations', () => {
     await waitFor(() => expect(result.current.conversations).toHaveLength(0))
     expect(api.deleteConversation).toHaveBeenCalledWith('1')
   })
+  it('keeps the newest list when an older refresh resolves last', async () => {
+    const stale: Conversation = { id: 'old', title: 'Stale', created_at: '', updated_at: '' }
+    const fresh: Conversation = { id: 'new', title: 'Fresh', created_at: '', updated_at: '' }
+    let resolveSlow!: (value: unknown) => void
+    const page = (items: Conversation[]) => ({ items, total: items.length, limit: 100, offset: 0 })
+    vi.mocked(api.listConversations)
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveSlow = resolve)) as never)
+      .mockResolvedValueOnce(page([fresh]))
+
+    const { result } = renderHook(() => useConversations({ enabled: true }), { wrapper: wrapper() })
+    await act(async () => {
+      await result.current.refresh()
+    })
+    await waitFor(() => expect(result.current.conversations[0]?.id).toBe('new'))
+
+    // The first (older) request finally answers; it must not replace the newer list.
+    await act(async () => {
+      resolveSlow(page([stale]))
+    })
+    expect(result.current.conversations.map((c) => c.id)).toEqual(['new'])
+  })
+
+  it('does not blank a populated list while refreshing in the background', async () => {
+    const one: Conversation = { id: '1', title: 'One', created_at: '', updated_at: '' }
+    const page = { items: [one], total: 1, limit: 100, offset: 0 }
+    vi.mocked(api.listConversations).mockResolvedValue(page)
+    const { result } = renderHook(() => useConversations({ enabled: true }), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    let sawLoading = false
+    const refreshing = act(async () => {
+      const p = result.current.refresh()
+      sawLoading = result.current.loading
+      await p
+    })
+    await refreshing
+    expect(sawLoading).toBe(false)
+    expect(result.current.conversations).toHaveLength(1)
+  })
 })

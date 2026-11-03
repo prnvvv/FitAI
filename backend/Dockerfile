@@ -16,23 +16,17 @@ ENV PIP_NO_CACHE_DIR=1 \
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# CPU-only PyTorch (the default PyPI wheel drags in several GB of CUDA libraries).
-# The versions match the pins in requirements.txt, so the next step keeps them.
-RUN pip install --upgrade pip setuptools wheel \
-    && pip install torch==2.9.1+cpu torchaudio==2.9.1+cpu \
-       --index-url https://download.pytorch.org/whl/cpu \
-       --extra-index-url https://pypi.org/simple
-
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install -r /tmp/requirements.txt
 
 # ---- runtime ----------------------------------------------------------------
 FROM python:3.10-slim-bookworm AS runtime
 
-# libgomp1: onnxruntime/torch threading. libgl1 + libglib2.0-0: opencv, which
-# rapidocr-onnxruntime imports for image OCR. libsndfile1: audio decoding.
+# libgomp1: onnxruntime threading. libgl1 + libglib2.0-0: opencv, which
+# rapidocr-onnxruntime imports for image OCR.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 libgl1 libglib2.0-0 libsndfile1 \
+    && apt-get install -y --no-install-recommends libgomp1 libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin app
 
@@ -47,8 +41,7 @@ ENV PATH="/opt/venv/bin:$PATH" \
     PORT=8000 \
     DOCUMENT_STORAGE_BACKEND=local \
     CHROMADB_PERSIST_DIR=/var/data/chroma \
-    UPLOAD_DIR=/var/data/uploads \
-    HF_HOME=/var/data/hf-cache
+    UPLOAD_DIR=/var/data/uploads
 
 # backend/ keeps its layout so settings, Alembic and the app resolve paths the
 # same way as in development (paths are anchored to this directory).
