@@ -38,6 +38,7 @@ from app.models.enums import MemoryChangeType, MemoryKey, MessageRole
 from app.models.user import User
 from app.rag.continuity_store import KIND_MEMORY, KIND_SUMMARY, ContinuityHit, ContinuityStore
 from app.rag.retriever import Retriever
+from app.rag.store_factory import build_vector_store
 from app.rag.vector_store import VectorStore
 from app.repositories.conversation_summary_repository import ConversationSummaryRepository
 from app.safety import run_safety_rules
@@ -404,7 +405,7 @@ def _vector_store() -> VectorStore | None:
     store = _VECTOR_STORES.get(key)
     if store is None:
         try:
-            store = VectorStore(persist_dir=settings.chromadb_persist_dir)
+            store = build_vector_store(VectorStore)
         except Exception:
             log.warning("vector store unavailable", exc_info=True)
             return None

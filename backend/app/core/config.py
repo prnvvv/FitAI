@@ -57,6 +57,11 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = "FitAI Backend"
+    #: Which deployable service this process is: ``core`` | ``stt`` | ``documents``.
+    #: Only used to scope production start-up validation to what the service needs.
+    service_name: str = Field(
+        default="core", validation_alias=AliasChoices("FITAI_SERVICE", "SERVICE_NAME")
+    )
     environment: str = "development"
     debug: bool = False
     #: Single source of truth for the local dev server bind address. Read by the
@@ -96,7 +101,55 @@ class Settings(BaseSettings):
     # File uploads / document storage
     max_upload_size_mb: int = 10
     upload_dir: str = "./uploads"
+    #: unconfigured | local | supabase
     document_storage_backend: str = "unconfigured"
+    #: Private Supabase Storage bucket for the original uploads.
+    supabase_storage_bucket: str = "fitai-documents"
+    supabase_storage_timeout_s: float = 30.0
+
+    # Which route groups the Core API serves. Both default to True so a local
+    # single-process run (and the existing test-suite) keeps working; the
+    # production Core image sets them to false and the dedicated STT / Documents
+    # services own those routes.
+    serve_documents_routes: bool = True
+    serve_stt_routes: bool = True
+
+    # Vector storage: ``chroma`` (local, development default) or ``pgvector``
+    # (Supabase PostgreSQL, production).
+    vector_store_backend: str = "chroma"
+    #: Embeddings: ``local`` (Chroma's bundled ONNX MiniLM) or ``remote`` (HTTP).
+    embedding_provider: str = "local"
+    #: Feature-extraction endpoint for ``remote`` (no default: must be configured).
+    embedding_api_url: str | None = None
+    embedding_api_key: str | None = None
+    #: Model name sent to ``openai``-format endpoints (``hf`` endpoints embed it in the URL).
+    embedding_remote_model: str | None = None
+    #: ``hf`` (HuggingFace feature-extraction) or ``openai`` (/embeddings).
+    embedding_api_format: str = "hf"
+    #: Dimension every vector must have; all-MiniLM-L6-v2 produces 384.
+    embedding_dimension: int = 384
+    embedding_batch_size: int = 32
+    embedding_timeout_s: float = 30.0
+
+    # Document ingestion. ``inline`` keeps the original in-process BackgroundTask
+    # (development / tests). ``jobs`` persists a job row per document and
+    # processes it in checkpointed batches so a restart resumes instead of failing.
+    ingestion_mode: str = "inline"
+    ingestion_worker_enabled: bool = True
+    ingestion_pages_per_batch: int = 5
+    ingestion_poll_seconds: float = 5.0
+    ingestion_lease_seconds: int = 300
+    ingestion_max_attempts: int = 3
+
+    # Speech-to-text (STT service). ``local`` loads Granite via torch (needs far
+    # more than 512 MB); ``remote`` forwards audio to an OpenAI-compatible
+    # ``/audio/transcriptions`` endpoint that must be configured explicitly.
+    stt_provider: str = "local"
+    stt_remote_url: str | None = None
+    stt_remote_api_key: str | None = None
+    stt_remote_model: str | None = None
+    stt_remote_timeout_s: float = 60.0
+    stt_max_upload_mb: int = 10
 
     # AI / retrieval configuration is owned by Person 2. These values are kept
     # here only so both developers share a single configuration source.
@@ -297,7 +350,12 @@ class Settings(BaseSettings):
         return value
 
     def production_problems(self) -> list[str]:
-        """Configuration mistakes that must never reach a production start."""
+        """Configuration mistakes that must never reach a production start.
+
+        Checks are scoped by ``service_name`` so the STT service is not forced to
+        carry a Groq key and Core is not forced to carry STT credentials.
+        """
+        service = self.service_name.strip().lower()
         problems: list[str] = []
         if self.database_url.startswith("sqlite"):
             problems.append("DATABASE_URL must be a PostgreSQL URL, not SQLite.")
@@ -310,15 +368,58 @@ class Settings(BaseSettings):
             problems.append("CORS_ORIGINS must use https:// for non-local origins.")
         if not self.supabase_url:
             problems.append("SUPABASE_URL is required to verify sign-in tokens.")
-        if not self.groq_api_key:
-            problems.append("GROQ_API_KEY is required for chat.")
         if self.debug:
             problems.append("DEBUG must be false.")
-        if self.document_storage_backend.strip().lower() != "local":
+
+        if service == "core" and not self.groq_api_key:
+            problems.append("GROQ_API_KEY is required for chat.")
+
+        serves_documents = service == "documents" or (
+            service == "core" and self.serve_documents_routes
+        )
+        if serves_documents:
+            backend = self.document_storage_backend.strip().lower()
+            if backend not in {"local", "supabase"}:
+                problems.append(
+                    "DOCUMENT_STORAGE_BACKEND must be 'supabase' (or 'local' with "
+                    "UPLOAD_DIR on a persistent disk); other values leave uploads disabled."
+                )
+            if backend == "supabase" and not self.supabase_service_role_key:
+                problems.append("SUPABASE_SERVICE_ROLE_KEY is required for Supabase Storage.")
+
+        uses_vectors = service in {"core", "documents"}
+        if uses_vectors and self.vector_store_backend.strip().lower() == "pgvector":
+            problems.extend(self._remote_embedding_problems())
+        if service == "documents" and self.vector_store_backend.strip().lower() != "pgvector":
+            problems.append("VECTOR_STORE_BACKEND must be 'pgvector' for the documents service.")
+        if service == "documents" and self.ingestion_mode.strip().lower() != "jobs":
+            problems.append("INGESTION_MODE must be 'jobs' for the documents service.")
+
+        if service == "stt" and self.stt_provider.strip().lower() != "remote":
             problems.append(
-                "DOCUMENT_STORAGE_BACKEND must be 'local' (point UPLOAD_DIR at the "
-                "persistent disk); other values leave uploads disabled."
+                "STT_PROVIDER must be 'remote': local Granite inference does not fit "
+                "a 512 MB instance."
             )
+        if service == "stt" and self.stt_provider.strip().lower() == "remote":
+            for name, value in (
+                ("STT_REMOTE_URL", self.stt_remote_url),
+                ("STT_REMOTE_API_KEY", self.stt_remote_api_key),
+                ("STT_REMOTE_MODEL", self.stt_remote_model),
+            ):
+                if not value:
+                    problems.append(f"{name} is required when STT_PROVIDER=remote.")
+        return problems
+
+    def _remote_embedding_problems(self) -> list[str]:
+        """pgvector deployments must embed through a remote provider."""
+        problems: list[str] = []
+        if self.embedding_provider.strip().lower() != "remote":
+            problems.append(
+                "EMBEDDING_PROVIDER must be 'remote' with VECTOR_STORE_BACKEND=pgvector: "
+                "a local embedding model does not fit a 512 MB instance."
+            )
+        elif not self.embedding_api_url or not self.embedding_api_key:
+            problems.append("EMBEDDING_API_URL and EMBEDDING_API_KEY are required.")
         return problems
 
     @model_validator(mode="after")
