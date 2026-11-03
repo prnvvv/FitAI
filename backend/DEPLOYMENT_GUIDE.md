@@ -56,8 +56,7 @@
 | `DATABASE_URL` | ✔ | ✔ | ✔ | Supabase **pooler** URL, `?sslmode=require` |
 | `CORS_ORIGINS` | ✔ | ✔ | ✔ | exact `https://` frontend origin(s), never `*` |
 | `SUPABASE_URL` | ✔ | ✔ | ✔ | token (JWKS) verification + Storage base |
-| `SUPABASE_ANON_KEY` | ✔ | | | |
-| `SUPABASE_SERVICE_ROLE_KEY` | | | ✔ | **server-side only**; Storage access |
+| `SUPABASE_SERVICE_ROLE_KEY` | | | ✔ | **server-side only**; Storage access. Accepts a new `sb_secret_...` key (sent as `apikey` only) or a legacy JWT key. Leave `SUPABASE_JWT_SECRET` unset. |
 | `GROQ_API_KEY` (+ `GROQ_EXTRACTION_API_KEY`, `PROMPT_GUARD_API_KEY`) | ✔ | | | |
 | `VECTOR_STORE_BACKEND=pgvector` | ✔ | | ✔ | |
 | `EMBEDDING_PROVIDER=remote`, `EMBEDDING_API_URL`, `EMBEDDING_API_KEY`, `EMBEDDING_API_FORMAT` | ✔ | | ✔ | 384-dimension MiniLM-class model |
