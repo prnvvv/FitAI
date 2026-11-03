@@ -1,4 +1,5 @@
-# Render Blueprint for the two independently deployable FitAI backend services.
+# ALTERNATIVE two-service Render Blueprint (reference only; render.yaml is the
+# single-service default). Render reads render.yaml unless pointed at this file.
 #
 #   fitai-core       chat, auth, profile, workouts, memory, ...   (Groq + LangGraph)
 #   fitai-documents  PDF upload, extraction, embeddings, pgvector

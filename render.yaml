@@ -1,0 +1,92 @@
+# Render Blueprint: ONE web service serving the React frontend and the FastAPI backend.
+#
+#   Browser -> fitai-web (Docker) -> Supabase (Postgres, pgvector, Storage, Auth) + Groq
+#
+# Same-origin: the frontend calls /api/v1 on this service, so there is no
+# cross-service CORS. The two-service layout remains in render.split.yaml.
+#
+# READ backend/DEPLOYMENT_GUIDE.md BEFORE APPLYING THIS BLUEPRINT:
+#   * Apply the database migration once, manually, BEFORE the first deploy. The
+#     container verifies the schema at start-up and refuses to boot against an
+#     un-migrated database; it never migrates it itself.
+#   * autoDeployTrigger is "off": nothing deploys until you trigger it.
+#   * No persistent disk is used: originals live in Supabase Storage, vectors and
+#     ingestion jobs in Postgres. The local filesystem is scratch space only.
+#   * VITE_* values are PUBLIC and baked into the browser bundle at build time.
+#     Never put the service-role key or any other secret in a VITE_* variable.
+
+services:
+  - type: web
+    name: fitai-web
+    runtime: docker
+    plan: free
+    repo: https://github.com/prnvvv/FitAI
+    branch: main
+    dockerfilePath: ./Dockerfile.web
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: FITAI_SERVICE
+        value: core
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      # One process serves chat AND documents; the ingestion worker runs in-process.
+      - key: SERVE_DOCUMENTS_ROUTES
+        value: "true"
+      - key: INGESTION_MODE
+        value: jobs
+      - key: INGESTION_PAGES_PER_BATCH
+        value: "5"
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "10"
+      - key: DOCUMENT_STORAGE_BACKEND
+        value: supabase
+      - key: SUPABASE_STORAGE_BUCKET
+        value: fitai-documents
+      # Small, bounded pool for a pooled Supabase connection string.
+      - key: DB_POOL_SIZE
+        value: "3"
+      - key: DB_MAX_OVERFLOW
+        value: "2"
+      - key: GUARDRAILS_MODE
+        value: enforce
+      - key: VECTOR_STORE_BACKEND
+        value: pgvector
+      - key: EMBEDDING_PROVIDER
+        value: remote
+      - key: EMBEDDING_DIMENSION
+        value: "384"
+      - key: EMBEDDING_API_FORMAT
+        value: hf
+      - key: FRONTEND_DIST_DIR
+        value: /srv/fitai/frontend/dist
+      - key: DATABASE_URL
+        sync: false
+      # This service's own https origin (e.g. https://fitai-web.onrender.com).
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      # Server-side only. NEVER expose this key to the frontend.
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_EXTRACTION_API_KEY
+        sync: false
+      - key: PROMPT_GUARD_API_KEY
+        sync: false
+      - key: EMBEDDING_API_URL
+        sync: false
+      - key: EMBEDDING_API_KEY
+        sync: false
+      # Public browser-bundle build args (same values as the Supabase project's public config).
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false

@@ -1,4 +1,4 @@
-"""Static guards for render.yaml, the Dockerfiles and the per-service requirements."""
+"""Static guards for render.split.yaml (two-service topology), the Dockerfiles and the per-service requirements."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ ROOT = BACKEND.parent
 SERVICES = ("core", "documents")
 MODULES = {"core": "app.main:app", "documents": "app.documents_main:app"}
 
-BLUEPRINT = yaml.safe_load((ROOT / "render.yaml").read_text(encoding="utf-8"))
+BLUEPRINT = yaml.safe_load((ROOT / "render.split.yaml").read_text(encoding="utf-8"))
 BY_NAME = {s["name"]: s for s in BLUEPRINT["services"]}
 
 
