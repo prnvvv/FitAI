@@ -1,4 +1,4 @@
-"""The three deployable services: isolation, routes, health and authentication."""
+"""The two deployable services: isolation, routes, health and authentication."""
 
 from __future__ import annotations
 
@@ -53,11 +53,9 @@ def _imports(module: str, env: dict[str, str] | None = None) -> tuple[list[str],
 
 
 def test_core_with_split_services_imports_no_heavy_or_peer_service_code() -> None:
-    heavy, app_modules = _imports(
-        "app.main", {"SERVE_DOCUMENTS_ROUTES": "false", "SERVE_STT_ROUTES": "false"}
-    )
+    heavy, app_modules = _imports("app.main", {"SERVE_DOCUMENTS_ROUTES": "false"})
     assert heavy == []
-    assert not [m for m in app_modules if m.startswith(("app.stt", "app.rag.page_source"))]
+    assert not [m for m in app_modules if m.startswith("app.rag.page_source")]
     assert "app.api.routers.documents" not in app_modules
     assert "app.services.ingestion_jobs" not in app_modules
 
@@ -68,24 +66,19 @@ def test_core_default_does_not_load_chroma_or_ml_libraries_at_startup() -> None:
     assert heavy == []
 
 
-@pytest.mark.parametrize("module", ["app.stt_main", "app.documents_main"])
-def test_peer_services_import_no_heavy_dependencies(module: str) -> None:
-    heavy, app_modules = _imports(module)
+def test_documents_service_imports_no_heavy_dependencies() -> None:
+    heavy, app_modules = _imports("app.documents_main")
     assert heavy == []
-    # Neither peer service may pull in the chat agent or the other service's code.
+    # The Documents service must not pull in the chat agent.
     assert not [m for m in app_modules if m.startswith(("app.agent", "app.services.chat_service"))]
 
 
-def test_documents_service_does_not_import_stt_and_stt_does_not_import_documents() -> None:
-    _, docs_modules = _imports("app.documents_main")
-    _, stt_modules = _imports("app.stt_main")
-    assert not [m for m in docs_modules if m.startswith("app.stt")]
-    assert "app.api.routers.documents" not in stt_modules
-    assert not [
-        m
-        for m in stt_modules
-        if m.startswith(("app.rag.vector_store", "app.rag.pipeline", "app.rag.embeddings"))
-    ]
+def test_there_is_no_speech_to_text_backend() -> None:
+    """Dictation is browser-native (Web Speech API): no STT module may exist."""
+    import importlib.util
+
+    assert importlib.util.find_spec("app.stt") is None
+    assert importlib.util.find_spec("app.stt_main") is None
 
 
 def _paths(app) -> set[str]:
@@ -98,23 +91,15 @@ def _paths(app) -> set[str]:
     return set(app.openapi()["paths"])
 
 
-def test_stt_app_registers_only_stt_routes_and_health() -> None:
-    from app.stt_main import app
-
-    paths = _paths(app)
-    assert "/api/v1/stt/transcribe" in paths and "/health" in paths
-    assert not [p for p in paths if p.startswith(("/api/v1/chat", "/api/v1/documents"))]
-
-
 def test_documents_app_registers_only_document_routes_and_health() -> None:
     from app.documents_main import app
 
     paths = _paths(app)
     assert "/api/v1/documents" in paths and "/health" in paths
-    assert not [p for p in paths if p.startswith(("/api/v1/chat", "/api/v1/stt"))]
+    assert not [p for p in paths if p.startswith("/api/v1/chat")]
 
 
-def test_core_registers_documents_and_stt_only_when_enabled(monkeypatch) -> None:
+def test_core_registers_documents_only_when_enabled(monkeypatch) -> None:
     from app.core.config import settings
     from app.main import core_routers
 
@@ -122,16 +107,15 @@ def test_core_registers_documents_and_stt_only_when_enabled(monkeypatch) -> None
         return {r.prefix for r in core_routers()}
 
     monkeypatch.setattr(settings, "serve_documents_routes", False)
-    monkeypatch.setattr(settings, "serve_stt_routes", False)
     split = prefixes()
-    assert "/documents" not in split and "/stt" not in split and "/chat" in split
+    assert "/documents" not in split and "/chat" in split and "/stt" not in split
 
     monkeypatch.setattr(settings, "serve_documents_routes", True)
-    monkeypatch.setattr(settings, "serve_stt_routes", True)
-    assert {"/documents", "/stt", "/chat"} <= prefixes()
+    enabled = prefixes()
+    assert {"/documents", "/chat"} <= enabled and "/stt" not in enabled
 
 
-@pytest.mark.parametrize("module", ["app.main", "app.stt_main", "app.documents_main"])
+@pytest.mark.parametrize("module", ["app.main", "app.documents_main"])
 def test_every_service_exposes_a_cheap_health_endpoint(module: str) -> None:
     app = __import__(module, fromlist=["app"]).app
     response = TestClient(app).get("/health")  # no `with`: lifespan (DB check) not run
@@ -143,8 +127,6 @@ def test_every_service_exposes_a_cheap_health_endpoint(module: str) -> None:
 @pytest.mark.parametrize(
     ("module", "method", "path"),
     [
-        ("app.stt_main", "post", "/api/v1/stt/transcribe"),
-        ("app.stt_main", "get", "/api/v1/stt/status"),
         ("app.documents_main", "get", "/api/v1/documents"),
         ("app.documents_main", "post", "/api/v1/documents"),
         ("app.documents_main", "delete", "/api/v1/documents/00000000-0000-0000-0000-000000000000"),
@@ -164,7 +146,7 @@ def test_split_service_endpoints_require_authentication(module, method, path) ->
 def test_readiness_reports_database_separately(monkeypatch) -> None:
     from app.api.deps import get_current_auth_user  # noqa: F401 - keep import order stable
     from app.db.session import get_db
-    from app.stt_main import app
+    from app.documents_main import app
 
     class Broken:
         def execute(self, *_a, **_k):

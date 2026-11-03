@@ -1,4 +1,4 @@
-"""Plumbing shared by the Core, STT and Documents FastAPI applications.
+"""Plumbing shared by the Core and Documents FastAPI applications.
 
 Every deployable service gets the same CORS policy, structured error envelope,
 request-id/timing log line and ``/health`` endpoints. Only the routers and the

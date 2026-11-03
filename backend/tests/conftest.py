@@ -11,12 +11,6 @@ workout/progress services, and RAG retriever used by unit tests.
 
 from __future__ import annotations
 
-import os
-
-# Keep the Granite STT model off the network in tests. Production/development
-# default to eager-loading; tests opt out so the suite stays offline and fast.
-os.environ.setdefault("STT_EAGER_LOAD", "0")
-
 import uuid
 from collections.abc import Iterator, Mapping, Sequence
 from datetime import date, datetime, timezone

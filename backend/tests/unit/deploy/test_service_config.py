@@ -28,15 +28,6 @@ CORE = {
     "FITAI_SERVICE": "core",
     "GROQ_API_KEY": "gsk",
     "SERVE_DOCUMENTS_ROUTES": "false",
-    "SERVE_STT_ROUTES": "false",
-}
-STT = {
-    **BASE,
-    "FITAI_SERVICE": "stt",
-    "STT_PROVIDER": "remote",
-    "STT_REMOTE_URL": "https://stt.example.com/v1/audio/transcriptions",
-    "STT_REMOTE_API_KEY": "k",
-    "STT_REMOTE_MODEL": "m",
 }
 DOCUMENTS = {
     **BASE,
@@ -56,7 +47,7 @@ def _settings(monkeypatch: pytest.MonkeyPatch, env: dict[str, str], **override: 
     return Settings(_env_file=None)
 
 
-@pytest.mark.parametrize("env", [CORE, STT, DOCUMENTS], ids=["core", "stt", "documents"])
+@pytest.mark.parametrize("env", [CORE, DOCUMENTS], ids=["core", "documents"])
 def test_complete_service_configuration_is_accepted(monkeypatch, env) -> None:
     assert _settings(monkeypatch, env).is_production
 
@@ -67,15 +58,15 @@ def _rejected(monkeypatch, env, **override) -> str:
     return str(exc.value)
 
 
-def test_stt_does_not_need_a_groq_key_but_core_does(monkeypatch) -> None:
-    assert "GROQ_API_KEY" not in _rejected(monkeypatch, STT, STT_REMOTE_URL="")
+def test_documents_does_not_need_a_groq_key_but_core_does(monkeypatch) -> None:
+    assert "GROQ_API_KEY" not in _rejected(monkeypatch, DOCUMENTS, SUPABASE_SERVICE_ROLE_KEY="")
     assert "GROQ_API_KEY" in _rejected(monkeypatch, CORE, GROQ_API_KEY="")
 
 
-def test_stt_production_rejects_local_granite_and_missing_provider_settings(monkeypatch) -> None:
-    assert "does not fit" in _rejected(monkeypatch, STT, STT_PROVIDER="local")
-    for name in ("STT_REMOTE_URL", "STT_REMOTE_API_KEY", "STT_REMOTE_MODEL"):
-        assert name in _rejected(monkeypatch, STT, **{name: ""})
+def test_no_speech_to_text_settings_remain() -> None:
+    """Dictation runs in the browser; the backend carries no STT configuration."""
+    assert [name for name in Settings.model_fields if "stt" in name.split("_")] == []
+    assert "serve_stt_routes" not in Settings.model_fields
 
 
 def test_pgvector_requires_a_remote_embedding_provider(monkeypatch) -> None:
@@ -104,7 +95,7 @@ def test_core_without_document_routes_does_not_need_document_storage(monkeypatch
 
 
 def test_production_still_rejects_wildcard_cors_for_every_service(monkeypatch) -> None:
-    for env in (CORE, STT, DOCUMENTS):
+    for env in (CORE, DOCUMENTS):
         assert "explicit origins" in _rejected(monkeypatch, env, CORS_ORIGINS="*")
 
 
@@ -112,6 +103,6 @@ def test_development_defaults_keep_local_single_process_behaviour(monkeypatch) -
     for key in ("ENVIRONMENT", "FITAI_SERVICE", "SERVE_DOCUMENTS_ROUTES", "VECTOR_STORE_BACKEND"):
         monkeypatch.delenv(key, raising=False)
     s = Settings(_env_file=None)
-    assert s.serve_documents_routes and s.serve_stt_routes
+    assert s.serve_documents_routes
     assert s.vector_store_backend == "chroma" and s.embedding_provider == "local"
-    assert s.ingestion_mode == "inline" and s.stt_provider == "local"
+    assert s.ingestion_mode == "inline"

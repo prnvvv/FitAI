@@ -38,7 +38,6 @@ ENV PATH="/opt/venv/bin:$PATH" \
     ENVIRONMENT=production \
     FITAI_SERVICE=core \
     SERVE_DOCUMENTS_ROUTES=false \
-    SERVE_STT_ROUTES=false \
     PORT=8000
 
 # backend/ keeps its layout so settings and the migration-head check resolve

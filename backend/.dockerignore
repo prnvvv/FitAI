@@ -1,9 +1,8 @@
-# Build context for backend/Dockerfile.{core,stt,documents} is backend/.
+# Build context for backend/Dockerfile.{core,documents} is backend/.
 # Allow-list: nothing enters an image unless listed here.
 *
 
 !requirements-core.txt
-!requirements-stt.txt
 !requirements-documents.txt
 !alembic.ini
 !pyproject.toml

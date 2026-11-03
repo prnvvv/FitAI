@@ -57,7 +57,7 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = "FitAI Backend"
-    #: Which deployable service this process is: ``core`` | ``stt`` | ``documents``.
+    #: Which deployable service this process is: ``core`` | ``documents``.
     #: Only used to scope production start-up validation to what the service needs.
     service_name: str = Field(
         default="core", validation_alias=AliasChoices("FITAI_SERVICE", "SERVICE_NAME")
@@ -107,12 +107,11 @@ class Settings(BaseSettings):
     supabase_storage_bucket: str = "fitai-documents"
     supabase_storage_timeout_s: float = 30.0
 
-    # Which route groups the Core API serves. Both default to True so a local
+    # Whether the Core API serves the document routes. Defaults to True so a local
     # single-process run (and the existing test-suite) keeps working; the
-    # production Core image sets them to false and the dedicated STT / Documents
-    # services own those routes.
+    # production Core image sets it to false and the dedicated Documents service
+    # owns those routes.
     serve_documents_routes: bool = True
-    serve_stt_routes: bool = True
 
     # Vector storage: ``chroma`` (local, development default) or ``pgvector``
     # (Supabase PostgreSQL, production).
@@ -140,16 +139,6 @@ class Settings(BaseSettings):
     ingestion_poll_seconds: float = 5.0
     ingestion_lease_seconds: int = 120
     ingestion_max_attempts: int = 3
-
-    # Speech-to-text (STT service). ``local`` loads Granite via torch (needs far
-    # more than 512 MB); ``remote`` forwards audio to an OpenAI-compatible
-    # ``/audio/transcriptions`` endpoint that must be configured explicitly.
-    stt_provider: str = "local"
-    stt_remote_url: str | None = None
-    stt_remote_api_key: str | None = None
-    stt_remote_model: str | None = None
-    stt_remote_timeout_s: float = 60.0
-    stt_max_upload_mb: int = 10
 
     # AI / retrieval configuration is owned by Person 2. These values are kept
     # here only so both developers share a single configuration source.
@@ -352,8 +341,8 @@ class Settings(BaseSettings):
     def production_problems(self) -> list[str]:
         """Configuration mistakes that must never reach a production start.
 
-        Checks are scoped by ``service_name`` so the STT service is not forced to
-        carry a Groq key and Core is not forced to carry STT credentials.
+        Checks are scoped by ``service_name`` so the Documents service is not forced
+        to carry a Groq key.
         """
         service = self.service_name.strip().lower()
         problems: list[str] = []
@@ -395,19 +384,6 @@ class Settings(BaseSettings):
         if service == "documents" and self.ingestion_mode.strip().lower() != "jobs":
             problems.append("INGESTION_MODE must be 'jobs' for the documents service.")
 
-        if service == "stt" and self.stt_provider.strip().lower() != "remote":
-            problems.append(
-                "STT_PROVIDER must be 'remote': local Granite inference does not fit "
-                "a 512 MB instance."
-            )
-        if service == "stt" and self.stt_provider.strip().lower() == "remote":
-            for name, value in (
-                ("STT_REMOTE_URL", self.stt_remote_url),
-                ("STT_REMOTE_API_KEY", self.stt_remote_api_key),
-                ("STT_REMOTE_MODEL", self.stt_remote_model),
-            ):
-                if not value:
-                    problems.append(f"{name} is required when STT_PROVIDER=remote.")
         return problems
 
     def _remote_embedding_problems(self) -> list[str]:
