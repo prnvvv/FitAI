@@ -1,0 +1,58 @@
+# FitAI core service image (Render).
+#
+# Build context: the backend/ directory
+#   docker build -f Dockerfile.documents -t fitai-documents:latest .
+#
+# Runtime configuration comes entirely from environment variables (see
+# .env.example). No secrets, local databases, ChromaDB data or uploads are copied
+# into the image (.dockerignore), and migrations are NOT run at start-up: apply
+# them once, deliberately, with the one-off command in DEPLOYMENT_GUIDE.md.
+
+# ---- builder: install only this service's dependencies into a venv ----------
+FROM python:3.10-slim-bookworm AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Dependencies first so source edits do not invalidate this layer.
+COPY requirements-documents.txt /tmp/requirements.txt
+RUN pip install --upgrade pip \
+    && pip install -r /tmp/requirements.txt \
+    && pip check
+
+# ---- runtime: no compilers, no package manager caches -----------------------
+FROM python:3.10-slim-bookworm AS runtime
+
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app
+
+COPY --from=builder /opt/venv /opt/venv
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HOME=/home/app \
+    ENVIRONMENT=production \
+    FITAI_SERVICE=documents \
+    PORT=8000
+
+# backend/ keeps its layout so settings and the migration-head check resolve
+# paths the same way as in development.
+WORKDIR /srv/fitai/backend
+COPY alembic.ini pyproject.toml ./
+COPY migrations ./migrations
+COPY app ./app
+RUN chown -R app:app /srv/fitai
+
+USER app
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('PORT','8000'), timeout=4)" || exit 1
+
+# Shell form so Render's $PORT is expanded; `exec` makes uvicorn PID 1 so it
+# receives SIGTERM directly for a graceful stop. Exactly one worker (512 MB).
+CMD exec uvicorn app.documents_main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 1 --proxy-headers --forwarded-allow-ips "*" --timeout-graceful-shutdown "${GRACEFUL_SHUTDOWN_SECONDS:-25}"

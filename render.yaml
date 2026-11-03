@@ -1,0 +1,179 @@
+# Render Blueprint for the three independently deployable FitAI backend services.
+#
+#   fitai-core       chat, auth, profile, workouts, memory, ...   (Groq + LangGraph)
+#   fitai-stt        speech-to-text (remote provider, no local model)
+#   fitai-documents  PDF upload, extraction, embeddings, pgvector
+#
+# Every service: Docker, one Uvicorn worker, build context = backend/, health check
+# at /health, no secrets in this file (sync: false => Render prompts for the value).
+#
+# READ backend/DEPLOYMENT_GUIDE.md BEFORE APPLYING THIS BLUEPRINT:
+#   * Run the database migration once, manually, BEFORE the first deploy. The
+#     containers verify the schema at start-up and refuse to boot against an
+#     un-migrated database; they never migrate it themselves.
+#   * autoDeployTrigger is "off": nothing deploys until you trigger it.
+#   * Free instances: 512 MB RAM, spin down after ~15 min idle, no persistent disk,
+#     and the workspace has a monthly instance-hour allowance that three
+#     always-on services can exceed. Services cannot rely on private networking
+#     between each other, so none of them calls another: each talks directly to
+#     Supabase and the browser calls each service's public URL.
+
+services:
+  # ---------------------------------------------------------------- Core API
+  - type: web
+    name: fitai-core
+    runtime: docker
+    plan: free
+    repo: https://github.com/prnvvv/FitAI
+    branch: main
+    dockerfilePath: ./backend/Dockerfile.core
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: FITAI_SERVICE
+        value: core
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      # Document and speech routes live in their own services.
+      - key: SERVE_DOCUMENTS_ROUTES
+        value: "false"
+      - key: SERVE_STT_ROUTES
+        value: "false"
+      # Small, bounded pool: 512 MB and a pooled Supabase connection string.
+      - key: DB_POOL_SIZE
+        value: "3"
+      - key: DB_MAX_OVERFLOW
+        value: "2"
+      - key: GUARDRAILS_MODE
+        value: enforce
+      # Vectors in Supabase pgvector; embeddings from a remote provider.
+      - key: VECTOR_STORE_BACKEND
+        value: pgvector
+      - key: EMBEDDING_PROVIDER
+        value: remote
+      - key: EMBEDDING_DIMENSION
+        value: "384"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_EXTRACTION_API_KEY
+        sync: false
+      - key: PROMPT_GUARD_API_KEY
+        sync: false
+      - key: EMBEDDING_API_URL
+        sync: false
+      - key: EMBEDDING_API_KEY
+        sync: false
+      - key: EMBEDDING_API_FORMAT
+        value: hf
+
+  # ----------------------------------------------------------------- STT API
+  - type: web
+    name: fitai-stt
+    runtime: docker
+    plan: free
+    repo: https://github.com/prnvvv/FitAI
+    branch: main
+    dockerfilePath: ./backend/Dockerfile.stt
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: FITAI_SERVICE
+        value: stt
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DB_POOL_SIZE
+        value: "2"
+      - key: DB_MAX_OVERFLOW
+        value: "1"
+      # Local Granite inference cannot fit in 512 MB; a remote provider is required.
+      - key: STT_PROVIDER
+        value: remote
+      - key: STT_MAX_UPLOAD_MB
+        value: "10"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: STT_REMOTE_URL
+        sync: false
+      - key: STT_REMOTE_API_KEY
+        sync: false
+      - key: STT_REMOTE_MODEL
+        sync: false
+
+  # ------------------------------------------------------------ Documents API
+  - type: web
+    name: fitai-documents
+    runtime: docker
+    plan: free
+    repo: https://github.com/prnvvv/FitAI
+    branch: main
+    dockerfilePath: ./backend/Dockerfile.documents
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: FITAI_SERVICE
+        value: documents
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DB_POOL_SIZE
+        value: "3"
+      - key: DB_MAX_OVERFLOW
+        value: "1"
+      # Durable, checkpointed ingestion: survives spin-down and restarts.
+      - key: INGESTION_MODE
+        value: jobs
+      - key: INGESTION_PAGES_PER_BATCH
+        value: "5"
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "10"
+      - key: DOCUMENT_STORAGE_BACKEND
+        value: supabase
+      - key: SUPABASE_STORAGE_BUCKET
+        value: fitai-documents
+      - key: VECTOR_STORE_BACKEND
+        value: pgvector
+      - key: EMBEDDING_PROVIDER
+        value: remote
+      - key: EMBEDDING_DIMENSION
+        value: "384"
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      # Server-side only. NEVER expose this key to the frontend.
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: EMBEDDING_API_URL
+        sync: false
+      - key: EMBEDDING_API_KEY
+        sync: false
+      - key: EMBEDDING_API_FORMAT
+        value: hf

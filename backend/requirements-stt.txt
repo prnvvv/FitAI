@@ -1,0 +1,24 @@
+# FitAI STT API runtime dependencies (Dockerfile.stt).
+#
+# Production STT forwards audio to a remote OpenAI-compatible transcription
+# endpoint (STT_PROVIDER=remote), so NO model runtime is installed: no torch,
+# torchaudio, transformers or accelerate. numpy is imported by app.stt.
+#
+# Local Granite inference (STT_PROVIDER=local, development only) needs the heavy
+# stack from the repository-root requirements.txt instead; it cannot fit in 512 MB.
+
+fastapi>=0.115.0,<0.163
+uvicorn[standard]>=0.32.0,<0.55
+pydantic>=2.9.0,<3
+pydantic-settings>=2.6.0,<3
+python-dotenv>=1.0.1,<2
+# Authenticated upload route (multipart parsing).
+python-multipart>=0.0.17,<0.1
+# Authentication dependency: token verification + user provisioning.
+sqlalchemy>=2.0.36,<2.1
+alembic>=1.14.0,<1.15
+psycopg2-binary>=2.9.10,<3
+pyjwt[crypto]>=2.9.0,<3
+httpx>=0.27.0,<0.28
+structlog>=24.4.0,<25
+numpy>=1.26.0,<2

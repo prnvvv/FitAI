@@ -1,0 +1,21 @@
+# Build context for backend/Dockerfile.{core,stt,documents} is backend/.
+# Allow-list: nothing enters an image unless listed here.
+*
+
+!requirements-core.txt
+!requirements-stt.txt
+!requirements-documents.txt
+!alembic.ini
+!pyproject.toml
+!migrations/**
+!app/**
+
+# Never ship secrets, local data, caches or tests, even inside allowed folders.
+**/.env
+**/.env.*
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/__pycache__
+**/*.pyc
+**/.pytest_cache

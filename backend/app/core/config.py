@@ -138,7 +138,7 @@ class Settings(BaseSettings):
     ingestion_worker_enabled: bool = True
     ingestion_pages_per_batch: int = 5
     ingestion_poll_seconds: float = 5.0
-    ingestion_lease_seconds: int = 300
+    ingestion_lease_seconds: int = 120
     ingestion_max_attempts: int = 3
 
     # Speech-to-text (STT service). ``local`` loads Granite via torch (needs far
