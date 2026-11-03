@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { useToast } from './components/ui/Toast'
@@ -11,13 +11,23 @@ import { useAuth } from './context/AuthContext'
 import { useConversations } from './hooks/useConversations'
 import { ChatPage } from './pages/ChatPage'
 import { LandingPage } from './pages/LandingPage'
-import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
-import { MemoryPage } from './pages/MemoryPage'
-import { PlanPage } from './pages/PlanPage'
-import { ProfilePage } from './pages/ProfilePage'
-import { ProgressPage } from './pages/ProgressPage'
 import './backdrop.css'
+
+// Secondary pages load on demand so the first paint ships only chat, landing and login.
+const LibraryPage = lazy(() => import('./pages/LibraryPage').then((m) => ({ default: m.LibraryPage })))
+const MemoryPage = lazy(() => import('./pages/MemoryPage').then((m) => ({ default: m.MemoryPage })))
+const PlanPage = lazy(() => import('./pages/PlanPage').then((m) => ({ default: m.PlanPage })))
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })))
+const ProgressPage = lazy(() => import('./pages/ProgressPage').then((m) => ({ default: m.ProgressPage })))
+
+function PageFallback() {
+  return (
+    <div className="auth-loading">
+      <div className="auth-loading__spinner" />
+    </div>
+  )
+}
 
 function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -209,17 +219,21 @@ function AuthenticatedApp() {
           path="library"
           element={
             <PageErrorBoundary name="Library">
-              <LibraryPage />
+              <Suspense fallback={<PageFallback />}>
+                <LibraryPage />
+              </Suspense>
             </PageErrorBoundary>
           }
         />
-        <Route path="memory" element={<MemoryPage />} />
-        <Route path="profile" element={<ProfilePage />} />
+        <Route path="memory" element={<Suspense fallback={<PageFallback />}><MemoryPage /></Suspense>} />
+        <Route path="profile" element={<Suspense fallback={<PageFallback />}><ProfilePage /></Suspense>} />
         <Route
           path="plan"
           element={
             <PageErrorBoundary name="Plan">
-              <PlanPage />
+              <Suspense fallback={<PageFallback />}>
+                <PlanPage />
+              </Suspense>
             </PageErrorBoundary>
           }
         />
@@ -227,11 +241,13 @@ function AuthenticatedApp() {
           path="progress"
           element={
             <PageErrorBoundary name="Progress">
-              <ProgressPage />
+              <Suspense fallback={<PageFallback />}>
+                <ProgressPage />
+              </Suspense>
             </PageErrorBoundary>
           }
         />
-        <Route path="settings" element={<ProfilePage />} />
+        <Route path="settings" element={<Suspense fallback={<PageFallback />}><ProfilePage /></Suspense>} />
         <Route path="workouts" element={<Navigate to="/plan" replace />} />
         <Route path="documents" element={<Navigate to="/library" replace />} />
       </Route>
