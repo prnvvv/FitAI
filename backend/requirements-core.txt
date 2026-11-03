@@ -1,0 +1,28 @@
+# FitAI Core API runtime dependencies (Dockerfile.core).
+#
+# Authoritative ranges live in pyproject.toml; this file is the minimal subset the
+# Core service actually imports. It deliberately EXCLUDES torch/transformers
+# (local STT), chromadb/onnxruntime (local vectors + embeddings), pypdf/python-docx
+# (document parsing) and numpy/scipy/av/soundfile (audio): production Core embeds
+# through a remote provider and stores vectors in pgvector.
+#
+# Verified by tests/unit/deploy/test_service_entrypoints.py (import isolation) and
+# by installing this file alone into a clean virtualenv (see DEPLOYMENT_VERIFICATION.md).
+
+fastapi>=0.115.0,<0.163
+uvicorn[standard]>=0.32.0,<0.55
+pydantic>=2.9.0,<3
+pydantic-settings>=2.6.0,<3
+python-dotenv>=1.0.1,<2
+sqlalchemy>=2.0.36,<2.1
+alembic>=1.14.0,<1.15
+psycopg2-binary>=2.9.10,<3
+# [crypto]: Supabase signs access tokens with ES256/RS256 (JWKS verification).
+pyjwt[crypto]>=2.9.0,<3
+httpx>=0.27.0,<0.28
+structlog>=24.4.0,<25
+langgraph>=0.2.45,<0.3
+langchain-core>=0.3.0,<0.4
+groq>=0.11.0,<0.12
+# Web-search agent tool (imported at start-up by app.tools).
+ddgs>=9.0.0
