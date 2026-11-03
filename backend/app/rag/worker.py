@@ -15,7 +15,6 @@ from __future__ import annotations
 import contextlib
 from uuid import UUID
 
-from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.enums import DocumentStatus
 from app.services.document_service import DocumentService
@@ -38,6 +37,7 @@ def ingest_document(user_id: UUID, document_id: UUID, data: bytes) -> None:
     """
     from app.db.session import SessionLocal
     from app.rag.pipeline import IngestionPipeline
+    from app.rag.store_factory import build_vector_store
     from app.rag.vector_store import VectorStore
 
     db = SessionLocal()
@@ -53,7 +53,7 @@ def ingest_document(user_id: UUID, document_id: UUID, data: bytes) -> None:
             return
 
         try:
-            pipeline = IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
+            pipeline = IngestionPipeline(build_vector_store(VectorStore))
         except Exception as exc:  # noqa: BLE001
             logger.error("document_ingestion_crashed", doc_id=str(document_id), error=str(exc))
             _mark_failed(service, user_id, document_id, "Ingestion failed")

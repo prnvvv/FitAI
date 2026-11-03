@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from .loader import LoadedDocument
+from .loader import LoadedDocument, Section
 
 Metadata = dict[str, str | int | float | bool]
 _BREAKS = ("\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " ")
@@ -84,4 +84,41 @@ def chunk_document(
             chunks.append(Chunk(id=f"{id_prefix}{doc_id}:{i}", text=piece, metadata=meta))
             if max_chunks is not None and len(chunks) > max_chunks:
                 raise ValueError(f"document exceeds {max_chunks} chunks")
+    return chunks
+
+
+def chunk_sections(
+    sections: Sequence[Section],
+    source: str,
+    file_type: str,
+    doc_id: str,
+    metadata: Mapping[str, object] | None = None,
+    chunk_size: int = 1000,
+    overlap: int = 150,
+    id_prefix: str = "",
+    start_index: int = 0,
+    max_chunks: int | None = None,
+) -> list[Chunk]:
+    """Chunk a slice of a document, continuing the global chunk numbering.
+
+    Produces exactly the chunks (ids, indices, metadata) that ``chunk_document``
+    would for the same sections, so a document ingested in slices is identical to
+    one ingested whole. ``start_index`` is the number of chunks already emitted.
+    """
+    base = _scalar(metadata or {})
+    chunks: list[Chunk] = []
+    for section in sections:
+        for piece in split_text(section.text, chunk_size, overlap):
+            i = start_index + len(chunks)
+            if max_chunks is not None and i >= max_chunks:
+                raise ValueError(f"document exceeds {max_chunks} chunks")
+            meta: Metadata = {
+                **base,
+                "doc_id": doc_id,
+                "source": source,
+                "file_type": file_type,
+                "page": section.page or -1,
+                "chunk_index": i,
+            }
+            chunks.append(Chunk(id=f"{id_prefix}{doc_id}:{i}", text=piece, metadata=meta))
     return chunks
