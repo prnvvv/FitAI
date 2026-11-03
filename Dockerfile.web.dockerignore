@@ -1,0 +1,17 @@
+# Allow-list build context for Dockerfile.web.
+*
+!frontend/
+!backend/requirements-web.txt
+!backend/alembic.ini
+!backend/pyproject.toml
+!backend/app/
+!backend/migrations/
+
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/*.db
+**/*.sqlite3
+**/__pycache__
+**/*.pyc
