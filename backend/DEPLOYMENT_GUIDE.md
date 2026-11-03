@@ -1,4 +1,4 @@
-# FitAI deployment guide (three Render services, 512 MB each)
+# FitAI deployment guide (two Render services, 512 MB each)
 
 > Nothing in this repository deploys or migrates anything by itself. Every step marked
 > **[manual]** is yours to run. The blueprint (`render.yaml`) has `autoDeployTrigger: "off"`.
@@ -10,17 +10,17 @@
 ```
                          Browser (Vercel)
         ┌───────────────────┼──────────────────────┐
-        │ VITE_API_BASE_URL │ VITE_DOCUMENTS_URL   │ VITE_STT_URL
-        ▼                   ▼                      ▼
-  fitai-core          fitai-documents          fitai-stt
-  chat · auth ·       upload · extract ·       audio upload ·
-  profile · memory    chunk · embed ·          validate ·
-  LangGraph + Groq    ingestion worker         transcribe
-        │                   │       │               │
-        │                   │       └──► Storage    └──► STT provider (HTTP)
+        │ VITE_API_BASE_URL │ VITE_DOCUMENTS_URL   │ Web Speech API (in the browser)
+        ▼                   ▼                      │ dictation -> text -> chat input
+  fitai-core          fitai-documents              │ (no FitAI backend involved)
+  chat · auth ·       upload · extract ·
+  profile · memory    chunk · embed ·
+  LangGraph + Groq    ingestion worker
+        │                   │       │
+        │                   │       └──► Storage
         │                   └──► Embedding provider (HTTP)
         └──► Groq · Embedding provider (HTTP, for queries)
-        └─────────────┬──────────────┬─────────────────┘
+        └─────────────┬──────────────┘
                       ▼              ▼
               Supabase PostgreSQL (+ pgvector)   Supabase Storage (private bucket)
 ```
@@ -29,43 +29,46 @@
   Supabase and the public internet; the browser calls each service's public URL with the user's
   Supabase JWT, which every service verifies independently. No service-to-service secret is needed
   and none is exposed.
-* Shared code: one repository, one `app/` package; three tiny entrypoints
-  (`app.main`, `app.stt_main`, `app.documents_main`) that build the app with the same factory
+* Shared code: one repository, one `app/` package; two tiny entrypoints
+  (`app.main`, `app.documents_main`) that build the app with the same factory
   (`app/core/service_app.py`): CORS, error envelope, request-id/duration logging, `/health`.
 
 ## 2. Services
 
-| | fitai-core | fitai-stt | fitai-documents |
-|---|---|---|---|
-| Entrypoint | `app.main:app` | `app.stt_main:app` | `app.documents_main:app` |
-| Image | `Dockerfile.core` | `Dockerfile.stt` | `Dockerfile.documents` |
-| Dependencies | `requirements-core.txt` | `requirements-stt.txt` | `requirements-documents.txt` |
-| Routes | auth, chat, conversations, profile, memory, workouts, progress, activity, location, plan, exercises | `/api/v1/stt/*` | `/api/v1/documents/*` |
-| Local models | none | none (`STT_PROVIDER=remote`) | none |
-| Background work | none | none | durable ingestion worker (1 thread) |
-| Workers | 1 | 1 | 1 |
+| | fitai-core | fitai-documents |
+|---|---|---|
+| Entrypoint | `app.main:app` | `app.documents_main:app` |
+| Image | `Dockerfile.core` | `Dockerfile.documents` |
+| Dependencies | `requirements-core.txt` | `requirements-documents.txt` |
+| Routes | auth, chat, conversations, profile, memory, workouts, progress, activity, location, plan, exercises | `/api/v1/documents/*` |
+| Local models | none | none |
+| Background work | none | durable ingestion worker (1 thread) |
+| Workers | 1 | 1 |
+
+**Speech-to-text is not a service.** The previous IBM Granite STT service (`fitai-stt`) was
+removed: dictation now uses the browser's Web Speech API and the backend never receives audio.
+See `frontend/SPEECH_TO_TEXT.md` for browser support, HTTPS requirements and privacy notes.
 
 ## 3. Environment variables
 
 `.env.example` documents every variable. Production start-up validation (in
 `app/core/config.py`) aborts with an explicit list if a required one is missing:
 
-| Variable | core | stt | documents | Notes |
-|---|:-:|:-:|:-:|---|
-| `ENVIRONMENT=production`, `FITAI_SERVICE`, `DEBUG=false` | ✔ | ✔ | ✔ | set by `render.yaml` |
-| `DATABASE_URL` | ✔ | ✔ | ✔ | Supabase **pooler** URL, `?sslmode=require` |
-| `CORS_ORIGINS` | ✔ | ✔ | ✔ | exact `https://` frontend origin(s), never `*` |
-| `SUPABASE_URL` | ✔ | ✔ | ✔ | token (JWKS) verification + Storage base |
-| `SUPABASE_SERVICE_ROLE_KEY` | | | ✔ | **server-side only**; Storage access. Accepts a new `sb_secret_...` key (sent as `apikey` only) or a legacy JWT key. Leave `SUPABASE_JWT_SECRET` unset. |
-| `GROQ_API_KEY` (+ `GROQ_EXTRACTION_API_KEY`, `PROMPT_GUARD_API_KEY`) | ✔ | | | |
-| `VECTOR_STORE_BACKEND=pgvector` | ✔ | | ✔ | |
-| `EMBEDDING_PROVIDER=remote`, `EMBEDDING_API_URL`, `EMBEDDING_API_KEY`, `EMBEDDING_API_FORMAT` | ✔ | | ✔ | 384-dimension MiniLM-class model |
-| `SERVE_DOCUMENTS_ROUTES=false`, `SERVE_STT_ROUTES=false` | ✔ | | | |
-| `STT_PROVIDER=remote`, `STT_REMOTE_URL`, `STT_REMOTE_API_KEY`, `STT_REMOTE_MODEL` | | ✔ | | OpenAI-compatible `/audio/transcriptions` |
-| `INGESTION_MODE=jobs`, `DOCUMENT_STORAGE_BACKEND=supabase`, `SUPABASE_STORAGE_BUCKET` | | | ✔ | |
-| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | 3 / 2 | 2 / 1 | 3 / 1 | per-instance; keep the sum well under the Supabase pool limit |
+| Variable | core | documents | Notes |
+|---|:-:|:-:|---|
+| `ENVIRONMENT=production`, `FITAI_SERVICE`, `DEBUG=false` | ✔ | ✔ | set by `render.yaml` |
+| `DATABASE_URL` | ✔ | ✔ | Supabase **pooler** URL, `?sslmode=require` |
+| `CORS_ORIGINS` | ✔ | ✔ | exact `https://` frontend origin(s), never `*` |
+| `SUPABASE_URL` | ✔ | ✔ | token (JWKS) verification + Storage base |
+| `SUPABASE_SERVICE_ROLE_KEY` | | ✔ | **server-side only**; Storage access. Accepts a new `sb_secret_...` key (sent as `apikey` only) or a legacy JWT key. Leave `SUPABASE_JWT_SECRET` unset. |
+| `GROQ_API_KEY` (+ `GROQ_EXTRACTION_API_KEY`, `PROMPT_GUARD_API_KEY`) | ✔ | | |
+| `VECTOR_STORE_BACKEND=pgvector` | ✔ | ✔ | |
+| `EMBEDDING_PROVIDER=remote`, `EMBEDDING_API_URL`, `EMBEDDING_API_KEY`, `EMBEDDING_API_FORMAT` | ✔ | ✔ | 384-dimension MiniLM-class model |
+| `SERVE_DOCUMENTS_ROUTES=false` | ✔ | | |
+| `INGESTION_MODE=jobs`, `DOCUMENT_STORAGE_BACKEND=supabase`, `SUPABASE_STORAGE_BUCKET` | | ✔ | |
+| `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` | 3 / 2 | 3 / 1 | per-instance; keep the sum well under the Supabase pool limit |
 
-No endpoint is defaulted for embeddings or STT: pick a provider, confirm its URL/format in its
+No endpoint is defaulted for embeddings: pick a provider, confirm its URL/format in its
 own documentation, and set it. (`EMBEDDING_API_FORMAT=hf` posts `{"inputs":[...]}` and expects
 `[[...]]`; `openai` posts `{"input":[...],"model":...}` and expects `{"data":[{"embedding":[...]}]}`.)
 
@@ -102,7 +105,6 @@ bypasses RLS, and users never access the bucket directly.
 ```bash
 cd backend
 docker build -f Dockerfile.core      -t fitai-core:latest .
-docker build -f Dockerfile.stt       -t fitai-stt:latest .
 docker build -f Dockerfile.documents -t fitai-documents:latest .
 
 # Disposable database with pgvector (never your real one)
@@ -124,16 +126,16 @@ curl localhost:8000/health/ready  # database reported separately
 ## 8. GitHub -> Render **[manual]**
 
 1. Render dashboard -> **New** -> **Blueprint** -> connect the GitHub repo (branch `main`).
-2. Render reads `render.yaml` and proposes three services. For every `sync: false` variable it asks
+2. Render reads `render.yaml` and proposes two services. For every `sync: false` variable it asks
    for a value: paste them from section 3. Leave the others as proposed.
 3. Create the services. Because `autoDeployTrigger` is `"off"`, Render builds on first creation but
    will not redeploy on later pushes: use **Manual Deploy**, or change it to `commit` once you trust
    the pipeline.
-4. Build context is `backend/`; Dockerfile paths are `./backend/Dockerfile.{core,stt,documents}`.
+4. Build context is `backend/`; Dockerfile paths are `./backend/Dockerfile.{core,documents}`.
 
 ## 9. Health checks
 
-All three services expose `GET /health` (constant-time liveness: no DB, no model, no LLM) and
+Both services expose `GET /health` (constant-time liveness: no DB, no model, no LLM) and
 `GET /health/ready` (one `SELECT 1`, reports `{"checks":{"database":"ok|unavailable"}}` separately and
 returns 503 when the database is down). Render's `healthCheckPath` is `/health`; use `/health/ready`
 for your own uptime monitor. Each request is logged as `request_completed` with `service`,
@@ -146,7 +148,7 @@ headers, bodies, tokens and document contents are never logged.
 2. Enable `vector`, create the bucket (sections 5-6).
 3. `alembic upgrade head` (section 5).
 4. Optional: `verify_embedding_parity.py`, then `migrate_chroma_to_pgvector.py` (dry-run, apply, verify).
-5. Create the Render services (section 8), deploy Documents and STT, then Core.
+5. Create the Render services (section 8), deploy Documents, then Core.
 6. Point the frontend at them (section 11) and redeploy it.
 
 ## 11. Frontend endpoint configuration
@@ -155,7 +157,6 @@ headers, bodies, tokens and document contents are never logged.
 |---|---|---|
 | `VITE_API_BASE_URL` | `https://fitai-core.onrender.com/api/v1` | all Core calls (unchanged variable) |
 | `VITE_DOCUMENTS_URL` | `https://fitai-documents.onrender.com/api/v1` | document list/upload/retry/rename/delete **(new, optional)** |
-| `VITE_STT_URL` | `https://fitai-stt.onrender.com/api/v1/stt` | dictation (already existed) |
 
 Paths and payloads are unchanged; only the origin differs. If `VITE_DOCUMENTS_URL` is unset or
 empty, the document calls go to `VITE_API_BASE_URL`, so a single-process deployment is untouched.
@@ -164,7 +165,7 @@ other's origins). Never put the service-role key in any `VITE_*` variable.
 
 ## 12. Deploy and roll back
 
-* Deploy order: Documents, STT, Core. Each deploy is independent.
+* Deploy order: Documents, then Core. Each deploy is independent.
 * Roll back a service from Render -> Deploys -> previous deploy -> **Rollback**.
 * Schema rollback (rarely needed): `alembic downgrade -1` removes only the two new tables.
 * Roll back the vector backend: `VECTOR_STORE_BACKEND=chroma`, `EMBEDDING_PROVIDER=local` on the
@@ -173,8 +174,8 @@ other's origins). Never put the service-role key in any `VITE_*` variable.
 ## 13. Free-tier limitations (read this)
 
 * **Instance hours**: a Render *workspace* gets a monthly free instance-hour allowance. One
-  always-on service roughly uses it up; **three always-on free services will exceed it** and be
-  suspended until the next month. Do not assume three free services run continuously. Options:
+  always-on service roughly uses it up; **two always-on free services will exceed it** and be
+  suspended until the next month. Do not assume two free services run continuously. Options:
   run only Core on Free, or put the services you need on a paid plan.
 * **Spin-down**: free services sleep after ~15 minutes idle and cold-start on the next request
   (tens of seconds), then each re-verifies the schema and (Documents) resumes ingestion.
@@ -198,6 +199,6 @@ other's origins). Never put the service-role key in any `VITE_*` variable.
 | Document stays `processing` | Check the Documents logs for `ingestion_batch_failed`; transient errors retry (up to `INGESTION_MAX_ATTEMPTS`) then fail with a readable reason; use **Retry** in the UI. |
 | `EMBEDDING_API_URL and EMBEDDING_API_KEY are required` | Remote embeddings are mandatory with pgvector. |
 | `embedding provider returned a vector that is not 384-dimensional` | The provider model differs; use a 384-d MiniLM-class model or run a full re-embed and migration. |
-| STT returns 503 `Speech-to-text is not configured` | Set `STT_REMOTE_URL`, `STT_REMOTE_API_KEY`, `STT_REMOTE_MODEL`. |
+| Microphone button is disabled or shows "Voice input unavailable" | Dictation is browser-native: use Chrome or Edge over HTTPS. See `frontend/SPEECH_TO_TEXT.md`. |
 | Browser CORS error | Add the exact frontend origin (https, no trailing slash) to that service's `CORS_ORIGINS`. |
 | OOM-killed on Render | Check `INGESTION_PAGES_PER_BATCH`, `DB_POOL_SIZE`; see verification doc for baseline numbers. |
