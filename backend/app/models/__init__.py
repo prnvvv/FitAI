@@ -21,6 +21,7 @@ from app.models.enums import (
     WeightUnit,
 )
 from app.models.exercise_library import ExerciseLibrary
+from app.models.ingestion_job import IngestionJob
 from app.models.measurement import Measurement
 from app.models.memory import Memory, MemoryHistory
 from app.models.pending_update import PendingMemoryUpdate
@@ -37,6 +38,7 @@ __all__ = [
     "Conversation",
     "ConversationSummary",
     "Document",
+    "IngestionJob",
     "DocumentStatus",
     "ExerciseLibrary",
     "Measurement",

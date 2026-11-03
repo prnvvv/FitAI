@@ -12,9 +12,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-import chromadb
-from chromadb.config import Settings
-
 from .chunker import Chunk
 from .embeddings import EMBEDDING_NAME, get_embedding_function
 
@@ -67,10 +64,17 @@ class VectorStore:
         self, persist_dir: str | None = None, client: Any = None, embedding_function: Any = None
     ):
         """`persist_dir` should come from project config; env CHROMA_PERSIST_DIR is the fallback."""
-        self._client = client or chromadb.PersistentClient(
-            path=_persist_path(persist_dir),
-            settings=Settings(anonymized_telemetry=False),
-        )
+        if client is None:
+            # Imported here so services that never touch Chroma (pgvector
+            # deployments) do not pay for chromadb/onnxruntime at start-up.
+            import chromadb
+            from chromadb.config import Settings
+
+            client = chromadb.PersistentClient(
+                path=_persist_path(persist_dir),
+                settings=Settings(anonymized_telemetry=False),
+            )
+        self._client = client
         self.persist_dir = persist_dir or _persist_path(None)
         self._ef = embedding_function or get_embedding_function()
         self._cols: dict[str, Any] = {}

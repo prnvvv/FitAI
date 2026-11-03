@@ -16,6 +16,7 @@ from uuid import UUID
 
 from app.core.config import settings
 from app.rag.continuity_store import ContinuityStore
+from app.rag.store_factory import build_vector_store
 from app.rag.vector_store import VectorStore
 
 log = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ def _store() -> ContinuityStore | None:
     if not settings.continuity_enabled:
         return None
     try:
-        return ContinuityStore(VectorStore(persist_dir=settings.chromadb_persist_dir))
+        return ContinuityStore(build_vector_store(VectorStore))
     except Exception:
         log.warning("continuity store unavailable", exc_info=True)
         return None

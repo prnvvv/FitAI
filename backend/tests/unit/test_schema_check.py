@@ -66,7 +66,7 @@ def test_valid_schema_passes(tmp_path) -> None:
 
 def test_head_revision_independent_of_cwd(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    assert alembic_head_revision() == "0004_conversation_summaries"
+    assert alembic_head_revision() == "0005_ingestion_jobs_pgvector"
 
 
 def test_migrations_build_full_schema_on_sqlite(tmp_path, monkeypatch) -> None:
