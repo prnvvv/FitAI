@@ -79,7 +79,9 @@ def _field(key: str, cast: str) -> str:
     return f"(metadata ->> '{key}'){cast}"
 
 
-def translate_filter(where: FilterDict | None, params: _Params | None = None) -> tuple[str, dict]:
+def translate_filter(
+    where: FilterDict | None, params: _Params | None = None
+) -> tuple[str, dict[str, Any]]:
     """Translate a Chroma ``where`` filter into a SQL predicate and bound params.
 
     Supports equality, ``$eq $ne $gt $gte $lt $lte $in $nin`` and ``$and``/``$or``.
@@ -208,6 +210,12 @@ class PgVectorStore:
         except (SQLAlchemyError, ValueError) as exc:
             raise VectorStoreError(f"{action} failed: {type(exc).__name__}: {exc}") from exc
 
+    def _write(self, action: str, sql: Any, rows: list[dict[str, Any]]) -> None:
+        def _execute(db: Session) -> None:
+            db.execute(sql, rows)
+
+        self._run(action, _execute)
+
     def _embed_checked(self, texts: Sequence[str]) -> list[list[float]]:
         vectors = [list(v) for v in self._embed(list(texts))]
         if len(vectors) != len(texts) or any(len(v) != self._dimension for v in vectors):
@@ -245,7 +253,7 @@ class PgVectorStore:
                 }
                 for c, vec in zip(batch, vectors, strict=True)
             ]
-            self._run("indexing", lambda db, rows=rows: db.execute(sql, rows))
+            self._write("indexing", sql, rows)
         return len(chunks)
 
     def add_embedded(
@@ -286,14 +294,14 @@ class PgVectorStore:
                 }
                 for j in range(i, min(i + _BATCH, len(ids)))
             ]
-            self._run("migration upsert", lambda db, rows=rows: db.execute(sql, rows))
+            self._write("migration upsert", sql, rows)
         return len(ids)
 
     def delete_document(self, collection: str, doc_id: str, owner_id: str | None = None) -> int:
         params = _Params()
         where = self._where_sql(collection, owner_id, {"doc_id": doc_id}, params)
         sql = text(f"DELETE FROM vector_chunks WHERE {where}")
-        return int(self._run("delete", lambda db: db.execute(sql, params.values).rowcount or 0))
+        return int(self._run("delete", lambda db: _rowcount(db.execute(sql, params.values))))
 
     def delete_document_pair(self, doc_id: str, owner_id: str) -> int:
         return self.delete_document(USER_COLLECTION, doc_id, owner_id=owner_id)
@@ -404,6 +412,11 @@ class PgVectorStore:
             "embedding_model": row[1],
             "dimension": int(row[2]) if row[2] is not None else None,
         }
+
+
+def _rowcount(result: Any) -> int:
+    """Rows affected by a DML statement (``CursorResult.rowcount``)."""
+    return int(result.rowcount or 0)
 
 
 def _text(sql: str) -> Any:

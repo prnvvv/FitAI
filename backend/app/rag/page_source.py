@@ -9,6 +9,7 @@ the batch rather than the document. Non-PDF formats are small single sections.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from .loader import (
     DEFAULT_MAX_BYTES,
@@ -52,7 +53,7 @@ class PageSource:
             self.total_units = len(self._sections)
 
     @staticmethod
-    def _open_pdf(path: Path):  # noqa: ANN205 - pypdf type imported lazily
+    def _open_pdf(path: Path) -> Any:  # pypdf is imported lazily
         try:
             from pypdf import PdfReader
         except ImportError as exc:
