@@ -15,16 +15,18 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession, Pagination
 from app.core.config import settings
-from app.core.errors import PayloadTooLargeError
+from app.core.errors import AppError, PayloadTooLargeError
 from app.core.logging import get_logger
 from app.models.enums import ActivityEventType
 from app.rag.pipeline import IngestionPipeline
+from app.rag.store_factory import build_vector_store
 from app.rag.vector_store import VectorStore
 from app.rag.worker import ingest_document
 from app.schemas.common import Page
 from app.schemas.document import DocumentOut, DocumentRename
 from app.services.activity_event_service import ActivityEventService
 from app.services.document_service import DocumentService
+from app.services.ingestion_jobs import enqueue
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -34,7 +36,12 @@ logger = get_logger(__name__)
 
 
 def _get_ingestion() -> IngestionPipeline:
-    return IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
+    return IngestionPipeline(build_vector_store(VectorStore))
+
+
+def _uses_jobs() -> bool:
+    """True when ingestion is a durable, checkpointed job (Documents service)."""
+    return settings.ingestion_mode.strip().lower() == "jobs"
 
 
 async def _read_upload_limited(file: UploadFile) -> bytes:
@@ -100,7 +107,12 @@ async def upload_document(
         entity_id=str(document.id),
         payload={"filename": document.filename, "size_bytes": document.size_bytes},
     )
-    background_tasks.add_task(ingest_document, current_user.id, document.id, data)
+    if _uses_jobs():
+        # Durable path: the job row (not process memory) carries the work, so a
+        # restart resumes it. The file is already in persistent storage.
+        enqueue(db, document)
+    else:
+        background_tasks.add_task(ingest_document, current_user.id, document.id, data)
     return JSONResponse(status_code=status.HTTP_201_CREATED, content=body)
 
 
@@ -152,6 +164,17 @@ def retry_document(
     db: DbSession,
 ) -> DocumentOut:
     """Re-run ingestion for one of the user's documents."""
+    if _uses_jobs():
+        service = DocumentService(db)
+        document = service.get(current_user.id, document_id)
+        if not document.storage_key:
+            raise AppError(
+                "This document has no stored file, so it cannot be reprocessed. "
+                "Upload it again instead."
+            )
+        service.reset_for_retry(document)
+        enqueue(db, document, reset=True)
+        return DocumentOut.from_document(document)
     document = DocumentService(db, ingestion=_get_ingestion()).retry(current_user.id, document_id)
     return DocumentOut.from_document(document)
 
@@ -168,15 +191,11 @@ def delete_document(
     behind would keep deleted content retrievable by the owner. If it fails the
     metadata row is kept so the user can retry the deletion.
     """
-    from app.core.errors import AppError
-    from app.rag.pipeline import IngestionPipeline
-    from app.rag.vector_store import VectorStore
-
     # Ownership check first: a document owned by someone else must 404.
     service = DocumentService(db)
     service.get(current_user.id, document_id)
 
-    ingestion = IngestionPipeline(VectorStore(persist_dir=settings.chromadb_persist_dir))
+    ingestion = _get_ingestion()
     try:
         ingestion.delete_user_document(str(current_user.id), str(document_id))
     except Exception as exc:  # noqa: BLE001 - surfaced as a clear error, never swallowed

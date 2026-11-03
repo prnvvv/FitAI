@@ -207,6 +207,17 @@ class DocumentService:
         self._db.refresh(document)
         return self._ingest(document, data)
 
+    def reset_for_retry(self, document: Document) -> Document:
+        """Clear a document's failure state ahead of a durable re-ingestion job."""
+        document.status = DocumentStatus.PENDING
+        document.error_message = None
+        document.failed_at = None
+        document.completed_at = None
+        self._set_note(document, None)
+        self._commit()
+        self._db.refresh(document)
+        return document
+
     def ingest(self, user_id: UUID, document_id: UUID, data: bytes) -> Document:
         """Run ingestion for an already-stored document and record its status.
 
