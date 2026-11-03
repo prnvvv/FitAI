@@ -1,333 +1,196 @@
 /**
- * Microphone dictation in the chat composer.
- *
- * The transcription service and the microphone are both faked: no model, no
- * network, no audio hardware. Real transcription is covered by the service's own
- * suite and its smoke test, not here.
+ * Dictation in the chat composer, with the browser SpeechRecognition mocked.
+ * These tests prove the wiring; real microphone behaviour needs the manual
+ * browser checklist in docs/SPEECH_TO_TEXT.md.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FakeSpeechRecognition } from '../../test/fakeSpeechRecognition'
 import { Composer } from './Composer'
 
-const TRANSCRIPT = 'how many protein shakes after training'
-
-class FakeRecorder {
-  static isTypeSupported = vi.fn(() => true)
-  static instances: FakeRecorder[] = []
-
-  state: 'inactive' | 'recording' = 'inactive'
-  mimeType: string
-  ondataavailable: ((event: { data: Blob }) => void) | null = null
-  onstop: (() => void) | null = null
-  chunks: Blob[] = []
-
-  options?: MediaRecorderOptions
-
-  constructor(options?: MediaRecorderOptions) {
-    this.options = options
-    this.mimeType = options?.mimeType ?? 'audio/webm'
-    FakeRecorder.instances.push(this)
-  }
-
-  start() {
-    this.state = 'recording'
-  }
-
-  stop() {
-    this.state = 'inactive'
-    // MediaRecorder emits the buffered audio before the stop event.
-    this.ondataavailable?.({ data: new Blob([new Uint8Array([1, 2, 3])], { type: this.mimeType }) })
-    this.onstop?.()
-  }
-}
-
-function installFakeMicrophone(overrides: { getUserMedia?: () => Promise<MediaStream> } = {}) {
-  const track = { stop: vi.fn(), kind: 'audio' } as unknown as MediaStreamTrack
-  const stream = { getTracks: () => [track], getAudioTracks: () => [track] } as unknown as MediaStream
-  const getUserMedia = vi.fn(
-    overrides.getUserMedia ?? (async (_constraints?: MediaStreamConstraints) => stream),
-  )
-  Object.defineProperty(globalThis.navigator, 'mediaDevices', {
-    configurable: true,
-    value: { getUserMedia },
-  })
-  ;(globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = FakeRecorder
-  return { getUserMedia, track, stream }
-}
-
-function transcriptionResponse(body: Record<string, unknown>, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  }
-}
-
-let fetchMock: ReturnType<typeof vi.fn>
-
 beforeEach(() => {
-  FakeRecorder.instances = []
-  fetchMock = vi.fn(async () => transcriptionResponse({ text: TRANSCRIPT }))
-  vi.stubGlobal('fetch', fetchMock)
+  vi.spyOn(navigator, 'language', 'get').mockReturnValue('fr-FR')
+  window.localStorage.clear()
+  FakeSpeechRecognition.install()
 })
 
 afterEach(() => {
-  vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  FakeSpeechRecognition.uninstall()
 })
 
-/** Records for `ms`, then presses stop, letting the transcription resolve. */
-async function recordAndStop(user: ReturnType<typeof userEvent.setup>, ms = 500) {
-  await user.click(screen.getByRole('button', { name: 'Start recording' }))
-  await screen.findByRole('button', { name: 'Stop recording and transcribe' })
-  await new Promise((resolve) => setTimeout(resolve, ms))
-  await user.click(screen.getByRole('button', { name: 'Stop recording and transcribe' }))
+const textbox = () => screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement
+
+async function startListening(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Start voice input' }))
+  act(() => FakeSpeechRecognition.last.emitStart())
 }
 
-describe('composer microphone', () => {
-  it('shows the microphone control when the browser can record', () => {
-    installFakeMicrophone()
+describe('composer voice input', () => {
+  it('offers the microphone and language picker when the browser supports it', () => {
     render(<Composer onSend={vi.fn()} />)
-
-    const mic = screen.getByRole('button', { name: 'Start recording' })
-    expect(mic).toBeInTheDocument()
-    expect(mic).toHaveAttribute('title', 'Start recording (dictate a message)')
-    expect(screen.queryByRole('button', { name: 'Stop recording and transcribe' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start voice input' })).toBeEnabled()
+    expect(screen.getByRole('combobox', { name: 'Voice input language' })).toHaveValue('en-IN')
+    expect(FakeSpeechRecognition.instances).toHaveLength(0)
   })
 
-  it('hides the control when the browser cannot record', () => {
-    Object.defineProperty(globalThis.navigator, 'mediaDevices', { configurable: true, value: undefined })
-    ;(globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = undefined
-    render(<Composer onSend={vi.fn()} />)
-
-    expect(screen.queryByRole('button', { name: 'Start recording' })).not.toBeInTheDocument()
-  })
-
-  it('asks for permission only after the click, then records', async () => {
+  it('inserts final speech into the textarea and never sends by itself', async () => {
     const user = userEvent.setup()
-    const { getUserMedia } = installFakeMicrophone()
-    render(<Composer onSend={vi.fn()} />)
-
-    expect(getUserMedia).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Start recording' }))
-
-    expect(getUserMedia).toHaveBeenCalledTimes(1)
-    expect(getUserMedia.mock.calls[0][0]).toMatchObject({ audio: expect.any(Object) })
-    expect(await screen.findByRole('button', { name: 'Stop recording and transcribe' })).toBeInTheDocument()
-    // Recording is announced in text, not by colour alone.
-    expect(screen.getByRole('status')).toHaveTextContent('0s')
-    expect(screen.getByRole('button', { name: 'Cancel recording' })).toBeInTheDocument()
-  })
-
-  it('uploads 16 kHz-ready audio and inserts the transcript at the caret', async () => {
-    const user = userEvent.setup()
-    installFakeMicrophone()
-    render(<Composer onSend={vi.fn()} />)
-
-    const input = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement
-    await user.type(input, 'my draft')
-    // Put the caret before the draft so the transcript lands there.
-    input.setSelectionRange(0, 0)
-
-    await recordAndStop(user)
-
-    // The caret was at the start, so nothing separates the two fragments.
-    await waitFor(() => expect(input).toHaveValue(`${TRANSCRIPT}my draft`))
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toBe('/api/v1/stt/transcribe')
-    expect(init.method).toBe('POST')
-    const form = init.body as FormData
-    expect(form.get('file')).toBeInstanceOf(Blob)
-  })
-
-  it('keeps an existing draft when the transcript is empty', async () => {
-    const user = userEvent.setup()
-    installFakeMicrophone()
-    fetchMock.mockResolvedValueOnce(transcriptionResponse({ text: '', warning: 'No speech was recognised.' }))
-    render(<Composer onSend={vi.fn()} />)
-
-    const input = screen.getByRole('textbox', { name: 'Message' })
-    await user.type(input, 'my draft')
-    await recordAndStop(user)
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('No speech was recognised')
-    expect(input).toHaveValue('my draft')
-  })
-
-  it('cancels without uploading or inserting anything', async () => {
-    const user = userEvent.setup()
-    installFakeMicrophone()
-    render(<Composer onSend={vi.fn()} />)
-
-    await user.click(screen.getByRole('button', { name: 'Start recording' }))
-    await screen.findByRole('button', { name: 'Stop recording and transcribe' })
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    await user.click(screen.getByRole('button', { name: 'Cancel recording' }))
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Start recording' })).toBeInTheDocument())
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('')
-    expect(FakeRecorder.instances[0]?.state).toBe('inactive')
-  })
-
-  it('cancels on Escape while recording', async () => {
-    const user = userEvent.setup()
-    installFakeMicrophone()
-    render(<Composer onSend={vi.fn()} />)
-
-    await user.click(screen.getByRole('button', { name: 'Start recording' }))
-    await screen.findByRole('button', { name: 'Stop recording and transcribe' })
-    await user.keyboard('{Escape}')
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Start recording' })).toBeInTheDocument())
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('explains a denied microphone without touching the draft', async () => {
-    const user = userEvent.setup()
-    installFakeMicrophone({
-      getUserMedia: async () => {
-        const error = new Error('denied')
-        error.name = 'NotAllowedError'
-        throw error
-      },
-    })
     const onSend = vi.fn()
     render(<Composer onSend={onSend} />)
 
-    const input = screen.getByRole('textbox', { name: 'Message' })
-    await user.type(input, 'keep me')
-    await user.click(screen.getByRole('button', { name: 'Start recording' }))
+    await startListening(user)
+    expect(screen.getByRole('status')).toHaveTextContent('Listening')
+    act(() => FakeSpeechRecognition.last.emitResults([{ text: 'how much protein', isFinal: false }]))
+    expect(screen.getByRole('status')).toHaveTextContent('how much protein')
+    expect(textbox()).toHaveValue('')
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Microphone access was blocked')
-    expect(input).toHaveValue('keep me')
-    expect(fetchMock).not.toHaveBeenCalled()
+    act(() => FakeSpeechRecognition.last.emitResults([{ text: 'how much protein', isFinal: true }]))
+    expect(textbox()).toHaveValue('how much protein')
+
+    await user.click(screen.getByRole('button', { name: 'Stop voice input' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Review and edit')
+    expect(onSend).not.toHaveBeenCalled()
   })
 
-  it('reports an unreachable service and keeps the draft', async () => {
+  it('keeps typed text and inserts at the caret', async () => {
     const user = userEvent.setup()
-    installFakeMicrophone()
-    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     render(<Composer onSend={vi.fn()} />)
 
-    const input = screen.getByRole('textbox', { name: 'Message' })
-    await user.type(input, 'keep me')
-    await recordAndStop(user)
+    fireEvent.change(textbox(), { target: { value: 'Plan my  workout' } })
+    textbox().setSelectionRange(8, 8)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not reach the speech-to-text service')
-    expect(input).toHaveValue('keep me')
+    await startListening(user)
+    act(() => FakeSpeechRecognition.last.emitResults([{ text: 'leg day', isFinal: true }]))
+    expect(textbox()).toHaveValue('Plan my leg day workout')
   })
 
-  it('surfaces the service error message for unusable audio', async () => {
+  it('appends several phrases in order without duplicating them', async () => {
     const user = userEvent.setup()
-    installFakeMicrophone()
-    fetchMock.mockResolvedValueOnce(transcriptionResponse({ detail: 'The recording was empty.' }, 422))
     render(<Composer onSend={vi.fn()} />)
+    fireEvent.change(textbox(), { target: { value: 'Hi' } })
+    textbox().setSelectionRange(2, 2)
 
-    await recordAndStop(user)
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('The recording was empty.')
-  })
-
-  it('does not start a second recording on repeated clicks', async () => {
-    const user = userEvent.setup()
-    const { getUserMedia } = installFakeMicrophone()
-    render(<Composer onSend={vi.fn()} />)
-
-    const mic = screen.getByRole('button', { name: 'Start recording' })
-    await user.click(mic)
-    await screen.findByRole('button', { name: 'Stop recording and transcribe' })
-
-    expect(getUserMedia).toHaveBeenCalledTimes(1)
-    expect(FakeRecorder.instances).toHaveLength(1)
-  })
-
-  it('sends only one request when stop is pressed twice', async () => {
-    const user = userEvent.setup()
-    installFakeMicrophone()
-    render(<Composer onSend={vi.fn()} />)
-
-    await user.click(screen.getByRole('button', { name: 'Start recording' }))
-    const stop = await screen.findByRole('button', { name: 'Stop recording and transcribe' })
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    await user.click(stop)
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-  })
-
-  it('drops a transcript that arrives after the conversation changed', async () => {
-    const user = userEvent.setup()
-    installFakeMicrophone()
-    let release: (value: unknown) => void = () => {}
-    fetchMock.mockImplementationOnce(
-      () => new Promise((resolve) => { release = resolve }) as Promise<unknown>,
+    await startListening(user)
+    const rec = FakeSpeechRecognition.last
+    act(() => rec.emitResults([{ text: 'first', isFinal: true }]))
+    act(() => rec.emitResults([{ text: 'first', isFinal: true }], 0))
+    act(() =>
+      rec.emitResults(
+        [
+          { text: 'first', isFinal: true },
+          { text: 'second', isFinal: true },
+        ],
+        1,
+      ),
     )
-
-    const { rerender } = render(<Composer key="c1" onSend={vi.fn()} />)
-    await recordAndStop(user)
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-
-    // Switching conversation remounts the composer (ChatPage keys it by id),
-    // which must discard the transcript that is still in flight.
-    rerender(<Composer key="c2" onSend={vi.fn()} />)
-    release(transcriptionResponse({ text: TRANSCRIPT }))
-
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Start recording' })).toBeInTheDocument())
-    expect(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('')
+    expect(textbox()).toHaveValue('Hi first second')
   })
 
-  it('blocks sending while a recording is active, then sends the transcript normally', async () => {
+  it('lets the user edit the transcript and then sends the edited text', async () => {
     const user = userEvent.setup()
-    installFakeMicrophone()
     const onSend = vi.fn()
     render(<Composer onSend={onSend} />)
 
-    const input = screen.getByRole('textbox', { name: 'Message' })
-    await user.type(input, 'quick note')
-    expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled()
+    await startListening(user)
+    act(() => FakeSpeechRecognition.last.emitResults([{ text: 'log my run', isFinal: true }]))
+    await user.click(screen.getByRole('button', { name: 'Stop voice input' }))
 
-    await user.click(screen.getByRole('button', { name: 'Start recording' }))
-    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled()
-
-    // Already recording, so only the stop leg of the helper applies here.
-    await screen.findByRole('button', { name: 'Stop recording and transcribe' })
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    await user.click(screen.getByRole('button', { name: 'Stop recording and transcribe' }))
-    // The caret was at the end of the draft, so the transcript is appended with
-    // a single separating space.
-    await waitFor(() => expect(input).toHaveValue(`quick note ${TRANSCRIPT}`))
-
+    fireEvent.change(textbox(), { target: { value: 'log my 5k run' } })
     await user.click(screen.getByRole('button', { name: 'Send message' }))
-    expect(onSend).toHaveBeenCalledWith(`quick note ${TRANSCRIPT}`)
-    expect(input).toHaveValue('')
+    expect(onSend).toHaveBeenCalledTimes(1)
+    expect(onSend).toHaveBeenCalledWith('log my 5k run')
+    expect(textbox()).toHaveValue('')
   })
 
-  it('still sends typed messages with Enter while idle', async () => {
+  it('blocks sending while dictating so words are not lost', async () => {
     const user = userEvent.setup()
-    installFakeMicrophone()
     const onSend = vi.fn()
     render(<Composer onSend={onSend} />)
+    fireEvent.change(textbox(), { target: { value: 'draft' } })
 
-    const input = screen.getByRole('textbox', { name: 'Message' })
-    await user.type(input, 'hello')
-    await user.keyboard('{Enter}')
-
-    expect(onSend).toHaveBeenCalledWith('hello')
-    expect(fetchMock).not.toHaveBeenCalled()
+    await startListening(user)
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled()
+    fireEvent.keyDown(textbox(), { key: 'Enter' })
+    expect(onSend).not.toHaveBeenCalled()
   })
 
-  it('rejects a recording that is too short', async () => {
+  it('passes the chosen language to the recognizer', async () => {
     const user = userEvent.setup()
-    installFakeMicrophone()
+    render(<Composer onSend={vi.fn()} />)
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Voice input language' }), 'ta-IN')
+    await user.click(screen.getByRole('button', { name: 'Start voice input' }))
+    expect(FakeSpeechRecognition.last.lang).toBe('ta-IN')
+  })
+
+  it('cancel discards the session and leaves the draft untouched', async () => {
+    const user = userEvent.setup()
+    render(<Composer onSend={vi.fn()} />)
+    fireEvent.change(textbox(), { target: { value: 'keep me' } })
+
+    await startListening(user)
+    act(() => FakeSpeechRecognition.last.emitResults([{ text: 'ignored', isFinal: false }]))
+    await user.click(screen.getByRole('button', { name: 'Cancel voice input' }))
+
+    expect(textbox()).toHaveValue('keep me')
+    expect(screen.getByRole('button', { name: 'Start voice input' })).toBeInTheDocument()
+  })
+
+  it('shows permission-denied guidance and reports it to the owner', async () => {
+    const user = userEvent.setup()
+    const onSpeechError = vi.fn()
+    render(<Composer onSend={vi.fn()} onSpeechError={onSpeechError} />)
+
+    await user.click(screen.getByRole('button', { name: 'Start voice input' }))
+    act(() => FakeSpeechRecognition.last.emitError('not-allowed'))
+    act(() => FakeSpeechRecognition.last.emitEnd())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/blocked/i)
+    expect(onSpeechError).toHaveBeenCalledWith(expect.stringMatching(/blocked/i))
+    expect(screen.getByRole('button', { name: 'Start voice input' })).toBeEnabled()
+  })
+
+  it('shows a network error from the recognition service', async () => {
+    const user = userEvent.setup()
+    render(<Composer onSend={vi.fn()} />)
+    await startListening(user)
+    act(() => FakeSpeechRecognition.last.emitError('network'))
+    act(() => FakeSpeechRecognition.last.emitEnd())
+    expect(await screen.findByRole('alert')).toHaveTextContent(/recognition service/i)
+  })
+
+  it('releases the microphone when the composer unmounts', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Composer onSend={vi.fn()} />)
+    await startListening(user)
+    const rec = FakeSpeechRecognition.last
+    unmount()
+    expect(rec.abort).toHaveBeenCalled()
+  })
+})
+
+describe('composer voice input in an unsupported browser', () => {
+  it('disables the microphone and explains what to do', async () => {
+    FakeSpeechRecognition.uninstall()
+    const user = userEvent.setup()
     render(<Composer onSend={vi.fn()} />)
 
-    await user.click(screen.getByRole('button', { name: 'Start recording' }))
-    await screen.findByRole('button', { name: 'Stop recording and transcribe' })
-    await user.click(screen.getByRole('button', { name: 'Stop recording and transcribe' }))
+    const mic = screen.getByRole('button', { name: 'Voice input unavailable' })
+    expect(mic).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.queryByRole('combobox', { name: 'Voice input language' })).not.toBeInTheDocument()
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('too short')
-    expect(fetchMock).not.toHaveBeenCalled()
+    await user.click(mic)
+    expect(screen.getByRole('alert')).toHaveTextContent(/Chrome or Edge/)
+    expect(FakeSpeechRecognition.instances).toHaveLength(0)
+  })
+
+  it('still lets the user type and send', async () => {
+    FakeSpeechRecognition.uninstall()
+    const user = userEvent.setup()
+    const onSend = vi.fn()
+    render(<Composer onSend={onSend} />)
+    await user.type(textbox(), 'typed{Enter}')
+    expect(onSend).toHaveBeenCalledWith('typed')
   })
 })

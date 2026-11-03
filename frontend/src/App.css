@@ -6806,16 +6806,6 @@
   color: var(--text-primary);
 }
 
-.composer__recording {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
 .composer__recording-dot {
   width: 8px;
   height: 8px;
@@ -6824,10 +6814,25 @@
   animation: composer-pulse 1.2s ease-in-out infinite;
 }
 
-.composer__transcribing {
-  font-size: 0.75rem;
+.composer__mic--unsupported {
   color: var(--text-muted);
-  white-space: nowrap;
+  cursor: help;
+}
+
+.composer__lang {
+  max-width: 120px;
+  height: 28px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.composer__lang:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .composer__speech-error,
@@ -6843,6 +6848,11 @@
 
 .composer__speech-note {
   color: var(--text-muted);
+}
+
+/* The live region stays in the DOM for screen readers but takes no space when empty. */
+.composer__speech-note:empty {
+  margin: 0;
 }
 
 @keyframes composer-pulse {
@@ -6866,9 +6876,8 @@
 }
 
 @media (max-width: 767px) {
-  .composer__recording,
-  .composer__transcribing {
-    font-size: 0.6875rem;
+  .composer__lang {
+    max-width: 88px;
   }
 }
 
