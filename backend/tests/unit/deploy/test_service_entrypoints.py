@@ -89,7 +89,13 @@ def test_documents_service_does_not_import_stt_and_stt_does_not_import_documents
 
 
 def _paths(app) -> set[str]:
-    return {getattr(r, "path", "") for r in app.routes}
+    """Return the path templates the app exposes.
+
+    Read them from the OpenAPI schema rather than ``app.routes``: FastAPI 0.162+
+    keeps routers included with ``include_router`` behind a lazy entry, so the
+    mounted endpoints are no longer flattened into ``app.routes``.
+    """
+    return set(app.openapi()["paths"])
 
 
 def test_stt_app_registers_only_stt_routes_and_health() -> None:
