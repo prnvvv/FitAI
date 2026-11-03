@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { api } from '../services/api'
 import type { Conversation } from '../types'
@@ -42,17 +42,23 @@ export function useConversations({ enabled }: UseConversationsOptions): UseConve
   const urlConversationId = paramConversationId ?? extractConversationIdFromPath(location.pathname)
   const activeId = urlConversationId ?? null
 
+  // Overlapping refreshes (e.g. one per sent message) can resolve out of order;
+  // only the most recently started request may update the list.
+  const latestLoad = useRef(0)
+
   const load = useCallback(async () => {
     if (!enabled) return
+    const requestId = (latestLoad.current += 1)
     setError(null)
     try {
       const page = await api.listConversations(100, 0)
-      setConversations(page.items)
+      if (requestId === latestLoad.current) setConversations(page.items)
     } catch (err) {
+      if (requestId !== latestLoad.current) return
       const message = err instanceof Error ? err.message : 'Failed to load conversations'
       setError(message)
     } finally {
-      setLoading(false)
+      if (requestId === latestLoad.current) setLoading(false)
     }
   }, [enabled])
 
@@ -66,8 +72,15 @@ export function useConversations({ enabled }: UseConversationsOptions): UseConve
     }
   }, [load])
 
+  // Background refreshes (one per sent message) must not blank a list that is
+  // already on screen; only an empty list shows the loading state.
+  const hasConversations = useRef(false)
+  useEffect(() => {
+    hasConversations.current = conversations.length > 0
+  }, [conversations])
+
   const refresh = useCallback(async () => {
-    setLoading(true)
+    if (!hasConversations.current) setLoading(true)
     await load()
   }, [load])
 

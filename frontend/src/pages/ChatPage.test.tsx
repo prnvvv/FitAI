@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { api } from '../services/api'
+import { ApiError, api } from '../services/api'
 import { ChatPage } from './ChatPage'
 import type { Message, Page } from '../types'
 
@@ -201,6 +201,15 @@ describe('ChatPage history', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByText('Hello from c1')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+  })
+
+  it('explains a deleted or foreign conversation instead of offering a pointless retry', async () => {
+    vi.mocked(api.listMessages).mockRejectedValue(new ApiError(404, '{"error":{"message":"Conversation not found."}}'))
+    render(<Harness path="/chat/c1" />)
+
+    expect(await screen.findByText(/no longer exists/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start a new chat' })).toBeInTheDocument()
   })
 
   it('shows the welcome screen, not an error, for a genuinely empty conversation', async () => {

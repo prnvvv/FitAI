@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Composer } from '../components/chat/Composer'
 import { MessageList } from '../components/chat/MessageList'
 import { WelcomeScreen } from '../components/chat/WelcomeScreen'
-import { api } from '../services/api'
+import { ApiError, api } from '../services/api'
 import type { Message } from '../types'
 
 interface ChatPageProps {
@@ -20,6 +20,8 @@ interface Thread {
 interface HistoryError {
   conversationId: string
   message: string
+  /** The conversation does not exist (deleted, or not this user's). */
+  notFound: boolean
 }
 
 const HISTORY_PAGE_SIZE = 100
@@ -96,6 +98,7 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
         setHistoryError({
           conversationId: viewingKey,
           message: err instanceof Error ? err.message : 'Failed to load messages',
+          notFound: err instanceof ApiError && err.status === 404,
         })
       })
     return () => {
@@ -225,10 +228,21 @@ export function ChatPage({ onConversationCreated }: ChatPageProps) {
   } else if (failedHistory) {
     body = (
       <div className="chat-page__history chat-page__history--error" role="alert">
-        <span>Could not load this conversation. {failedHistory.message}</span>
-        <button type="button" className="chat-page__retry" onClick={retryHistory}>
-          Retry
-        </button>
+        {failedHistory.notFound ? (
+          <>
+            <span>This conversation no longer exists. It may have been deleted.</span>
+            <button type="button" className="chat-page__retry" onClick={() => navigate('/')}>
+              Start a new chat
+            </button>
+          </>
+        ) : (
+          <>
+            <span>Could not load this conversation. {failedHistory.message}</span>
+            <button type="button" className="chat-page__retry" onClick={retryHistory}>
+              Retry
+            </button>
+          </>
+        )}
       </div>
     )
   } else if (!hasMessages && !streaming && !error) {
