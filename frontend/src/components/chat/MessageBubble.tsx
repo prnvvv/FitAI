@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { safeHttpUrl } from '../../utils/safeUrl'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy, Database, History, Sparkles, Wrench, X, AlertCircle, ExternalLink } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -185,7 +186,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                     <a
                       key={`${message.id}-source-${source.index}`}
                       id={`source-${message.id}-${source.index}`}
-                      href={source.url}
+                      href={safeHttpUrl(source.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="message__source"

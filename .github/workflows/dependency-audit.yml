@@ -1,0 +1,31 @@
+# Advisory dependency vulnerability scan (weekly + on demand). It reports known
+# advisories without blocking merges: a few backend findings need a coordinated
+# major upgrade (see docs/SECURITY_AUDIT.md, "Remaining risks").
+name: Dependency Audit
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Frontend production dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Backend dependencies (pip-audit)
+        continue-on-error: true
+        working-directory: backend
+        run: |
+          pip install uv pip-audit
+          uv pip compile requirements-web.txt --python-version 3.10 -o /tmp/pinned.txt
+          pip-audit -r /tmp/pinned.txt --no-deps --disable-pip

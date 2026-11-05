@@ -7,7 +7,7 @@ import logging
 import re
 from html.parser import HTMLParser
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -95,37 +95,58 @@ def _is_private(host: str) -> bool:
     return False
 
 
+_REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+
+
+def _blocked_reason(url: str) -> str | None:
+    """Return why ``url`` must not be fetched, or None when it is allowed."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return "Only http/https URLs are allowed"
+    if not parsed.hostname:
+        return "URL has no host"
+    host = parsed.hostname.lower()
+    if host in {"localhost", "127.0.0.1", "::1"} or host.endswith(".local") or _is_private(host):
+        return "Private or internal URLs are not allowed"
+    return None
+
+
 def fetch_url(url: str) -> dict[str, Any]:
     """Fetch a URL safely and return cleaned text.
 
     Protects against SSRF by rejecting non-http(s) schemes, private IPs,
-    oversized bodies, and too many redirects.
+    oversized bodies, and too many redirects. Redirects are followed manually so
+    *every* hop is re-validated: a public page must not be able to bounce the
+    server to ``169.254.169.254`` or another internal address.
     """
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        return {"url": url, "title": None, "text": "", "error": "Only http/https URLs are allowed"}
-    if not parsed.hostname:
-        return {"url": url, "title": None, "text": "", "error": "URL has no host"}
-
-    host = parsed.hostname.lower()
-    if host in {"localhost", "127.0.0.1", "::1"} or host.endswith(".local") or _is_private(host):
-        return {
-            "url": url,
-            "title": None,
-            "text": "",
-            "error": "Private or internal URLs are not allowed",
-        }
+    reason = _blocked_reason(url)
+    if reason:
+        return {"url": url, "title": None, "text": "", "error": reason}
 
     try:
         with httpx.Client(
             timeout=settings.web_fetch_timeout_seconds,
-            follow_redirects=True,
-            max_redirects=settings.web_max_redirects,
+            follow_redirects=False,
         ) as client:
-            response = client.get(
-                url,
-                headers={"User-Agent": USER_AGENT},
-            )
+            current = url
+            for _hop in range(settings.web_max_redirects + 1):
+                response = client.get(
+                    current,
+                    headers={"User-Agent": USER_AGENT},
+                )
+                location = (
+                    response.headers.get("location")
+                    if response.status_code in _REDIRECT_STATUSES
+                    else None
+                )
+                if not location:
+                    break
+                current = urljoin(current, location)
+                reason = _blocked_reason(current)
+                if reason:
+                    return {"url": url, "title": None, "text": "", "error": reason}
+            else:
+                return {"url": url, "title": None, "text": "", "error": "Too many redirects"}
             response.raise_for_status()
 
             content_type = response.headers.get("content-type", "").lower()

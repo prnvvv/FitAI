@@ -64,7 +64,7 @@ def test_failed_result_marks_failed(db_session, monkeypatch, local_storage) -> N
 
     user_id = uuid.uuid4()
     document, _ = DocumentService(db_session, storage=local_storage).create(
-        user_id, "scan.pdf", "application/pdf", b"data"
+        user_id, "scan.pdf", "application/pdf", b"%PDF-1.4 scanned image only"
     )
 
     monkeypatch.setattr("app.db.session.SessionLocal", _worker_session_factory(db_session))

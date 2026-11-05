@@ -82,6 +82,21 @@ class Settings(BaseSettings):
     #: ``https://fitai-.*-myteam\.vercel\.app``). Empty means exact origins only.
     cors_origin_regex: str | None = None
 
+    #: Serve ``/docs`` and ``/openapi.json``. ``None`` means "only outside production".
+    expose_api_docs: bool | None = None
+
+    # Rate limiting (in-process; the production image runs a single worker)
+    rate_limit_enabled: bool = True
+    rate_limit_api_per_minute: int = 120
+    rate_limit_chat_per_minute: int = 20
+    rate_limit_upload_per_minute: int = 10
+    rate_limit_location_per_minute: int = 30
+    #: Failed (401) requests per client per 5 minutes before further requests get 429.
+    rate_limit_auth_failures: int = 20
+    #: Trust the rightmost ``X-Forwarded-For`` entry (set by the host's reverse proxy).
+    #: Only enable behind a proxy that appends the real peer address (Render does).
+    trust_proxy_headers: bool = False
+
     # Database
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/fitai"
     db_pool_size: int = 5
@@ -381,6 +396,8 @@ class Settings(BaseSettings):
             problems.append("SUPABASE_URL is required to verify sign-in tokens.")
         if self.debug:
             problems.append("DEBUG must be false.")
+        if not self.rate_limit_enabled:
+            problems.append("RATE_LIMIT_ENABLED must be true.")
 
         if service == "core" and not self.groq_api_key:
             problems.append("GROQ_API_KEY is required for chat.")
@@ -433,6 +450,13 @@ class Settings(BaseSettings):
                 bullets = "".join(f"\n- {p}" for p in problems)
                 raise ValueError("Invalid production configuration:" + bullets)
         return self
+
+    @property
+    def api_docs_enabled(self) -> bool:
+        """Interactive API docs are off in production unless explicitly enabled."""
+        if self.expose_api_docs is not None:
+            return self.expose_api_docs
+        return not self.is_production
 
     @property
     def is_production(self) -> bool:
