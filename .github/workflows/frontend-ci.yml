@@ -55,6 +55,7 @@ jobs:
 
       - name: Production build
         run: npm run build
+
       - name: Scan bundle for secrets and source maps
         run: npm run check:bundle
 
