@@ -24,6 +24,7 @@ build/
 # recordings and scratch scripts, none of which belong in the repository.
 unit testing/
 .coverage
+coverage.xml
 htmlcov/
 .tox/
 .nox/
@@ -31,7 +32,9 @@ htmlcov/
 
 # Frontend
 node_modules/
-dist/
+coverage/
+playwright-report/
+test-results/
 *.local
 .vite/
 *.tsbuildinfo
@@ -83,11 +86,10 @@ test_upload.sh
 test_full_flow.py
 test_workout.jpg
 test_workout.pdf
- 
+
+# Local-only notes and agent tooling (not part of the project)
 TASK_LIST.md
-AGENTS.md
 CLAUDE.md
 .claude/
-docs/
-
-FUNCTIONALITY_AUDIT_REPORT.md
+docs/DEPENDABOT_REMEDIATION_REPORT.md
+docs/DEPLOYMENT_GUIDE.md
