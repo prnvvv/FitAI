@@ -66,7 +66,7 @@ def test_valid_schema_passes(tmp_path) -> None:
 
 def test_head_revision_independent_of_cwd(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    assert alembic_head_revision() == "0006_vector_dimension_1024"
+    assert alembic_head_revision() == "ca4d2c439416"
 
 
 def test_migrations_build_full_schema_on_sqlite(tmp_path, monkeypatch) -> None:
