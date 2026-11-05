@@ -65,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 
 # Shell form so Render's $PORT is expanded; `exec` makes uvicorn PID 1 for a
 # graceful SIGTERM stop. Exactly one worker (memory-bound instance).
-CMD exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 1 --proxy-headers --forwarded-allow-ips "*" --timeout-graceful-shutdown "${GRACEFUL_SHUTDOWN_SECONDS:-25}"
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port \"${PORT:-8000}\" --workers 1 --proxy-headers --forwarded-allow-ips \"*\" --timeout-graceful-shutdown \"${GRACEFUL_SHUTDOWN_SECONDS:-25}\""]
