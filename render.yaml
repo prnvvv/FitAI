@@ -83,6 +83,13 @@ services:
         sync: false
       - key: PROMPT_GUARD_API_KEY
         sync: false
+      # Optional sentence-similarity reranking (hf-inference). Off unless enabled; needs HF_TOKEN.
+      - key: HF_TOKEN
+        sync: false
+      - key: HF_RERANKING_ENABLED
+        value: "false"
+      - key: HF_RERANKING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
       - key: EMBEDDING_API_URL
         value: https://router.huggingface.co/deepinfra/v1/openai/embeddings
       - key: EMBEDDING_API_KEY

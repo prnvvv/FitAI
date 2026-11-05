@@ -52,6 +52,22 @@ if `vector_chunks` already holds rows, because vectors of different models are n
 empty that derived table deliberately and re-ingest in that case. Apply 0006 with the rest of
 the migrations before the first deploy.
 
+## Optional reranking (Hugging Face sentence similarity)
+
+After the vector query, retrieved chunks can be reordered with `InferenceClient.sentence_similarity`
+(provider `hf-inference`, model `sentence-transformers/all-MiniLM-L6-v2`). It only reorders candidates:
+no embeddings are created or stored, pgvector and its 1024-d column are unchanged, and chunk metadata and
+citations are preserved. Any failure (no token, 401/402/429, timeout, bad reply) falls back to the vector
+order and pauses reranking for `HF_RERANKING_COOLDOWN_S` seconds.
+
+- `HF_TOKEN` (secret, `sync: false`): Hugging Face token. `HUGGINGFACE_API_KEY` is accepted as the same setting.
+- `HF_RERANKING_ENABLED` (default `false`): set `true` to turn it on.
+- Optional: `HF_RERANKING_MODEL`, `HF_RERANKING_CANDIDATES` (12, max 50), `HF_RERANKING_TIMEOUT_S` (8),
+  `HF_RERANKING_COOLDOWN_S` (60).
+
+Status: **a live call was not verified** (the Hugging Face account returned 402: Inference Providers
+credit required). Leave it disabled until a smoke test succeeds. Never expose the token to Vite (`VITE_*`).
+
 ## Persistent storage
 
 No Render disk. Create the private Supabase bucket `fitai-documents`. Apply the
