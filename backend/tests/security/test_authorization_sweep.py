@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from app.core.security import AuthUser
@@ -27,15 +26,25 @@ _ID_PARAMS = (
 )
 
 
+def _declared_routes() -> set[tuple[str, str]]:
+    """(METHOD, path) pairs from the OpenAPI schema.
+
+    ``app.routes`` is not stable across FastAPI versions (newer releases wrap
+    included routers), whereas the generated schema always lists every route.
+    """
+    paths = app.openapi()["paths"]
+    return {
+        (method.upper(), path)
+        for path, item in paths.items()
+        for method in item
+        if method.upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}
+    }
+
+
 def _protected_routes() -> list[tuple[str, str]]:
-    found: list[tuple[str, str]] = []
-    for route in app.routes:
-        if not isinstance(route, APIRoute) or not route.path.startswith("/api/v1/"):
-            continue
-        for method in route.methods - {"HEAD", "OPTIONS"}:
-            if (method, route.path) not in PUBLIC:
-                found.append((method, route.path))
-    return sorted(found)
+    return sorted(
+        (m, p) for m, p in _declared_routes() if p.startswith("/api/v1/") and (m, p) not in PUBLIC
+    )
 
 
 @pytest.mark.parametrize(("method", "path"), _protected_routes())
@@ -48,9 +57,12 @@ def test_route_requires_authentication(anon_client, method: str, path: str) -> N
     assert response.json()["error"]["code"] == "UNAUTHENTICATED"
 
 
+def test_route_enumeration_finds_the_api() -> None:
+    assert len(_protected_routes()) >= 40  # guards against silently testing nothing
+
+
 def test_public_allowlist_has_no_stale_entries() -> None:
-    declared = {(m, r.path) for r in app.routes if isinstance(r, APIRoute) for m in r.methods}
-    assert declared >= PUBLIC
+    assert _declared_routes() >= PUBLIC
 
 
 def test_malformed_and_non_bearer_credentials_are_rejected(anon_client) -> None:
