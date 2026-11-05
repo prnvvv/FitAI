@@ -10,6 +10,14 @@
 !backend/app/**
 !backend/migrations/**
 
+# Dockerfile.web (single service) also builds the frontend. BuildKit uses
+# Dockerfile.web.dockerignore for it; these entries keep the build working if a
+# builder falls back to this file instead.
+!frontend/
+!backend/requirements-web.txt
+**/node_modules
+**/dist
+
 # Never ship secrets, local data, caches or tests, even inside allowed folders.
 **/.env
 **/.env.*
