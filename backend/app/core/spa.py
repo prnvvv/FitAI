@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 
 from app.core.config import settings
+from app.core.http_security import build_app_csp
 
 _RESERVED_PREFIXES = ("api/", "health", "docs", "redoc", "openapi.json")
 _IMMUTABLE = "public, max-age=31536000, immutable"
@@ -38,6 +39,7 @@ def mount_frontend(app: FastAPI, dist_dir: Path) -> None:
 
     def _file(candidate: Path, *, cache: str | None = None) -> FileResponse:
         headers = dict(_SECURITY_HEADERS)
+        headers["Content-Security-Policy"] = build_app_csp(settings.supabase_url)
         if cache:
             headers["Cache-Control"] = cache
         return FileResponse(candidate, headers=headers)

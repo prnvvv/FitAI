@@ -33,6 +33,11 @@ services:
         value: core
       - key: DEBUG
         value: "false"
+      # Render's proxy appends the real peer to X-Forwarded-For; the rate limiter uses it.
+      - key: TRUST_PROXY_HEADERS
+        value: "true"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
       - key: LOG_LEVEL
         value: INFO
       # One process serves chat AND documents; the ingestion worker runs in-process.
