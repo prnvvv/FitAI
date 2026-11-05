@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.models.document import Document
 from app.models.enums import DocumentStatus
-from app.rag.embeddings import EMBEDDING_NAME
+from app.rag.embeddings import embedding_model_name
 from app.rag.vector_store import USER_COLLECTION, VectorStore, VectorStoreError
 from app.repositories.document_repository import DocumentRepository
 
@@ -170,7 +170,7 @@ def audit_library(
     report = AuditReport(
         collection=info["name"],
         persist_dir=store.persist_dir,
-        embedding_model=EMBEDDING_NAME,
+        embedding_model=embedding_model_name(),
         stored_embedding_model=info["embedding_model"],
         total_vectors=int(info["count"]),
         expected_dimension=expected_dimension,
