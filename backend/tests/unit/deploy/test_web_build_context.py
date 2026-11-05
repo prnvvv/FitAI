@@ -135,3 +135,12 @@ def test_only_public_vite_values_are_build_args_and_no_secret_enters_a_layer() -
     assert set(env_keys) <= set(args)
     code = " ".join(ln for ln in DOCKERFILE.splitlines() if not ln.lstrip().startswith("#"))
     assert not re.search(r"SERVICE_ROLE|GROQ|DATABASE_URL|SECRET", code, flags=re.I)
+
+
+def test_cmd_is_json_form_one_worker_binds_all_interfaces_and_honours_port() -> None:
+    cmd = [ln for ln in DOCKERFILE.splitlines() if ln.startswith("CMD")]
+    assert len(cmd) == 1 and cmd[0].startswith("CMD ["), "CMD must be JSON (exec) form"
+    assert "exec uvicorn" in cmd[0]  # uvicorn is PID 1 -> receives SIGTERM
+    assert "--host 0.0.0.0" in cmd[0] and "--workers 1" in cmd[0]
+    assert "${PORT:-8000}" in cmd[0] and "--timeout-graceful-shutdown" in cmd[0]
+    assert re.search(r"^USER app$", DOCKERFILE, flags=re.M)  # non-root
