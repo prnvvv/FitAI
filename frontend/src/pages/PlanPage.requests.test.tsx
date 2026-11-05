@@ -132,7 +132,12 @@ describe('PlanPage network baseline', () => {
     const grid = screen.getByRole('grid')
     const before = totalCalls(spies)
 
-    await user.click(within(grid).getAllByRole('gridcell')[10])
+    // Today has a logged session in the mock, so pick a day that is never today
+    // (a fixed index collides with today once a month in the calendar).
+    const otherDay = within(grid)
+      .getAllByRole('gridcell')
+      .find((cell) => cell.getAttribute('aria-current') !== 'date')!
+    await user.click(otherDay)
 
     await waitFor(() => expect(screen.getByText(/Nothing logged yet/)).toBeInTheDocument())
     expect(totalCalls(spies)).toBe(before)
