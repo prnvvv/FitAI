@@ -6,8 +6,6 @@ import asyncio
 import threading
 import time
 
-import pytest
-
 from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.models.ingestion_job import IngestionJob
