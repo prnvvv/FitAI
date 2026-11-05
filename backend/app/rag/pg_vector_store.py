@@ -28,7 +28,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .chunker import Chunk
-from .embeddings import EMBEDDING_NAME, embed_texts
+from .embeddings import EMBEDDING_NAME, embed_texts, embedding_model_name
 from .vector_store import (
     _OWNER_SCOPED,
     CONTINUITY_COLLECTION,
@@ -249,7 +249,7 @@ class PgVectorStore:
                     "content": c.text,
                     "metadata": json.dumps(c.metadata),
                     "embedding": vector_literal(vec),
-                    "model": EMBEDDING_NAME,
+                    "model": embedding_model_name(),
                 }
                 for c, vec in zip(batch, vectors, strict=True)
             ]

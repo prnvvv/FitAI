@@ -118,6 +118,23 @@ class Settings(BaseSettings):
     #: Unset (the default) keeps Core API-only.
     frontend_dist_dir: str | None = None
 
+    # Optional reranking of retrieved chunks with Hugging Face sentence similarity
+    # (provider ``hf-inference``). It only reorders candidates the vector store already
+    # returned; it never produces embeddings and is never stored. Off by default: when
+    # disabled, unconfigured or failing, retrieval keeps the vector-similarity order.
+    #: Hugging Face access token (server-side only). ``HUGGINGFACE_API_KEY`` is the
+    #: older name used in existing .env files and is accepted as an alias.
+    hf_token: str | None = Field(
+        default=None, validation_alias=AliasChoices("HF_TOKEN", "HUGGINGFACE_API_KEY")
+    )
+    hf_reranking_enabled: bool = False
+    hf_reranking_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    #: Upper bound on candidates sent to the API per query (one request).
+    hf_reranking_candidates: int = 12
+    hf_reranking_timeout_s: float = 8.0
+    #: After a failure, skip reranking for this long instead of paying the timeout again.
+    hf_reranking_cooldown_s: float = 60.0
+
     # Vector storage: ``chroma`` (local, development default) or ``pgvector``
     # (Supabase PostgreSQL, production).
     vector_store_backend: str = "chroma"
@@ -401,6 +418,11 @@ class Settings(BaseSettings):
             )
         elif not self.embedding_api_url or not self.embedding_api_key:
             problems.append("EMBEDDING_API_URL and EMBEDDING_API_KEY are required.")
+        elif (
+            self.embedding_api_format.strip().lower() == "openai"
+            and not self.embedding_remote_model
+        ):
+            problems.append("EMBEDDING_REMOTE_MODEL is required with EMBEDDING_API_FORMAT=openai.")
         return problems
 
     @model_validator(mode="after")

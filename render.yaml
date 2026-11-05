@@ -60,9 +60,11 @@ services:
       - key: EMBEDDING_PROVIDER
         value: remote
       - key: EMBEDDING_DIMENSION
-        value: "384"
+        value: "1024"
       - key: EMBEDDING_API_FORMAT
-        value: hf
+        value: openai
+      - key: EMBEDDING_REMOTE_MODEL
+        value: Qwen/Qwen3-Embedding-0.6B
       - key: FRONTEND_DIST_DIR
         value: /srv/fitai/frontend/dist
       - key: DATABASE_URL
@@ -81,8 +83,15 @@ services:
         sync: false
       - key: PROMPT_GUARD_API_KEY
         sync: false
-      - key: EMBEDDING_API_URL
+      # Optional sentence-similarity reranking (hf-inference). Off unless enabled; needs HF_TOKEN.
+      - key: HF_TOKEN
         sync: false
+      - key: HF_RERANKING_ENABLED
+        value: "false"
+      - key: HF_RERANKING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
+      - key: EMBEDDING_API_URL
+        value: https://router.huggingface.co/deepinfra/v1/openai/embeddings
       - key: EMBEDDING_API_KEY
         sync: false
       # Public browser-bundle build args (same values as the Supabase project's public config).
