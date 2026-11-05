@@ -28,6 +28,11 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from app.api.deps import DbSession
 from app.core.config import settings
 from app.core.errors import AppError
+from app.core.http_security import (
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    default_rules,
+)
 from app.core.logging import configure_logging, get_logger
 
 logger = get_logger(__name__)
@@ -218,19 +223,40 @@ def build_service_app(
     app = FastAPI(
         title=title,
         version="0.1.0",
-        docs_url="/docs",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if settings.api_docs_enabled else None,
+        redoc_url="/redoc" if settings.api_docs_enabled else None,
+        openapi_url="/openapi.json" if settings.api_docs_enabled else None,
         lifespan=lifespan,
     )
+    # add_middleware wraps outward: the last one added runs first. Order (outer to
+    # inner): security headers -> request log -> CORS -> rate limit -> app, so even
+    # 429s carry CORS and security headers and are logged.
+    if settings.rate_limit_enabled:
+        app.add_middleware(
+            RateLimitMiddleware,
+            rules=default_rules(
+                api_per_minute=settings.rate_limit_api_per_minute,
+                chat_per_minute=settings.rate_limit_chat_per_minute,
+                upload_per_minute=settings.rate_limit_upload_per_minute,
+                location_per_minute=settings.rate_limit_location_per_minute,
+                api_prefix=settings.api_v1_prefix,
+            ),
+            api_prefix=settings.api_v1_prefix,
+            trust_proxy=settings.trust_proxy_headers,
+            auth_failure_limit=settings.rate_limit_auth_failures,
+        )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_origin_regex=settings.cors_origin_regex or None,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        expose_headers=["X-Request-ID", "X-Duplicate", "Retry-After"],
+        max_age=600,
     )
     app.add_middleware(RequestContextMiddleware, service=service)
+    app.add_middleware(SecurityHeadersMiddleware, hsts=settings.is_production, api_prefix="/api/")
     register_error_handlers(app)
     for router in routers:
         app.include_router(router, prefix=settings.api_v1_prefix)

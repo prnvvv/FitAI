@@ -9,7 +9,8 @@
     "type-check": "tsc -b",
     "lint": "oxlint",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:bundle": "node scripts/scanBundle.mjs dist"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",

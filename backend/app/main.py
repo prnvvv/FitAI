@@ -141,7 +141,13 @@ def _startup_tasks() -> tuple[Callable[[], None], ...]:
 def _register_guardrails_health(app: FastAPI) -> None:
     @app.get("/health/guardrails", tags=["health"])
     def guardrails_health() -> dict[str, object]:
-        """Guardrails status for observability."""
+        """Guardrails status for observability.
+
+        Unauthenticated, so production exposes only whether guardrails are on;
+        mode, model and canary details stay out of public responses.
+        """
+        if settings.is_production:
+            return {"enabled": settings.guardrails_enabled}
         return {
             "enabled": settings.guardrails_enabled,
             "mode": settings.guardrails_mode,

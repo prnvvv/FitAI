@@ -8,6 +8,7 @@ coordinated by Person 2.
 from __future__ import annotations
 
 import hashlib
+import re
 from contextlib import suppress
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -26,7 +27,12 @@ from app.core.errors import (
 )
 from app.models.document import Document
 from app.models.enums import DocumentStatus
-from app.rag.loader import FILE_HANDLERS, SUPPORTED_EXTENSIONS
+from app.rag.loader import (
+    FILE_HANDLERS,
+    SUPPORTED_EXTENSIONS,
+    DocumentLoadError,
+    resolve_handler,
+)
 from app.repositories.document_repository import DocumentRepository
 from app.services.document_storage import DocumentStorage, get_document_storage
 
@@ -35,6 +41,21 @@ ALLOWED_CONTENT_TYPES = {
     media_type for handler in FILE_HANDLERS.values() for media_type in handler.media_types
 }
 ALLOWED_EXTENSIONS = set(SUPPORTED_EXTENSIONS)
+
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def sanitize_filename(filename: str) -> str:
+    """Return a display-safe file name: no directories, control characters or overlong names.
+
+    The name is only ever metadata (storage keys are server-generated UUIDs), but
+    it is echoed back to the UI and into logs, so it must not carry path
+    separators or control characters.
+    """
+    name = filename.replace("\\", "/").rsplit("/", 1)[-1]
+    name = _CONTROL_CHARS.sub("", name).strip().strip(".")
+    return name[-255:] or "upload"
 
 
 def _utcnow() -> datetime:
@@ -139,7 +160,8 @@ class DocumentService:
         this user's library the existing row is returned unchanged instead of
         creating a second item.
         """
-        self._validate_upload(filename, content_type, len(data))
+        filename = sanitize_filename(filename)
+        self._validate_upload(filename, content_type, len(data), data)
 
         content_hash = hashlib.sha256(data).hexdigest()
         existing = self._documents.get_by_content_hash(user_id, content_hash)
@@ -350,7 +372,9 @@ class DocumentService:
             metadata.pop("note", None)
         document.ingestion_metadata = metadata or None
 
-    def _validate_upload(self, filename: str, content_type: str, size: int) -> None:
+    def _validate_upload(
+        self, filename: str, content_type: str, size: int, data: bytes | None = None
+    ) -> None:
         max_bytes = settings.max_upload_size_mb * 1024 * 1024
         if size <= 0:
             raise UnsupportedMediaTypeError("The uploaded file is empty.")
@@ -367,6 +391,16 @@ class DocumentService:
                 "Only PDF, TXT, MD, and DOCX files are supported.",
                 details={"content_type": content_type},
             )
+        if data is not None:
+            # Verify the bytes really are what the extension claims *before* anything
+            # is persisted (magic numbers for PDF/DOCX, no binary payload in text).
+            try:
+                resolve_handler(filename, data)
+            except DocumentLoadError as exc:
+                raise UnsupportedMediaTypeError(
+                    "The file content does not match its type.",
+                    details={"content_type": content_type},
+                ) from exc
 
     def _remove_stored(self, key: str) -> None:
         try:

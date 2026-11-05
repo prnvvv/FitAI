@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    // Never ship source maps to production: they expose original source to anyone.
+    build: { sourcemap: false },
     server: {
       // Bind IPv4 loopback explicitly: the default binds ::1 only, so a
       // 127.0.0.1 URL (or the proxy target) would be refused.
