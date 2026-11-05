@@ -133,6 +133,5 @@ def test_only_public_vite_values_are_build_args_and_no_secret_enters_a_layer() -
     frontend_stage = DOCKERFILE.split("AS builder")[0]
     env_keys = re.findall(r"^\s+(\w+)=\$", frontend_stage, flags=re.M)
     assert set(env_keys) <= set(args)
-    code = "
-".join(ln for ln in DOCKERFILE.splitlines() if not ln.lstrip().startswith("#"))
+    code = " ".join(ln for ln in DOCKERFILE.splitlines() if not ln.lstrip().startswith("#"))
     assert not re.search(r"SERVICE_ROLE|GROQ|DATABASE_URL|SECRET", code, flags=re.I)
