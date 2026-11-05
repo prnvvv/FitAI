@@ -32,10 +32,25 @@ Secret (`sync: false`): `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_K
 Fixed in the blueprint: `ENVIRONMENT=production`, `FITAI_SERVICE=core`,
 `SERVE_DOCUMENTS_ROUTES=true`, `INGESTION_MODE=jobs`, `DOCUMENT_STORAGE_BACKEND=supabase`,
 `SUPABASE_STORAGE_BUCKET`, `VECTOR_STORE_BACKEND=pgvector`, `EMBEDDING_PROVIDER=remote`,
-`EMBEDDING_DIMENSION=384`, `DB_POOL_SIZE=3`, `DB_MAX_OVERFLOW=2`, `GUARDRAILS_MODE=enforce`,
+`EMBEDDING_DIMENSION=1024`, `DB_POOL_SIZE=3`, `DB_MAX_OVERFLOW=2`, `GUARDRAILS_MODE=enforce`,
 `FRONTEND_DIST_DIR`. `$PORT` is supplied by Render; the app binds `0.0.0.0:$PORT`.
 
 Production start-up refuses unsafe configuration (SQLite, wildcard CORS, missing keys).
+
+## Embedding model
+
+Qwen3-Embedding-0.6B (1024-d) through the Hugging Face router (provider DeepInfra), OpenAI
+format: `EMBEDDING_API_URL=https://router.huggingface.co/deepinfra/v1/openai/embeddings`,
+`EMBEDDING_API_FORMAT=openai`, `EMBEDDING_REMOTE_MODEL=Qwen/Qwen3-Embedding-0.6B`,
+`EMBEDDING_API_KEY` = a Hugging Face token. The request shape was derived from the
+`huggingface_hub` DeepInfra client; a live call was **not verified** (the HF account returned
+402: Inference Providers credit is required).
+
+**Schema:** the pgvector column was `vector(384)` (migration 0005). Migration **0006**
+resizes it to `vector(1024)` and rebuilds the HNSW index. It refuses to run (changing nothing)
+if `vector_chunks` already holds rows, because vectors of different models are not comparable;
+empty that derived table deliberately and re-ingest in that case. Apply 0006 with the rest of
+the migrations before the first deploy.
 
 ## Persistent storage
 
