@@ -7,7 +7,7 @@ name = "fitai-backend"
 version = "0.0.1"
 description = "Backend for FitAI, an agentic RAG chatbot for fitness and nutrition."
 requires-python = ">=3.10"
-license = { text = "License-Ref-Pending" }
+license = { text = "MIT" }
 authors = [
     { name = "FitAI Team" },
 ]

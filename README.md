@@ -8,6 +8,7 @@
   <img alt="React 19" src="https://img.shields.io/badge/React-19-e2a24f?style=flat-square&labelColor=0a0806" />
   <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-orchestration-e2a24f?style=flat-square&labelColor=0a0806" />
   <img alt="Supabase" src="https://img.shields.io/badge/Supabase-Auth%20%C2%B7%20Postgres%20%C2%B7%20Storage-e2a24f?style=flat-square&labelColor=0a0806" />
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-e2a24f?style=flat-square&labelColor=0a0806" />
   <img alt="Stage: pre-alpha" src="https://img.shields.io/badge/stage-pre--alpha-b9773f?style=flat-square&labelColor=0a0806" />
 </p>
 
@@ -106,19 +107,19 @@ The application also includes **Library** (document upload and status), **Memory
 
 ```mermaid
 flowchart LR
-    U([User]) --> FE["Frontend<br/>React 19 + Vite SPA"]
-    FE -- "HTTPS + Bearer token" --> API["FastAPI<br/>/api/v1"]
-    FE <-. "sign-in / refresh" .-> SA["Supabase Auth"]
-    API --> AUTH{"Verify JWT<br/>(JWKS, issuer, audience)"}
-    AUTH -- invalid --> E401["401 error envelope"]
-    AUTH -- valid --> SAFE["Safety + guardrails"]
-    SAFE -- blocked --> REF["Safe refusal<br/>(no tools, no model)"]
-    SAFE -- allowed --> G["LangGraph agent"]
-    G <--> PG[("PostgreSQL<br/>profile · memory · history · records")]
-    G <--> VS[("Vector store<br/>pgvector in production")]
-    G <--> LLM["Groq LLM"]
-    G -. optional .-> T["Tools: web · weather · places"]
-    G --> RESP["Reply + sources + actions"]
+    U([User]) --> FE["Frontend - React 19 and Vite SPA"]
+    FE -->|HTTPS and Bearer token| API["FastAPI /api/v1"]
+    FE -->|sign-in and refresh| SA["Supabase Auth"]
+    API --> AUTH{"Verify JWT"}
+    AUTH -->|invalid| E401["401 error"]
+    AUTH -->|valid| SAFE["Safety and guardrails"]
+    SAFE -->|blocked| REF["Safe refusal"]
+    SAFE -->|allowed| G["LangGraph agent"]
+    G --> PG[("PostgreSQL: profile, memory, history, records")]
+    G --> VS[("Vector store: pgvector in production")]
+    G --> LLM["Groq LLM"]
+    G --> T["Optional tools: web, weather, places"]
+    G --> RESP["Reply, sources and actions"]
     REF --> RESP
     RESP --> FE
 ```
@@ -166,22 +167,21 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A["Upload (PDF / DOCX / TXT / MD)"] --> B{"Validate<br/>size ≤ limit · extension ·<br/>file signature"}
-    B -- rejected --> X["415 / 413 error<br/>nothing stored"]
-    B -- ok --> C["Store original<br/>(Supabase Storage)"]
-    C --> D["Create document row + ingestion job<br/>status: queued"]
-    D --> E["Worker: extract text<br/>(page batches for PDFs)"]
-    E --> F["Chunk<br/>~1000 chars, 150 overlap"]
-    F --> G["Embed<br/>(remote or local model)"]
-    G --> H[("Vector store<br/>owner_id-scoped rows")]
-    H --> I["status: ready / failed<br/>with a readable reason"]
-
-    Q["User question"] --> R["Retrieve top-k<br/>curated + the user's own collection"]
+    A["Upload: PDF, DOCX, TXT or MD"] --> B{"Validate size, extension and file signature"}
+    B -->|rejected| X["Error 413 or 415 - nothing stored"]
+    B -->|ok| C["Store original in Supabase Storage"]
+    C --> D["Create document row and ingestion job"]
+    D --> E["Worker extracts text in page batches"]
+    E --> F["Chunk: about 1000 chars, 150 overlap"]
+    F --> G["Embed with remote or local model"]
+    G --> H[("Vector store: rows scoped by owner_id")]
+    H --> I["Status ready or failed with a reason"]
+    Q["User question"] --> R["Retrieve top-k from curated and the user's own collection"]
     H --> R
-    R --> S{"Optional rerank"}
-    S --> T["Build prompt:<br/>memory + records + passages"]
+    R --> S["Optional rerank"]
+    S --> T["Build prompt: memory, records, passages"]
     T --> L["Groq LLM"]
-    L --> V["Answer + source references"]
+    L --> V["Answer with source references"]
 ```
 
 1. **Upload.** `POST /api/v1/documents` accepts PDF, DOCX, TXT and Markdown up to `MAX_UPLOAD_SIZE_MB` (10 by default). Identical bytes uploaded twice by the same user return the existing item.
@@ -212,13 +212,13 @@ FitAI separates **structured data in PostgreSQL** from **vector-based recall**:
 ```mermaid
 flowchart LR
     M["User message"] --> G{"Safety gate"}
-    G --> P{"Personal<br/>statement?"}
-    P -- yes --> X["Extract candidate facts"]
-    X --> D["Compare with current memory<br/>current · historical · hypothetical · conflict"]
-    D --> A{"Explicit and<br/>high confidence?"}
-    A -- yes --> W["Write memory + history"]
-    A -- no --> Q["Propose to the user<br/>(confirm / reject)"]
-    P -- no --> R["Retrieve memory, records,<br/>documents"]
+    G --> P{"Personal statement?"}
+    P -->|yes| X["Extract candidate facts"]
+    X --> D["Compare with current memory"]
+    D --> A{"Explicit and high confidence?"}
+    A -->|yes| W["Write memory and history"]
+    A -->|no| Q["Propose to the user: confirm or reject"]
+    P -->|no| R["Retrieve memory, records, documents"]
     W --> R
     R --> L["Generate reply"]
 ```
@@ -535,7 +535,6 @@ The backend suite mocks Groq and runs against an isolated in-memory database, so
 - The production layout is a single instance with in-process rate limiting and ingestion.
 - Reranking is optional and disabled by default.
 - Some pinned AI libraries (LangGraph / LangChain Core) have known advisories awaiting a major upgrade; see the audit.
-- No open-source license has been chosen yet.
 
 **Possible improvements** (not implemented)
 
@@ -555,7 +554,7 @@ The backend suite mocks Groq and runs against an isolated in-memory database, so
 
 ## License
 
-No open-source license has been selected yet; `backend/pyproject.toml` lists the license as pending. Until one is added, no permission to reuse or redistribute the code is granted.
+FitAI is released under the [MIT License](LICENSE). Third-party services and models you connect (Groq, Supabase, Hugging Face and others) are governed by their own terms.
 
 ## Acknowledgements
 
