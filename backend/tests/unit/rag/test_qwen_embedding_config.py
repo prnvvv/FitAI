@@ -13,7 +13,9 @@ from app.core.config import settings
 from app.rag import embeddings
 from app.rag.embeddings import RemoteEmbedder, embedding_model_name
 
-MIGRATION = Path(__file__).resolve().parents[3] / "migrations/versions/0006_vector_dimension_1024.py"
+MIGRATION = (
+    Path(__file__).resolve().parents[3] / "migrations/versions/0006_vector_dimension_1024.py"
+)
 
 
 def _migration():

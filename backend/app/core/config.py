@@ -418,7 +418,10 @@ class Settings(BaseSettings):
             )
         elif not self.embedding_api_url or not self.embedding_api_key:
             problems.append("EMBEDDING_API_URL and EMBEDDING_API_KEY are required.")
-        elif self.embedding_api_format.strip().lower() == "openai" and not self.embedding_remote_model:
+        elif (
+            self.embedding_api_format.strip().lower() == "openai"
+            and not self.embedding_remote_model
+        ):
             problems.append("EMBEDDING_REMOTE_MODEL is required with EMBEDDING_API_FORMAT=openai.")
         return problems
 

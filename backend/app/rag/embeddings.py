@@ -44,6 +44,7 @@ def embedding_model_name() -> str:
         return settings.embedding_remote_model.strip()
     return EMBEDDING_NAME
 
+
 _ONNX_REQUIRED_FILES = (
     "config.json",
     "model.onnx",

@@ -78,7 +78,11 @@ class Retriever:
         for collection, scope in plan:
             try:
                 hits = self._store.query(
-                    collection, query, fetch_k, where=where, owner_id=uid if scope == "user" else None
+                    collection,
+                    query,
+                    fetch_k,
+                    where=where,
+                    owner_id=uid if scope == "user" else None,
                 )
             except VectorStoreError as exc:
                 log.warning("retrieval from %s failed: %s", collection, exc)

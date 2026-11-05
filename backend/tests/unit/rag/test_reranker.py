@@ -55,7 +55,9 @@ def _store(n: int = 5) -> FakeStore:
 
 def _rr(client, **kw) -> SentenceSimilarityReranker:
     kw.setdefault("cooldown_s", 60.0)
-    return SentenceSimilarityReranker(TOKEN, "sentence-transformers/all-MiniLM-L6-v2", client=client, **kw)
+    return SentenceSimilarityReranker(
+        TOKEN, "sentence-transformers/all-MiniLM-L6-v2", client=client, **kw
+    )
 
 
 def _retriever(store, rr, k: int = 3) -> Retriever:
