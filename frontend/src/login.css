@@ -290,70 +290,6 @@
 }
 
 /* ---------------------------------------------------------------
-   Divider — "OR"
-   --------------------------------------------------------------- */
-.login-page__divider {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 18px;
-}
-
-.login-page__divider-line {
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.10);
-}
-
-.login-page__divider-text {
-  font-family: "Inter", system-ui, sans-serif;
-  font-weight: 500;
-  font-size: 12px;
-  line-height: 1;
-  letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.45);
-  white-space: nowrap;
-}
-
-/* ---------------------------------------------------------------
-   Google Button
-   --------------------------------------------------------------- */
-.login-page__google {
-  width: 100%;
-  height: 46px;
-  margin-top: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  font-family: "Inter", system-ui, sans-serif;
-  font-weight: 500;
-  font-size: 15px;
-  line-height: 1;
-  color: var(--cream);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  transition: background 0.2s ease;
-}
-
-.login-page__google:hover {
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.login-page__google:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 4px;
-}
-
-.login-page__google svg {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-/* ---------------------------------------------------------------
    Footer — Sign up link
    --------------------------------------------------------------- */
 .login-page__footer {
@@ -454,14 +390,6 @@
 
   .login-page__submit {
     margin-top: 10px;
-  }
-
-  .login-page__divider {
-    margin-top: 14px;
-  }
-
-  .login-page__google {
-    margin-top: 14px;
   }
 
   .login-page__footer {
