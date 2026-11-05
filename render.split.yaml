@@ -55,7 +55,7 @@ services:
       - key: EMBEDDING_PROVIDER
         value: remote
       - key: EMBEDDING_DIMENSION
-        value: "384"
+        value: "1024"
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGINS
@@ -69,11 +69,13 @@ services:
       - key: PROMPT_GUARD_API_KEY
         sync: false
       - key: EMBEDDING_API_URL
-        sync: false
+        value: https://router.huggingface.co/deepinfra/v1/openai/embeddings
       - key: EMBEDDING_API_KEY
         sync: false
       - key: EMBEDDING_API_FORMAT
-        value: hf
+        value: openai
+      - key: EMBEDDING_REMOTE_MODEL
+        value: Qwen/Qwen3-Embedding-0.6B
 
   # ------------------------------------------------------------ Documents API
   - type: web
@@ -115,7 +117,7 @@ services:
       - key: EMBEDDING_PROVIDER
         value: remote
       - key: EMBEDDING_DIMENSION
-        value: "384"
+        value: "1024"
       - key: DATABASE_URL
         sync: false
       - key: CORS_ORIGINS
@@ -126,8 +128,10 @@ services:
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: EMBEDDING_API_URL
-        sync: false
+        value: https://router.huggingface.co/deepinfra/v1/openai/embeddings
       - key: EMBEDDING_API_KEY
         sync: false
       - key: EMBEDDING_API_FORMAT
-        value: hf
+        value: openai
+      - key: EMBEDDING_REMOTE_MODEL
+        value: Qwen/Qwen3-Embedding-0.6B

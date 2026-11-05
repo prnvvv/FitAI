@@ -5,9 +5,10 @@ Two providers, selected by ``EMBEDDING_PROVIDER``:
 * ``local`` (development default): ChromaDB's bundled ONNX all-MiniLM-L6-v2. No API
   key, but the model files are downloaded on first use and it needs well over
   100 MB of RAM, so it is not used on the 512 MB production services.
-* ``remote``: an HTTP feature-extraction endpoint serving the *same* model family
-  (384-dimension vectors). No model is loaded in-process. The endpoint is never
-  defaulted: it must be configured, and a missing configuration fails loudly.
+* ``remote``: an HTTP embedding endpoint (``hf`` or ``openai`` format), e.g. Qwen3-Embedding-0.6B
+  through the Hugging Face router (1024-dimension vectors). No model is loaded in-process.
+  The endpoint is never defaulted: it must be configured, and a missing configuration
+  fails loudly. ``EMBEDDING_DIMENSION`` must match the model and the ``vector_chunks`` column.
 
 Both providers must produce ``EMBEDDING_DIMENSION`` floats per text; anything else
 is rejected so a mismatched model can never be written to the index.
@@ -30,6 +31,19 @@ log = logging.getLogger(__name__)
 
 # Stored in collection metadata; a mismatch means the index must be rebuilt.
 EMBEDDING_NAME = "chroma-default-onnx-minilm-l6-v2"
+
+
+def embedding_model_name() -> str:
+    """Name recorded with every indexed vector for the *configured* provider.
+
+    Remote deployments record ``EMBEDDING_REMOTE_MODEL`` (e.g. ``Qwen/Qwen3-Embedding-0.6B``)
+    so the audit can tell a re-embedded index from a stale MiniLM one; local/Chroma keeps
+    the original constant.
+    """
+    if settings.embedding_provider.strip().lower() == "remote" and settings.embedding_remote_model:
+        return settings.embedding_remote_model.strip()
+    return EMBEDDING_NAME
+
 
 _ONNX_REQUIRED_FILES = (
     "config.json",

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
+from .reranker import SentenceSimilarityReranker, get_configured_reranker
 from .vector_store import (
     KNOWLEDGE_COLLECTION,
     USER_COLLECTION,
@@ -27,14 +28,24 @@ class RetrievedChunk:
     doc_id: str
     page: int | None
     metadata: dict[str, Any]
+    #: Sentence-similarity score when the chunk was reranked; ``score`` stays the vector score.
+    rerank_score: float | None = None
 
     def citation(self) -> str:
         return f"{self.source}" + (f" p.{self.page}" if self.page else "")
 
 
 class Retriever:
-    def __init__(self, store: VectorStore, k: int = 4, min_score: float = 0.2):
+    def __init__(
+        self,
+        store: VectorStore,
+        k: int = 4,
+        min_score: float = 0.2,
+        reranker: SentenceSimilarityReranker | None = None,
+    ):
         self._store, self._k, self._min = store, k, min_score
+        # An explicit reranker wins; otherwise HF_RERANKING_* settings decide (default: none).
+        self._reranker = reranker if reranker is not None else get_configured_reranker()
 
     def retrieve(
         self,
@@ -54,6 +65,8 @@ class Retriever:
         if k < 1:
             raise ValueError("k must be >= 1")
         uid = user_id.strip() if isinstance(user_id, str) else ""
+        # With reranking, fetch a bounded candidate pool wider than k, then reorder it.
+        fetch_k = max(k, self._reranker.max_candidates) if self._reranker else k
         plan = []
         if include_curated:
             plan.append((KNOWLEDGE_COLLECTION, "curated"))
@@ -65,7 +78,11 @@ class Retriever:
         for collection, scope in plan:
             try:
                 hits = self._store.query(
-                    collection, query, k, where=where, owner_id=uid if scope == "user" else None
+                    collection,
+                    query,
+                    fetch_k,
+                    where=where,
+                    owner_id=uid if scope == "user" else None,
                 )
             except VectorStoreError as exc:
                 log.warning("retrieval from %s failed: %s", collection, exc)
@@ -82,7 +99,16 @@ class Retriever:
             if r.score >= self._min and key not in seen:
                 seen.add(key)
                 out.append(r)
-        return out[:k]
+        return self._rerank(query, out, k)
+
+    def _rerank(self, query: str, ranked: list[RetrievedChunk], k: int) -> list[RetrievedChunk]:
+        """Reorder the vector-ranked candidates; any failure keeps the vector order."""
+        if self._reranker is None:
+            return ranked[:k]
+        scored = self._reranker.rerank(query, ranked, lambda c: c.text)
+        if scored is None:
+            return ranked[:k]
+        return [replace(chunk, rerank_score=score) for chunk, score in scored][:k]
 
     def search(self, query: str, user_id: str, k: int = 4) -> list[str]:
         """Text form for the agent's `Retriever` protocol: '[source p.N] text'."""
