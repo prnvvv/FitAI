@@ -44,6 +44,16 @@ from app.tools.workout_tools import WorkoutLog, WorkoutService
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> Iterator[None]:
+    """Rate-limit counters are process-wide; isolate every test from the others."""
+    from app.core.http_security import GLOBAL_LIMITER
+
+    GLOBAL_LIMITER.reset()
+    yield
+    GLOBAL_LIMITER.reset()
+
+
+@pytest.fixture(autouse=True)
 def _off_network_guard_classifier(monkeypatch) -> None:
     """Keep tests off the network: the LLM guard classifier is off by default.
 
