@@ -8,7 +8,7 @@ SAFE BY DEFAULT
     * Upserts are idempotent: re-running after a partial failure is safe.
     * Nothing is ever deleted from either side.
 
-Usage (see backend/DEPLOYMENT_DATABASE_MIGRATION.md for the full procedure)::
+Usage (see docs/chroma-to-pgvector-migration.md for the full procedure)::
 
     DATABASE_URL=postgresql+psycopg2://...  python scripts/migrate_chroma_to_pgvector.py \
         --chroma-dir ./chroma_data                      # dry run

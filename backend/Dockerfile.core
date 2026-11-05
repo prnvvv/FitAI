@@ -6,7 +6,7 @@
 # Runtime configuration comes entirely from environment variables (see
 # .env.example). No secrets, local databases, ChromaDB data or uploads are copied
 # into the image (.dockerignore), and migrations are NOT run at start-up: apply
-# them once, deliberately, with the one-off command in DEPLOYMENT_GUIDE.md.
+# them once, deliberately, with the one-off command in docs/deployment.md.
 
 # ---- builder: install only this service's dependencies into a venv ----------
 FROM python:3.10-slim-bookworm AS builder

@@ -274,7 +274,7 @@ FitAI/
 ├── Dockerfile.web            single-service image: built frontend + API
 ├── render.yaml               Render Blueprint (single web service)
 ├── render.split.yaml         Render Blueprint for the two-service layout
-├── docs/                     setup, API contracts, deployment, extraction, security audit
+├── docs/                     setup, API conventions, deployment, models, extraction, security audit
 ├── knowledge_base/           drop-in folder for curated documents (see its README)
 ├── scripts/                  dev runners, ingestion and smoke-test utilities
 └── .github/workflows/        backend, frontend, secret-scan and dependency-audit CI
@@ -326,7 +326,7 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 </details>
 
-At minimum set `DATABASE_URL`, `SUPABASE_URL` and `GROQ_API_KEY` in `backend/.env`. `uv sync --extra dev` (used by CI) is an equivalent way to install. The backend refuses to start if the database schema is behind the latest migration, so run `alembic upgrade head` first. See [`docs/backend_setup.md`](docs/backend_setup.md) for the full runbook.
+At minimum set `DATABASE_URL`, `SUPABASE_URL` and `GROQ_API_KEY` in `backend/.env`. `uv sync --extra dev` (used by CI) is an equivalent way to install. The backend refuses to start if the database schema is behind the latest migration, so run `alembic upgrade head` first. See [`docs/setup.md`](docs/setup.md) for the full runbook.
 
 ### 3. Frontend
 
@@ -447,7 +447,7 @@ Browser ──► Render (Docker: FastAPI + built frontend + in-process ingestio
 - **Single instance.** The image runs one worker; rate-limit counters and the ingestion worker are per-process. Do not scale horizontally without replacing the in-process limiter.
 - **No persistent disk is required**: originals live in Supabase Storage, vectors and jobs in Postgres.
 - **Free-tier cold starts** on Render add latency to the first request.
-- Read [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md) and [`backend/DEPLOYMENT_GUIDE.md`](backend/DEPLOYMENT_GUIDE.md) before the first deploy; the former describes the older ChromaDB-on-disk layout.
+- Read [`docs/deployment.md`](docs/deployment.md) before the first deploy.
 
 ## API reference
 
@@ -486,7 +486,7 @@ Content-Type: application/json
 List endpoints return `{ "items": [], "total": 0, "limit": 20, "offset": 0 }` and accept `limit` (1–100) and `offset`.
 </details>
 
-Interactive docs are served at `/docs` in development and are **disabled in production** unless `EXPOSE_API_DOCS=true`. Contracts are summarized in [`docs/api_contracts.md`](docs/api_contracts.md).
+Interactive docs are served at `/docs` in development and are **disabled in production** unless `EXPOSE_API_DOCS=true`. Contracts are summarized in [`docs/api.md`](docs/api.md).
 
 ## Database and security
 
@@ -544,13 +544,22 @@ The backend suite mocks Groq and runs against an isolated in-memory database, so
 - Cookie-based sessions instead of browser-stored tokens.
 - Food logging and richer nutrition data.
 
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/setup.md`](docs/setup.md) | Detailed local development runbook |
+| [`docs/deployment.md`](docs/deployment.md) | Docker, Render, Vercel, migrations, troubleshooting |
+| [`docs/api.md`](docs/api.md) | API conventions (the generated reference is at `/docs`) |
+| [`docs/models.md`](docs/models.md) | Models and why each is used |
+| [`docs/extraction.md`](docs/extraction.md) | Structured fact extraction |
+| [`docs/chroma-to-pgvector-migration.md`](docs/chroma-to-pgvector-migration.md) | Moving an existing ChromaDB store to pgvector |
+| [`docs/SECURITY_AUDIT.md`](docs/SECURITY_AUDIT.md) | Security audit, residual risks, platform settings |
+
 ## Contributing
 
-1. Read [`AGENTS.MD`](AGENTS.MD) for conventions and ownership boundaries.
-2. Fork the repository and create a branch (for example `feat/<topic>`); do not work directly on `main`.
-3. Keep changes small and focused, and add or update tests.
-4. Run the backend and frontend checks listed above.
-5. Open a pull request into `main` with a clear description and the checks you ran.
+Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow and checks, and
+[`AGENTS.MD`](AGENTS.MD) for architecture conventions.
 
 ## License
 

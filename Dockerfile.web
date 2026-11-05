@@ -8,7 +8,7 @@
 # The Supabase URL and ANON key are public by design (they ship in the browser
 # bundle). Never pass the service-role key or any other secret as a build arg.
 # Runtime configuration comes from environment variables; migrations are NOT run
-# at start-up (see backend/DEPLOYMENT_GUIDE.md).
+# at start-up (see docs/deployment.md).
 
 # ---- frontend: build the static bundle ------------------------------------
 FROM node:22-slim AS frontend
