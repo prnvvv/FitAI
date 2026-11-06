@@ -13,7 +13,7 @@ pydantic-settings>=2.6.0,<3
 python-dotenv>=1.0.1,<2
 python-multipart>=0.0.17,<0.1
 sqlalchemy>=2.0.36,<2.1
-alembic>=1.14.0,<1.15
+alembic>=1.14.0,<1.21
 psycopg2-binary>=2.9.10,<3
 # [crypto]: Supabase signs access tokens with ES256/RS256 (JWKS verification).
 pyjwt[crypto]>=2.9.0,<3
