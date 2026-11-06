@@ -27,4 +27,4 @@ ddgs>=9.0.0
 pypdf>=6.21.4,<7
 python-docx>=1.1.2,<2
 # Optional sentence-similarity reranking (InferenceClient, provider hf-inference).
-huggingface_hub>=0.30.0,<1
+huggingface_hub>=2.4.0,<3
